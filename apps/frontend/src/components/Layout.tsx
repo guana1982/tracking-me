@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey } from '../lib/utils';
@@ -11,7 +11,6 @@ export function Layout() {
   const [isPeriodSelectorOpen, setIsPeriodSelectorOpen] = useState(false);
   const { periodKey, setPeriodKey } = usePeriodStore();
   const { data: periods } = usePeriods();
-  const navigate = useNavigate();
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -23,7 +22,7 @@ export function Layout() {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8 sm:ml-16">
           <div className="flex items-center justify-between h-16">
             {/* Logo & Period Selector */}
             <div className="flex items-center gap-4">
@@ -101,7 +100,7 @@ export function Layout() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6">
+      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6">
         <Outlet />
       </main>
 

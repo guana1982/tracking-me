@@ -39,69 +39,79 @@ export function Dashboard() {
   const displayRule = budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
   return (
-    <div className="space-y-6 sm:ml-16">
-      {/* Header Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <Wallet className="w-4 h-4" />
-            <span className="text-sm">Entrate</span>
+    <div className="sm:ml-16">
+      {/* Main Layout: Expenses Left | Content Right */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Column - Recent Expenses (full height) */}
+        <div className="lg:w-80 xl:w-96 flex-shrink-0 order-2 lg:order-1">
+          <RecentExpenses expenses={recentExpenses} periodKey={periodKey} />
+        </div>
+
+        {/* Right Column - Stats, Cards, Chart */}
+        <div className="flex-1 space-y-6 order-1 lg:order-2">
+          {/* Header Stats */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="card">
+              <div className="flex items-center gap-2 text-slate-500 mb-2">
+                <Wallet className="w-4 h-4" />
+                <span className="text-sm">Entrate</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {formatCurrency(totalIncome)}
+              </p>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center gap-2 text-slate-500 mb-2">
+                <TrendingUp className="w-4 h-4" />
+                <span className="text-sm">Speso</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">
+                {formatCurrency(totalSpent)}
+              </p>
+            </div>
+
+            <div className="card">
+              <div className="flex items-center gap-2 text-slate-500 mb-2">
+                <PiggyBank className="w-4 h-4" />
+                <span className="text-sm">Rimanente</span>
+              </div>
+              <p
+                className={`text-2xl font-bold ${
+                  remaining >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {formatCurrency(remaining)}
+              </p>
+            </div>
+
+            <div className="card hidden xl:block">
+              <div className="flex items-center gap-2 text-slate-500 mb-2">
+                <span className="text-sm">Regola budget</span>
+              </div>
+              <p className="text-xl font-bold text-slate-900">
+                {displayRule.needsPct}/{displayRule.wantsPct}/{displayRule.savingsPct}
+              </p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {formatCurrency(totalIncome)}
-          </p>
-        </div>
 
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">Speso</span>
+          {/* Reallocation Card (if available) */}
+          <ReallocationCard periodKey={periodKey} />
+
+          {/* Category Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {categories.map((category) => (
+              <CategoryCard key={category.category} summary={category} />
+            ))}
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {formatCurrency(totalSpent)}
-          </p>
-        </div>
 
-        <div className="card col-span-2 sm:col-span-1">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <PiggyBank className="w-4 h-4" />
-            <span className="text-sm">Rimanente</span>
+          {/* Chart - Centered */}
+          <div className="flex justify-center">
+            <div className="w-full max-w-md">
+              <BudgetChart categories={categories} totalIncome={totalIncome} />
+            </div>
           </div>
-          <p
-            className={`text-2xl font-bold ${
-              remaining >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}
-          >
-            {formatCurrency(remaining)}
-          </p>
         </div>
-
-        <div className="card hidden sm:block">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <span className="text-sm">Regola budget</span>
-          </div>
-          <p className="text-xl font-bold text-slate-900">
-            {displayRule.needsPct}/{displayRule.wantsPct}/{displayRule.savingsPct}
-          </p>
-        </div>
-      </div>
-
-      {/* Reallocation Card (if available) */}
-      <ReallocationCard periodKey={periodKey} />
-
-      {/* Category Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {categories.map((category) => (
-          <CategoryCard key={category.category} summary={category} />
-        ))}
-      </div>
-
-      {/* Charts & Recent Expenses */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="relative">
-          <BudgetChart categories={categories} totalIncome={totalIncome} />
-        </div>
-        <RecentExpenses expenses={recentExpenses} />
       </div>
     </div>
   );

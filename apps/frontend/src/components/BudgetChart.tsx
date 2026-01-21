@@ -45,13 +45,13 @@ export function BudgetChart({ categories, totalIncome }: BudgetChartProps) {
   return (
     <div className="card h-full">
       <h3 className="font-semibold text-slate-900 mb-4">Distribuzione spese</h3>
-      <div className="h-64">
+      <div className="h-64 relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
               cx="50%"
-              cy="50%"
+              cy="45%"
               innerRadius={60}
               outerRadius={90}
               paddingAngle={2}
@@ -71,15 +71,14 @@ export function BudgetChart({ categories, totalIncome }: BudgetChartProps) {
             />
           </PieChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Center text */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="text-center -mt-8">
-          <p className="text-sm text-slate-500">Totale</p>
-          <p className="text-xl font-bold text-slate-900">
-            {formatCurrency(totalSpent)}
-          </p>
+        {/* Center text - positioned relative to the chart container */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ marginBottom: '36px' }}>
+          <div className="text-center">
+            <p className="text-sm text-slate-500">Totale</p>
+            <p className="text-xl font-bold text-slate-900">
+              {formatCurrency(totalSpent)}
+            </p>
+          </div>
         </div>
       </div>
     </div>
