@@ -3,7 +3,7 @@ import { useDashboard } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { ReallocationCard } from '../components/ReallocationCard';
-import { RecentExpenses } from '../components/RecentExpenses';
+import { ExpensesList } from '../components/RecentExpenses';
 import { formatCurrency } from '../lib/utils';
 import { Loader2, TrendingUp, Wallet, PiggyBank } from 'lucide-react';
 
@@ -38,17 +38,48 @@ export function Dashboard() {
   // Default budget rule if not set
   const displayRule = budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
+  // Filter expenses by category
+  const needsExpenses = recentExpenses.filter((e) => e.category === 'NEEDS');
+  const wantsExpenses = recentExpenses.filter((e) => e.category === 'WANTS');
+  const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
+
   return (
     <div className="sm:ml-16">
-      {/* Main Layout: Expenses Left | Content Right */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Column - Recent Expenses (full height) */}
-        <div className="lg:w-80 xl:w-96 flex-shrink-0 order-2 lg:order-1">
-          <RecentExpenses expenses={recentExpenses} periodKey={periodKey} />
+      {/* Main Layout: 3 Expense Columns | Content Right */}
+      <div className="flex flex-col xl:flex-row gap-6">
+        {/* Left Columns - Expenses by Category */}
+        <div className="flex flex-col lg:flex-row gap-4 xl:flex-shrink-0 order-2 xl:order-1">
+          <div className="lg:w-64 xl:w-72">
+            <ExpensesList
+              expenses={needsExpenses}
+              periodKey={periodKey}
+              title="Spese Necessarie"
+              category="NEEDS"
+              emptyMessage="Nessuna spesa necessaria"
+            />
+          </div>
+          <div className="lg:w-64 xl:w-72">
+            <ExpensesList
+              expenses={wantsExpenses}
+              periodKey={periodKey}
+              title="Spese Svago"
+              category="WANTS"
+              emptyMessage="Nessuna spesa svago"
+            />
+          </div>
+          <div className="lg:w-64 xl:w-72">
+            <ExpensesList
+              expenses={savingsExpenses}
+              periodKey={periodKey}
+              title="Risparmi"
+              category="SAVINGS"
+              emptyMessage="Nessun risparmio"
+            />
+          </div>
         </div>
 
         {/* Right Column - Stats, Cards, Chart */}
-        <div className="flex-1 space-y-6 order-1 lg:order-2">
+        <div className="flex-1 space-y-6 order-1 xl:order-2">
           {/* Header Stats */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="card">

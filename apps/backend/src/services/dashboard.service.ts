@@ -88,8 +88,8 @@ export class DashboardService {
       budgetRule.autoReallocateNeedsRemainder
     );
 
-    // Get recent expenses
-    const recentExpenses = await expenseService.getRecent(periodKey, 5);
+    // Get all expenses for the period
+    const recentExpenses = await expenseService.getAllByPeriodKey(periodKey);
 
     // Calculate unallocated income (income not assigned to any budget yet)
     // This is conceptual - in our model, all income is allocated by the percentages

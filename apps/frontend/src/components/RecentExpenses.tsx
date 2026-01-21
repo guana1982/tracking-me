@@ -1,19 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { formatCurrency, formatDate, getCategoryColor } from '../lib/utils';
-import type { ExpenseDTO } from '@budget/shared';
-import { ShoppingBag, Wallet, PiggyBank } from 'lucide-react';
+import { formatCurrency, formatDate } from '../lib/utils';
+import type { ExpenseDTO, Category } from '@budget/shared';
+import { Plus } from 'lucide-react';
 import { useUpdateExpense } from '../hooks/useQueries';
+import { QuickAddModal } from './QuickAddModal';
 
-interface RecentExpensesProps {
+interface ExpensesListProps {
   expenses: ExpenseDTO[];
   periodKey: string;
+  title: string;
+  category: Category;
+  emptyMessage?: string;
 }
-
-const categoryIcons = {
-  NEEDS: ShoppingBag,
-  WANTS: Wallet,
-  SAVINGS: PiggyBank,
-};
 
 type EditingField = {
   id: string;
@@ -21,8 +19,9 @@ type EditingField = {
   value: string;
 };
 
-export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
+export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata' }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
   const editingIdRef = useRef<string | null>(null);
@@ -92,25 +91,42 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
     }
   };
 
+  const headerContent = (
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="font-semibold text-slate-900">{title}</h3>
+      <button
+        onClick={() => setIsAddModalOpen(true)}
+        className="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+        title="Aggiungi spesa"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
   if (expenses.length === 0) {
     return (
       <div className="card h-full">
-        <h3 className="font-semibold text-slate-900 mb-4">Spese recenti</h3>
+        {headerContent}
         <p className="text-slate-500 text-center py-8">
-          Nessuna spesa registrata questo mese
+          {emptyMessage}
         </p>
+        <QuickAddModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          periodKey={periodKey}
+          defaultCategory={category}
+        />
       </div>
     );
   }
 
   return (
-    <div className="card h-full flex flex-col">
-      <h3 className="font-semibold text-slate-900 mb-3">Spese recenti</h3>
-      <div className="flex-1 overflow-y-auto -mx-4 px-4" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+    <div className="card h-full flex flex-col max-h-[calc(100vh-120px)]">
+      {headerContent}
+      <div className="flex-1 overflow-y-auto -mx-4 px-4">
         <div className="divide-y divide-slate-100">
           {expenses.map((expense) => {
-            const colors = getCategoryColor(expense.category);
-            const Icon = categoryIcons[expense.category];
             const isEditingThis = editing?.id === expense.id;
 
             return (
@@ -118,10 +134,6 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
                 key={expense.id}
                 className="flex items-center gap-2 py-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
               >
-                <div className={`p-1.5 rounded ${colors.bg}`}>
-                  <Icon className={`w-3.5 h-3.5 ${colors.text}`} />
-                </div>
-
                 <div className="flex-1 min-w-0">
                   {isEditingThis && editing.field === 'label' ? (
                     <input
@@ -199,6 +211,12 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
           })}
         </div>
       </div>
+      <QuickAddModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        periodKey={periodKey}
+        defaultCategory={category}
+      />
     </div>
   );
 }

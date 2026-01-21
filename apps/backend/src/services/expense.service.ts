@@ -127,10 +127,20 @@ export class ExpenseService {
       throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
     }
 
+    // Parse date properly to avoid timezone issues
+    let parsedDate: Date;
+    if (data.date.length === 10) {
+      // If it's just a date (YYYY-MM-DD), parse it as local date at noon to avoid timezone shifts
+      const [year, month, day] = data.date.split('-').map(Number);
+      parsedDate = new Date(year, month - 1, day, 12, 0, 0);
+    } else {
+      parsedDate = new Date(data.date);
+    }
+
     const expense = await prisma.expense.create({
       data: {
         monthPeriodId: period.id,
-        date: new Date(data.date),
+        date: parsedDate,
         category: data.category,
         label: data.label,
         amount: data.amount,
@@ -153,10 +163,22 @@ export class ExpenseService {
       throw new AppError('Expense not found', 404, 'NOT_FOUND');
     }
 
+    // Parse date properly to avoid timezone issues
+    let parsedDate: Date | undefined;
+    if (data.date) {
+      // If it's just a date (YYYY-MM-DD), parse it as local date at noon to avoid timezone shifts
+      if (data.date.length === 10) {
+        const [year, month, day] = data.date.split('-').map(Number);
+        parsedDate = new Date(year, month - 1, day, 12, 0, 0);
+      } else {
+        parsedDate = new Date(data.date);
+      }
+    }
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
-        date: data.date ? new Date(data.date) : undefined,
+        date: parsedDate,
         category: data.category ?? undefined,
         label: data.label ?? undefined,
         amount: data.amount ?? undefined,

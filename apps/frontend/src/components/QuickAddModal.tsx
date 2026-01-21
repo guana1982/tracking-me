@@ -8,6 +8,7 @@ interface QuickAddModalProps {
   isOpen: boolean;
   onClose: () => void;
   periodKey: string;
+  defaultCategory?: Category;
 }
 
 const categories: { value: Category; icon: React.ElementType }[] = [
@@ -16,9 +17,9 @@ const categories: { value: Category; icon: React.ElementType }[] = [
   { value: 'SAVINGS', icon: PiggyBank },
 ];
 
-export function QuickAddModal({ isOpen, onClose, periodKey }: QuickAddModalProps) {
+export function QuickAddModal({ isOpen, onClose, periodKey, defaultCategory }: QuickAddModalProps) {
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState<Category>('NEEDS');
+  const [category, setCategory] = useState<Category>(defaultCategory || 'NEEDS');
   const [label, setLabel] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -29,14 +30,14 @@ export function QuickAddModal({ isOpen, onClose, periodKey }: QuickAddModalProps
     if (isOpen) {
       // Reset form
       setAmount('');
-      setCategory('NEEDS');
+      setCategory(defaultCategory || 'NEEDS');
       setLabel('');
       setDate(new Date().toISOString().split('T')[0]);
 
       // Focus amount input
       setTimeout(() => amountRef.current?.focus(), 100);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultCategory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
