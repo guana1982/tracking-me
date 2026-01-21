@@ -25,13 +25,19 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
+  const editingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (editing && inputRef.current) {
+    // Solo focus quando si inizia un nuovo editing (id cambia)
+    if (editing && editing.id !== editingIdRef.current && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
+      editingIdRef.current = editing.id;
     }
-  }, [editing]);
+    if (!editing) {
+      editingIdRef.current = null;
+    }
+  }, [editing?.id, editing?.field]);
 
   const startEditing = (expense: ExpenseDTO, field: 'label' | 'amount' | 'date') => {
     let value: string;
@@ -42,6 +48,7 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
     } else {
       value = expense.label;
     }
+    editingIdRef.current = null; // Reset per triggerare il focus
     setEditing({ id: expense.id, field, value });
   };
 
@@ -121,7 +128,10 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
                       ref={inputRef}
                       type="text"
                       value={editing.value}
-                      onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditing((prev) => prev ? { ...prev, value: newValue } : null);
+                      }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
                       className="text-sm font-medium text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-slate-400"
@@ -141,7 +151,10 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
                       ref={inputRef}
                       type="date"
                       value={editing.value}
-                      onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setEditing((prev) => prev ? { ...prev, value: newValue } : null);
+                      }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
                       className="text-xs text-slate-400 bg-white border border-slate-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400"
@@ -164,7 +177,10 @@ export function RecentExpenses({ expenses, periodKey }: RecentExpensesProps) {
                     step="0.01"
                     min="0.01"
                     value={editing.value}
-                    onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      setEditing((prev) => prev ? { ...prev, value: newValue } : null);
+                    }}
                     onKeyDown={handleKeyDown}
                     onBlur={saveEditing}
                     className="text-sm font-semibold text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 w-20 text-right focus:outline-none focus:ring-1 focus:ring-slate-400"
