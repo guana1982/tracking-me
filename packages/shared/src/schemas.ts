@@ -1,0 +1,99 @@
+import { z } from 'zod';
+import { CATEGORIES } from './constants';
+
+// Category enum schema
+export const categorySchema = z.enum(CATEGORIES);
+
+// Month Period schemas
+export const createMonthPeriodSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+
+// Budget Rule schemas
+export const updateBudgetRuleSchema = z
+  .object({
+    needsPct: z.number().min(0).max(100).optional(),
+    wantsPct: z.number().min(0).max(100).optional(),
+    savingsPct: z.number().min(0).max(100).optional(),
+    cutoffDay: z.number().int().min(1).max(31).optional(),
+    autoReallocateNeedsRemainder: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      // If any percentage is provided, validate that all three sum to 100
+      const needs = data.needsPct;
+      const wants = data.wantsPct;
+      const savings = data.savingsPct;
+
+      // Only validate if all three are provided
+      if (needs !== undefined && wants !== undefined && savings !== undefined) {
+        return needs + wants + savings === 100;
+      }
+      return true;
+    },
+    {
+      message: 'Budget percentages must sum to 100',
+    }
+  );
+
+// Income schemas
+export const createIncomeSchema = z.object({
+  label: z.string().min(1).max(100).trim(),
+  amount: z.number().positive().multipleOf(0.01), // Allow cents
+});
+
+export const updateIncomeSchema = z.object({
+  label: z.string().min(1).max(100).trim().optional(),
+  amount: z.number().positive().multipleOf(0.01).optional(),
+});
+
+// Expense schemas
+export const createExpenseSchema = z.object({
+  date: z.string().datetime().or(z.string().date()), // ISO date or datetime
+  category: categorySchema,
+  label: z.string().min(1).max(200).trim(),
+  amount: z.number().positive().multipleOf(0.01),
+  notes: z.string().max(500).trim().optional(),
+});
+
+export const updateExpenseSchema = z.object({
+  date: z.string().datetime().or(z.string().date()).optional(),
+  category: categorySchema.optional(),
+  label: z.string().min(1).max(200).trim().optional(),
+  amount: z.number().positive().multipleOf(0.01).optional(),
+  notes: z.string().max(500).trim().optional().nullable(),
+});
+
+// Reallocation schemas
+export const createReallocationSchema = z.object({
+  fromCategory: categorySchema,
+  toCategory: categorySchema,
+  amount: z.number().positive().multipleOf(0.01),
+  reason: z.string().max(200).trim().optional(),
+});
+
+// Expense filters schema
+export const expenseFiltersSchema = z.object({
+  category: categorySchema.optional(),
+  startDate: z.string().date().optional(),
+  endDate: z.string().date().optional(),
+  search: z.string().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// Period key schema (YYYY-MM)
+export const periodKeySchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, {
+  message: 'Period key must be in YYYY-MM format',
+});
+
+// Type exports from schemas
+export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
+export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
+export type CreateIncomeInput = z.infer<typeof createIncomeSchema>;
+export type UpdateIncomeInput = z.infer<typeof updateIncomeSchema>;
+export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+export type CreateReallocationInput = z.infer<typeof createReallocationSchema>;
+export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;

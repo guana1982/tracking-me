@@ -1,0 +1,108 @@
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import { prisma } from './lib/prisma.js';
+import { monthPeriodRoutes } from './routes/month-period.routes.js';
+import { incomeRoutes } from './routes/income.routes.js';
+import { expenseRoutes } from './routes/expense.routes.js';
+import { budgetRuleRoutes } from './routes/budget-rule.routes.js';
+import { dashboardRoutes } from './routes/dashboard.routes.js';
+import { reallocationRoutes } from './routes/reallocation.routes.js';
+import { errorHandler } from './lib/error-handler.js';
+
+const fastify = Fastify({
+  logger: {
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transport:
+      process.env.NODE_ENV !== 'production'
+        ? {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+            },
+          }
+        : undefined,
+  },
+});
+
+// Register plugins
+await fastify.register(cors, {
+  origin: true, // Allow all origins in dev
+  credentials: true,
+});
+
+// Swagger documentation
+await fastify.register(swagger, {
+  openapi: {
+    info: {
+      title: 'Budget Tracker API',
+      description: 'Personal finance management API with 65/25/10 budget rule',
+      version: '1.0.0',
+    },
+    servers: [
+      {
+        url: `http://localhost:${process.env.PORT || 3001}`,
+        description: 'Development server',
+      },
+    ],
+    tags: [
+      { name: 'Month Periods', description: 'Monthly budget periods management' },
+      { name: 'Budget Rules', description: 'Budget percentage rules' },
+      { name: 'Incomes', description: 'Income entries management' },
+      { name: 'Expenses', description: 'Expense entries management' },
+      { name: 'Dashboard', description: 'Dashboard and summary endpoints' },
+      { name: 'Reallocations', description: 'Budget reallocation management' },
+    ],
+  },
+});
+
+await fastify.register(swaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: false,
+  },
+});
+
+// Error handler
+fastify.setErrorHandler(errorHandler);
+
+// Health check
+fastify.get('/health', async () => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Register routes
+await fastify.register(monthPeriodRoutes, { prefix: '/api/periods' });
+await fastify.register(budgetRuleRoutes, { prefix: '/api/budget-rules' });
+await fastify.register(incomeRoutes, { prefix: '/api/incomes' });
+await fastify.register(expenseRoutes, { prefix: '/api/expenses' });
+await fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
+await fastify.register(reallocationRoutes, { prefix: '/api/reallocations' });
+
+// Graceful shutdown
+const gracefulShutdown = async () => {
+  console.log('Shutting down gracefully...');
+  await fastify.close();
+  await prisma.$disconnect();
+  process.exit(0);
+};
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+
+// Start server
+const start = async () => {
+  try {
+    const port = Number(process.env.PORT) || 3001;
+    await fastify.listen({ port, host: '0.0.0.0' });
+    console.log(`\n🚀 Server running at http://localhost:${port}`);
+    console.log(`📚 API Docs available at http://localhost:${port}/docs`);
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+
+start();

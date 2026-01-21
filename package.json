@@ -1,0 +1,26 @@
+{
+  "name": "budget-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal finance management app with 65/25/10 budget rule",
+  "scripts": {
+    "dev": "pnpm --filter @budget/shared build && pnpm --parallel --filter @budget/frontend --filter @budget/backend run dev",
+    "dev:frontend": "pnpm --filter @budget/frontend dev",
+    "dev:backend": "pnpm --filter @budget/shared build && pnpm --filter @budget/backend dev",
+    "build": "pnpm -r run build",
+    "build:frontend": "pnpm --filter @budget/frontend build",
+    "build:backend": "pnpm --filter @budget/backend build",
+    "db:generate": "pnpm --filter @budget/backend prisma:generate",
+    "db:migrate": "pnpm --filter @budget/backend prisma:migrate",
+    "db:seed": "pnpm --filter @budget/backend prisma:seed",
+    "db:studio": "pnpm --filter @budget/backend prisma:studio",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean && rm -rf node_modules"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

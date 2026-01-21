@@ -1,0 +1,86 @@
+import { DEFAULT_BUDGET_RULE, WARNING_THRESHOLDS } from '@budget/shared';
+import type { CategorySummary, Category } from '@budget/shared';
+
+/**
+ * Generate period key from year and month (YYYY-MM format)
+ */
+export function generatePeriodKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+/**
+ * Parse period key to year and month
+ */
+export function parsePeriodKey(periodKey: string): { year: number; month: number } {
+  const [year, month] = periodKey.split('-').map(Number);
+  return { year, month };
+}
+
+/**
+ * Get current period key
+ */
+export function getCurrentPeriodKey(): string {
+  const now = new Date();
+  return generatePeriodKey(now.getFullYear(), now.getMonth() + 1);
+}
+
+/**
+ * Calculate budget targets based on income and percentages
+ */
+export function calculateTargets(
+  totalIncome: number,
+  needsPct: number,
+  wantsPct: number,
+  savingsPct: number
+): { needs: number; wants: number; savings: number } {
+  return {
+    needs: (totalIncome * needsPct) / 100,
+    wants: (totalIncome * wantsPct) / 100,
+    savings: (totalIncome * savingsPct) / 100,
+  };
+}
+
+/**
+ * Determine status based on spending percentage
+ */
+export function getSpendingStatus(percentage: number): 'ok' | 'warning' | 'danger' {
+  if (percentage >= WARNING_THRESHOLDS.DANGER) return 'danger';
+  if (percentage >= WARNING_THRESHOLDS.WARNING) return 'warning';
+  return 'ok';
+}
+
+/**
+ * Build category summary
+ */
+export function buildCategorySummary(
+  category: Category,
+  targetAmount: number,
+  actualAmount: number
+): CategorySummary {
+  const remaining = targetAmount - actualAmount;
+  const percentage = targetAmount > 0 ? (actualAmount / targetAmount) * 100 : 0;
+
+  return {
+    category,
+    targetAmount: Math.round(targetAmount * 100) / 100,
+    actualAmount: Math.round(actualAmount * 100) / 100,
+    remaining: Math.round(remaining * 100) / 100,
+    percentage: Math.round(percentage * 100) / 100,
+    status: getSpendingStatus(percentage),
+  };
+}
+
+/**
+ * Check if we're past the cutoff day for reallocation
+ */
+export function isPastCutoffDay(cutoffDay: number): boolean {
+  const today = new Date().getDate();
+  return today >= cutoffDay;
+}
+
+/**
+ * Round to 2 decimal places
+ */
+export function roundCurrency(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}

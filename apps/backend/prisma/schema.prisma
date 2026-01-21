@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Month Period - represents a budget month (e.g., 2026-01)
+model MonthPeriod {
+  id          String   @id @default(cuid())
+  year        Int
+  month       Int      // 1-12
+  periodKey   String   @unique // YYYY-MM format for easy querying
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  budgetRule    BudgetRule?
+  incomes       Income[]
+  expenses      Expense[]
+  reallocations Reallocation[]
+
+  @@unique([year, month])
+  @@index([periodKey])
+  @@map("month_periods")
+}
+
+// Budget Rule - configurable percentages for a month
+model BudgetRule {
+  id                          String   @id @default(cuid())
+  monthPeriodId               String   @unique
+  needsPct                    Float    @default(65)
+  wantsPct                    Float    @default(25)
+  savingsPct                  Float    @default(10)
+  cutoffDay                   Int      @default(26) // Day of month for reallocation
+  autoReallocateNeedsRemainder Boolean @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  // Relations
+  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+
+  @@map("budget_rules")
+}
+
+// Income - monthly income entry
+model Income {
+  id            String   @id @default(cuid())
+  monthPeriodId String
+  label         String
+  amount        Float    // Store as float (EUR), we'll handle precision in app
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([monthPeriodId])
+  @@map("incomes")
+}
+
+// Category enum
+enum Category {
+  NEEDS
+  WANTS
+  SAVINGS
+}
+
+// Expense - individual expense entry
+model Expense {
+  id            String   @id @default(cuid())
+  monthPeriodId String
+  date          DateTime
+  category      Category
+  label         String
+  amount        Float    // Store as float (EUR)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([monthPeriodId])
+  @@index([category])
+  @@index([date])
+  @@map("expenses")
+}
+
+// Reallocation - transfer between categories at end of month
+model Reallocation {
+  id            String   @id @default(cuid())
+  monthPeriodId String
+  fromCategory  Category
+  toCategory    Category
+  amount        Float
+  executedAt    DateTime @default(now())
+  reason        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([monthPeriodId])
+  @@map("reallocations")
+}
