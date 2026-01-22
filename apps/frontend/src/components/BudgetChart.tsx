@@ -49,9 +49,9 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
   if (compact && showStats) {
     return (
       <div className="card py-4 px-5">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
           {/* Donut chart */}
-          <div className="w-24 h-24 relative flex-shrink-0">
+          <div className="w-24 h-24 relative flex-shrink-0 mx-auto sm:mx-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -75,7 +75,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
           {/* Legend + Stats */}
           <div className="flex-1 flex flex-col gap-3">
             {/* Legend */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
               {data.map((entry, index) => (
                 <div key={index} className="flex items-center gap-1.5">
                   <div
@@ -91,16 +91,16 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
             </div>
 
             {/* Stats: Entrate, Speso, Rimanente */}
-            <div className="flex gap-6 pt-2 border-t border-slate-100">
-              <div>
+            <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+              <div className="text-center sm:text-left">
                 <p className="text-xs text-slate-500">Entrate</p>
                 <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
               </div>
-              <div>
+              <div className="text-center sm:text-left">
                 <p className="text-xs text-slate-500">Speso</p>
                 <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
               </div>
-              <div>
+              <div className="text-center sm:text-left">
                 <p className="text-xs text-slate-500">Rimanente</p>
                 <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(remaining)}

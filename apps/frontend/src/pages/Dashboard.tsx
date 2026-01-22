@@ -40,10 +40,8 @@ export function Dashboard() {
 
   return (
     <div className="sm:ml-16 space-y-6">
-      {/* Chart with Stats - Aligned left */}
-      <div className="max-w-xl">
-        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats />
-      </div>
+      {/* Chart with Stats - Full width responsive */}
+      <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats />
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
