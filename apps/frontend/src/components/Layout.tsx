@@ -30,7 +30,7 @@ export function Layout() {
             {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold text-slate-900">Budget</h1>
-              <span className="text-sm font-medium text-slate-500">
+              <span className="text-xl font-bold text-slate-900">
                 {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
               </span>
 
@@ -90,6 +90,14 @@ export function Layout() {
                     </div>
                   </>
                 )}
+              </div>
+
+              {/* Today's Date */}
+              <div className="text-sm text-slate-500">
+                <span className="hidden sm:inline">Oggi: </span>
+                <span className="font-medium text-slate-700">
+                  {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
               </div>
             </div>
 
