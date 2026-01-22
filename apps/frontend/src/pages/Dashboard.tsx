@@ -4,8 +4,7 @@ import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { ReallocationCard } from '../components/ReallocationCard';
 import { ExpensesList } from '../components/RecentExpenses';
-import { formatCurrency } from '../lib/utils';
-import { Loader2, TrendingUp, Wallet, PiggyBank } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
@@ -32,8 +31,7 @@ export function Dashboard() {
 
   if (!data) return null;
 
-  const { totalIncome, totalSpent, categories, recentExpenses } = data;
-  const remaining = totalIncome - totalSpent;
+  const { totalIncome, categories, recentExpenses } = data;
 
   // Filter expenses by category
   const needsExpenses = recentExpenses.filter((e) => e.category === 'NEEDS');
@@ -42,46 +40,9 @@ export function Dashboard() {
 
   return (
     <div className="sm:ml-16 space-y-6">
-      {/* Header Stats - Top */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <Wallet className="w-4 h-4" />
-            <span className="text-sm">Entrate</span>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {formatCurrency(totalIncome)}
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm">Speso</span>
-          </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {formatCurrency(totalSpent)}
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 mb-2">
-            <PiggyBank className="w-4 h-4" />
-            <span className="text-sm">Rimanente</span>
-          </div>
-          <p
-            className={`text-2xl font-bold ${
-              remaining >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}
-          >
-            {formatCurrency(remaining)}
-          </p>
-        </div>
-      </div>
-
-      {/* Compact Chart - Aligned left */}
-      <div className="max-w-md">
-        <BudgetChart categories={categories} totalIncome={totalIncome} compact />
+      {/* Chart with Stats - Aligned left */}
+      <div className="max-w-xl">
+        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats />
       </div>
 
       {/* Category Cards + Expense Lists - Aligned in columns */}

@@ -6,9 +6,10 @@ interface BudgetChartProps {
   categories: CategorySummary[];
   totalIncome: number;
   compact?: boolean;
+  showStats?: boolean;
 }
 
-export function BudgetChart({ categories, totalIncome, compact = false }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, compact = false, showStats = false }: BudgetChartProps) {
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
     value: cat.actualAmount,
@@ -42,6 +43,75 @@ export function BudgetChart({ categories, totalIncome, compact = false }: Budget
     }
     return null;
   };
+
+  const remaining = totalIncome - totalSpent;
+
+  if (compact && showStats) {
+    return (
+      <div className="card py-4 px-5">
+        <div className="flex items-center gap-6">
+          {/* Donut chart */}
+          <div className="w-24 h-24 relative flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={28}
+                  outerRadius={44}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Legend + Stats */}
+          <div className="flex-1 flex flex-col gap-3">
+            {/* Legend */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {data.map((entry, index) => (
+                <div key={index} className="flex items-center gap-1.5">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <span className="text-xs text-slate-600">{entry.name}</span>
+                  <span className="text-xs font-medium text-slate-800">
+                    {entry.percentage.toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Stats: Entrate, Speso, Rimanente */}
+            <div className="flex gap-6 pt-2 border-t border-slate-100">
+              <div>
+                <p className="text-xs text-slate-500">Entrate</p>
+                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Speso</p>
+                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Rimanente</p>
+                <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(remaining)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (compact) {
     return (
