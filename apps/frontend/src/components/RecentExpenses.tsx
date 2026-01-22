@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category } from '@budget/shared';
 import { Plus, Trash2 } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
@@ -101,12 +101,14 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     }
   };
 
+  const colors = getCategoryColor(category);
+
   const headerContent = (
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="font-semibold text-slate-900">{title}</h3>
+    <div className={cn('flex items-center justify-between px-4 py-2 -mx-4 -mt-4 mb-3 rounded-t-xl border-b', colors.bg, colors.border)}>
+      <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
       <button
         onClick={() => setIsAddModalOpen(true)}
-        className="p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+        className={cn('p-1 rounded transition-colors', colors.text, 'hover:opacity-70')}
         title="Aggiungi spesa"
       >
         <Plus className="w-4 h-4" />
@@ -116,7 +118,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   if (expenses.length === 0) {
     return (
-      <div className="card h-full">
+      <div className="card h-full border border-slate-200">
         {headerContent}
         <p className="text-slate-500 text-center py-8">
           {emptyMessage}
@@ -132,9 +134,9 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   }
 
   return (
-    <div className="card h-full flex flex-col max-h-[calc(100vh-120px)]">
+    <div className="card flex flex-col max-h-[calc(100vh-340px)] border border-slate-200">
       {headerContent}
-      <div className="flex-1 overflow-y-auto -mx-4 px-4">
+      <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="divide-y divide-slate-100">
           {expenses.map((expense) => {
             const isEditingThis = editing?.id === expense.id;

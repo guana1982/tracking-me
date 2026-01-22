@@ -19,20 +19,20 @@ export function CategoryCard({ summary }: CategoryCardProps) {
   const isOverBudget = remaining < 0;
 
   return (
-    <div className={cn('card', colors.bg, colors.border, 'border')}>
+    <div className={cn('card py-3', colors.bg, colors.border, 'border')}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div className={cn('p-2 rounded-lg', colors.bg)}>
-            <Icon className={cn('w-5 h-5', colors.text)} />
+          <div className={cn('p-1.5 rounded-lg', colors.bg)}>
+            <Icon className={cn('w-4 h-4', colors.text)} />
           </div>
-          <h3 className={cn('font-semibold', colors.text)}>
+          <h3 className={cn('font-semibold text-sm', colors.text)}>
             {getCategoryLabel(category)}
           </h3>
         </div>
         <div
           className={cn(
-            'px-2 py-1 rounded-full text-xs font-medium',
+            'px-2 py-0.5 rounded-full text-xs font-medium',
             status === 'ok' && 'bg-green-100 text-green-700',
             status === 'warning' && 'bg-yellow-100 text-yellow-700',
             status === 'danger' && 'bg-red-100 text-red-700'
@@ -43,8 +43,8 @@ export function CategoryCard({ summary }: CategoryCardProps) {
       </div>
 
       {/* Progress Bar */}
-      <div className="mb-4">
-        <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+      <div className="mb-2">
+        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
           <div
             className={cn(
               'h-full rounded-full transition-all',
@@ -57,43 +57,30 @@ export function CategoryCard({ summary }: CategoryCardProps) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Speso</p>
-          <p className="text-lg font-semibold text-slate-900">
-            {formatCurrency(actualAmount)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500 mb-1">Budget</p>
-          <p className="text-lg font-semibold text-slate-700">
-            {formatCurrency(targetAmount)}
-          </p>
-        </div>
-      </div>
-
-      {/* Remaining */}
-      <div className={cn('mt-4 pt-4 border-t', colors.border)}>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-600">
-            {isOverBudget ? 'Sforato di' : 'Disponibile'}
+      {/* Stats & Remaining - Inline */}
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-3">
+          <span className="text-slate-600">
+            <span className="text-slate-400">Speso:</span> {formatCurrency(actualAmount)}
           </span>
-          <div className="flex items-center gap-1">
-            {isOverBudget ? (
-              <TrendingDown className="w-4 h-4 text-red-500" />
-            ) : (
-              <TrendingUp className="w-4 h-4 text-green-500" />
+          <span className="text-slate-600">
+            <span className="text-slate-400">Budget:</span> {formatCurrency(targetAmount)}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {isOverBudget ? (
+            <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+          ) : (
+            <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+          )}
+          <span
+            className={cn(
+              'font-bold',
+              isOverBudget ? 'text-red-600' : 'text-green-600'
             )}
-            <span
-              className={cn(
-                'text-lg font-bold',
-                isOverBudget ? 'text-red-600' : 'text-green-600'
-              )}
-            >
-              {formatCurrency(Math.abs(remaining))}
-            </span>
-          </div>
+          >
+            {formatCurrency(Math.abs(remaining))}
+          </span>
         </div>
       </div>
     </div>

@@ -79,43 +79,42 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Category Cards */}
+      {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {categories.map((category) => (
-          <CategoryCard key={category.category} summary={category} />
-        ))}
-      </div>
+        {/* Necessità Column */}
+        <div className="space-y-4">
+          <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} />
+          <ExpensesList
+            expenses={needsExpenses}
+            periodKey={periodKey}
+            title="Spese Necessarie"
+            category="NEEDS"
+            emptyMessage="Nessuna spesa necessaria"
+          />
+        </div>
 
-      {/* Expense Columns - Centered */}
-      <div className="flex justify-center">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="w-full lg:w-72">
-            <ExpensesList
-              expenses={needsExpenses}
-              periodKey={periodKey}
-              title="Spese Necessarie"
-              category="NEEDS"
-              emptyMessage="Nessuna spesa necessaria"
-            />
-          </div>
-          <div className="w-full lg:w-72">
-            <ExpensesList
-              expenses={wantsExpenses}
-              periodKey={periodKey}
-              title="Spese Svago"
-              category="WANTS"
-              emptyMessage="Nessuna spesa svago"
-            />
-          </div>
-          <div className="w-full lg:w-72">
-            <ExpensesList
-              expenses={savingsExpenses}
-              periodKey={periodKey}
-              title="Risparmi"
-              category="SAVINGS"
-              emptyMessage="Nessun risparmio"
-            />
-          </div>
+        {/* Svago Column */}
+        <div className="space-y-4">
+          <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} />
+          <ExpensesList
+            expenses={wantsExpenses}
+            periodKey={periodKey}
+            title="Spese Svago"
+            category="WANTS"
+            emptyMessage="Nessuna spesa svago"
+          />
+        </div>
+
+        {/* Risparmi Column */}
+        <div className="space-y-4">
+          <CategoryCard summary={categories.find((c) => c.category === 'SAVINGS')!} />
+          <ExpensesList
+            expenses={savingsExpenses}
+            periodKey={periodKey}
+            title="Risparmi"
+            category="SAVINGS"
+            emptyMessage="Nessun risparmio"
+          />
         </div>
       </div>
 
