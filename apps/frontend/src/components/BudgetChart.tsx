@@ -5,9 +5,10 @@ import type { CategorySummary } from '@budget/shared';
 interface BudgetChartProps {
   categories: CategorySummary[];
   totalIncome: number;
+  compact?: boolean;
 }
 
-export function BudgetChart({ categories, totalIncome }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, compact = false }: BudgetChartProps) {
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
     value: cat.actualAmount,
@@ -41,6 +42,57 @@ export function BudgetChart({ categories, totalIncome }: BudgetChartProps) {
     }
     return null;
   };
+
+  if (compact) {
+    return (
+      <div className="card py-3 px-4">
+        <div className="flex items-center gap-4">
+          {/* Mini donut chart */}
+          <div className="w-20 h-20 relative flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={22}
+                  outerRadius={36}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center text */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <p className="text-xs font-bold text-slate-700">
+                {formatCurrency(totalSpent)}
+              </p>
+            </div>
+          </div>
+          {/* Legend inline */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {data.map((entry, index) => (
+              <div key={index} className="flex items-center gap-1.5">
+                <div
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="text-xs text-slate-600">{entry.name}</span>
+                <span className="text-xs font-medium text-slate-800">
+                  {entry.percentage.toFixed(0)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card h-full">

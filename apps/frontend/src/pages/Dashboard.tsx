@@ -79,6 +79,11 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* Compact Chart - Aligned left */}
+      <div className="max-w-md">
+        <BudgetChart categories={categories} totalIncome={totalIncome} compact />
+      </div>
+
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Necessità Column */}
@@ -120,13 +125,6 @@ export function Dashboard() {
 
       {/* Reallocation Card (if available) */}
       <ReallocationCard periodKey={periodKey} />
-
-      {/* Chart - Centered */}
-      <div className="flex justify-center">
-        <div className="w-full max-w-md">
-          <BudgetChart categories={categories} totalIncome={totalIncome} />
-        </div>
-      </div>
     </div>
   );
 }
