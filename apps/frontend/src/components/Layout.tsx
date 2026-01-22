@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey } from '../lib/utils';
-import { usePeriods } from '../hooks/useQueries';
+import { usePeriods, useDashboard } from '../hooks/useQueries';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { QuickAddModal } from './QuickAddModal';
 
@@ -11,6 +11,9 @@ export function Layout() {
   const [isPeriodSelectorOpen, setIsPeriodSelectorOpen] = useState(false);
   const { periodKey, setPeriodKey } = usePeriodStore();
   const { data: periods } = usePeriods();
+  const { data: dashboard } = useDashboard(periodKey);
+
+  const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -24,9 +27,12 @@ export function Layout() {
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="px-4 sm:px-6 lg:px-8 sm:ml-16">
           <div className="flex items-center justify-between h-16">
-            {/* Logo & Period Selector */}
+            {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold text-slate-900">Budget</h1>
+              <span className="text-sm font-medium text-slate-500">
+                {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
+              </span>
 
               {/* Period Selector */}
               <div className="relative">

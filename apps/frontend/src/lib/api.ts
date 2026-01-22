@@ -36,12 +36,18 @@ async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
+
+  // Only set Content-Type for requests with body
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
     ...options,
+    headers,
   });
 
   const data = (await response.json()) as ApiResponse<T>;

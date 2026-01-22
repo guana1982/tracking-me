@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
 import type { ExpenseDTO, Category } from '@budget/shared';
-import { Plus } from 'lucide-react';
-import { useUpdateExpense } from '../hooks/useQueries';
+import { Plus, Trash2 } from 'lucide-react';
+import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
 interface ExpensesListProps {
@@ -24,6 +24,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
+  const deleteExpense = useDeleteExpense(periodKey);
   const editingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -88,6 +89,15 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       saveEditing();
     } else if (e.key === 'Escape') {
       cancelEditing();
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteExpense.mutateAsync(id);
+      setEditing(null);
+    } catch (error) {
+      console.error('Failed to delete expense:', error);
     }
   };
 
@@ -205,6 +215,19 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                   >
                     {formatCurrency(expense.amount)}
                   </p>
+                )}
+
+                {isEditingThis && (
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleDelete(expense.id);
+                    }}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors ml-1"
+                    title="Elimina spesa"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 )}
               </div>
             );
