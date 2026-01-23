@@ -1,7 +1,7 @@
-FROM node:18-alpine
+FROM node:18-slim
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
+# Install OpenSSL for Prisma (Debian-based)
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Install pnpm
 RUN npm install -g pnpm
