@@ -1,0 +1,37 @@
+FROM node:18-alpine AS builder
+
+# Install pnpm
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy root package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy all packages
+COPY packages ./packages
+COPY apps/frontend ./apps/frontend
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build shared package
+RUN pnpm --filter @budget/shared build
+
+# Build frontend
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+RUN pnpm --filter @budget/frontend build
+
+# Production stage
+FROM node:18-alpine
+
+RUN npm install -g serve
+
+WORKDIR /app
+
+COPY --from=builder /app/apps/frontend/dist ./dist
+
+EXPOSE 3000
+
+CMD ["serve", "-s", "dist", "-l", "3000"]
