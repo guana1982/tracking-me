@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd ../.. && pnpm install && pnpm --filter @budget/shared build && pnpm --filter @budget/backend build && pnpm --filter @budget/backend prisma:generate"
+
+[deploy]
+startCommand = "cd apps/backend && pnpm prisma:migrate:prod && pnpm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[variables]
+NODE_ENV = "production"
