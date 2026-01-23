@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd ../.. && pnpm install && pnpm --filter @budget/shared build && pnpm --filter @budget/frontend build"
+buildCommand = "npm install -g pnpm && cd ../.. && pnpm install && pnpm --filter @budget/shared build && pnpm --filter @budget/frontend build"
 
 [deploy]
 startCommand = "npx serve -s dist -l $PORT"
