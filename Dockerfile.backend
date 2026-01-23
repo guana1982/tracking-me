@@ -26,6 +26,7 @@ RUN pnpm --filter @budget/backend build
 
 WORKDIR /app/apps/backend
 
-EXPOSE 3001
+# Railway injects PORT at runtime
+ENV PORT=3001
 
-CMD ["sh", "-c", "pnpm prisma:migrate:prod && pnpm start"]
+CMD ["sh", "-c", "echo 'Starting migration...' && pnpm prisma:migrate:prod && echo 'Migration done. Starting server on port '$PORT'...' && pnpm start"]
