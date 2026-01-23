@@ -1,6 +1,7 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install -g pnpm && cd ../.. && pnpm install && pnpm --filter @budget/shared build && pnpm --filter @budget/backend build && pnpm --filter @budget/backend prisma:generate"
+installCommand = "npm install -g pnpm && cd ../.. && pnpm install"
+buildCommand = "cd ../.. && pnpm --filter @budget/shared build && pnpm --filter @budget/backend build && pnpm --filter @budget/backend prisma:generate"
 
 [deploy]
 startCommand = "cd apps/backend && pnpm prisma:migrate:prod && pnpm start"
