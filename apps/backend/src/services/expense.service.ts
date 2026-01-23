@@ -225,9 +225,9 @@ export class ExpenseService {
     });
 
     return {
-      NEEDS: totals.find((t) => t.category === 'NEEDS')?._sum.amount ?? 0,
-      WANTS: totals.find((t) => t.category === 'WANTS')?._sum.amount ?? 0,
-      SAVINGS: totals.find((t) => t.category === 'SAVINGS')?._sum.amount ?? 0,
+      NEEDS: totals.find((t: { category: string }) => t.category === 'NEEDS')?._sum.amount ?? 0,
+      WANTS: totals.find((t: { category: string }) => t.category === 'WANTS')?._sum.amount ?? 0,
+      SAVINGS: totals.find((t: { category: string }) => t.category === 'SAVINGS')?._sum.amount ?? 0,
     };
   }
 

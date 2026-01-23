@@ -53,7 +53,7 @@ export class ReallocationService {
     };
 
     // Calculate totals
-    const totalIncome = period.incomes.reduce((sum, i) => sum + i.amount, 0);
+    const totalIncome = period.incomes.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0);
     const targets = calculateTargets(
       totalIncome,
       budgetRule.needsPct,

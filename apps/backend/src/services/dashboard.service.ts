@@ -52,7 +52,7 @@ export class DashboardService {
     });
 
     const incomes = period?.incomes || [];
-    const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
+    const totalIncome = incomes.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0);
 
     // Calculate targets
     const targets = calculateTargets(
@@ -69,8 +69,8 @@ export class DashboardService {
     // Calculate reallocations impact (add to SAVINGS, subtract from NEEDS)
     const reallocations = period?.reallocations || [];
     const totalReallocatedToSavings = reallocations
-      .filter((r) => r.toCategory === 'SAVINGS')
-      .reduce((sum, r) => sum + r.amount, 0);
+      .filter((r: { toCategory: string }) => r.toCategory === 'SAVINGS')
+      .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0);
 
     // Build category summaries
     const categories: CategorySummary[] = [

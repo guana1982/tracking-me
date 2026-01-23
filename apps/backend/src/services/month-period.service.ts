@@ -17,12 +17,12 @@ export class MonthPeriodService {
       },
     });
 
-    return periods.map((p) => ({
+    return periods.map((p: { periodKey: string; year: number; month: number; incomes: { amount: number }[]; expenses: { amount: number }[] }) => ({
       periodKey: p.periodKey,
       year: p.year,
       month: p.month,
-      totalIncome: p.incomes.reduce((sum, i) => sum + i.amount, 0),
-      totalSpent: p.expenses.reduce((sum, e) => sum + e.amount, 0),
+      totalIncome: p.incomes.reduce((sum: number, i: { amount: number }) => sum + i.amount, 0),
+      totalSpent: p.expenses.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0),
     }));
   }
 

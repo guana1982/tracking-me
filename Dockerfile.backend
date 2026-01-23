@@ -18,11 +18,11 @@ RUN pnpm install --frozen-lockfile
 # Build shared package
 RUN pnpm --filter @budget/shared build
 
+# Generate Prisma client BEFORE building (needed for types)
+RUN pnpm --filter @budget/backend prisma:generate
+
 # Build backend
 RUN pnpm --filter @budget/backend build
-
-# Generate Prisma client
-RUN pnpm --filter @budget/backend prisma:generate
 
 WORKDIR /app/apps/backend
 

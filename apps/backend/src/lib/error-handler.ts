@@ -36,14 +36,15 @@ export function errorHandler(
 
   // Prisma errors
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    switch (error.code) {
+    const prismaError = error as Prisma.PrismaClientKnownRequestError;
+    switch (prismaError.code) {
       case 'P2002': // Unique constraint violation
         reply.status(409).send({
           success: false,
           error: {
             code: 'DUPLICATE_ENTRY',
             message: 'A record with this value already exists',
-            details: error.meta,
+            details: prismaError.meta,
           },
         } satisfies ApiError);
         return;
