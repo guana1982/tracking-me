@@ -1,7 +1,6 @@
-import { ArrowRight, PiggyBank, AlertCircle } from 'lucide-react';
+import { ArrowRight, PiggyBank } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { useCreateReallocation, useReallocationPreview } from '../hooks/useQueries';
-import type { ReallocationPreviewDTO } from '@budget/shared';
 
 interface ReallocationCardProps {
   periodKey: string;

@@ -12,9 +12,7 @@ import type { Category, ExpenseFilters } from '@budget/shared';
 import {
   Loader2,
   Search,
-  Filter,
   Trash2,
-  Edit2,
   ShoppingBag,
   Wallet,
   PiggyBank,

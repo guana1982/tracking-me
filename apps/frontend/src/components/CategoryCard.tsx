@@ -1,4 +1,4 @@
-import { cn, formatCurrency, getCategoryColor, getCategoryLabel, getStatusColor } from '../lib/utils';
+import { cn, formatCurrency, getCategoryColor, getCategoryLabel } from '../lib/utils';
 import type { CategorySummary } from '@budget/shared';
 import { ShoppingBag, Wallet, PiggyBank, TrendingUp, TrendingDown } from 'lucide-react';
 
