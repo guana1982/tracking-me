@@ -10,9 +10,9 @@ export class ReallocationService {
   /**
    * Get all reallocations for a period
    */
-  async getByPeriodKey(periodKey: string): Promise<ReallocationDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getByPeriodKey(periodKey: string, userId: string): Promise<ReallocationDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         reallocations: {
           orderBy: { executedAt: 'desc' },
@@ -30,9 +30,9 @@ export class ReallocationService {
   /**
    * Get reallocation preview (how much can be reallocated from NEEDS to SAVINGS)
    */
-  async getPreview(periodKey: string): Promise<ReallocationPreviewDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getPreview(periodKey: string, userId: string): Promise<ReallocationPreviewDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         incomes: true,
         budgetRule: true,
@@ -62,7 +62,7 @@ export class ReallocationService {
     );
 
     // Get expense totals
-    const expenseTotals = await expenseService.getTotalsByCategory(periodKey);
+    const expenseTotals = await expenseService.getTotalsByCategory(periodKey, userId);
     const needsRemainder = targets.needs - expenseTotals.NEEDS;
 
     // Check if reallocation is available
@@ -81,9 +81,9 @@ export class ReallocationService {
   /**
    * Execute a reallocation
    */
-  async create(periodKey: string, data: CreateReallocationDTO): Promise<ReallocationDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async create(periodKey: string, userId: string, data: CreateReallocationDTO): Promise<ReallocationDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -100,7 +100,7 @@ export class ReallocationService {
     }
 
     // Get preview to validate amount
-    const preview = await this.getPreview(periodKey);
+    const preview = await this.getPreview(periodKey, userId);
 
     if (data.amount > preview.needsRemainder) {
       throw new AppError(
@@ -128,12 +128,20 @@ export class ReallocationService {
   /**
    * Delete a reallocation (undo)
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, userId: string): Promise<void> {
     const existing = await prisma.reallocation.findUnique({
       where: { id },
+      include: {
+        monthPeriod: true,
+      },
     });
 
     if (!existing) {
+      throw new AppError('Reallocation not found', 404, 'NOT_FOUND');
+    }
+
+    // Verify ownership
+    if (existing.monthPeriod.userId !== userId) {
       throw new AppError('Reallocation not found', 404, 'NOT_FOUND');
     }
 

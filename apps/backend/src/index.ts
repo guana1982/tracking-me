@@ -10,6 +10,9 @@ import { budgetRuleRoutes } from './routes/budget-rule.routes.js';
 import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { reallocationRoutes } from './routes/reallocation.routes.js';
 import { errorHandler } from './lib/error-handler.js';
+import authPlugin from './auth/auth.plugin.js';
+import { authRoutes } from './auth/auth.routes.js';
+import { authMiddleware } from './auth/auth.middleware.js';
 
 const fastify = Fastify({
   logger: {
@@ -31,6 +34,9 @@ await fastify.register(cors, {
   origin: true, // Allow all origins in dev
   credentials: true,
 });
+
+// Register auth plugin (JWT, OAuth, cookies)
+await fastify.register(authPlugin);
 
 // Swagger documentation
 await fastify.register(swagger, {
@@ -71,6 +77,26 @@ fastify.setErrorHandler(errorHandler);
 // Health check
 fastify.get('/health', async () => {
   return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Register auth routes (public - no auth required)
+await fastify.register(authRoutes, { prefix: '/auth' });
+
+// Auth middleware for all /api routes
+fastify.addHook('onRequest', async (request, reply) => {
+  // Skip auth for public endpoints
+  if (
+    request.url.startsWith('/auth') ||
+    request.url === '/health' ||
+    request.url.startsWith('/docs')
+  ) {
+    return;
+  }
+
+  // Apply auth middleware to /api routes
+  if (request.url.startsWith('/api')) {
+    await authMiddleware(request, reply);
+  }
 });
 
 // Register routes

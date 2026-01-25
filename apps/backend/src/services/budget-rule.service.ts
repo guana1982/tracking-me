@@ -4,11 +4,11 @@ import { AppError } from '../lib/error-handler.js';
 
 export class BudgetRuleService {
   /**
-   * Get budget rule by period key
+   * Get budget rule by period key (user-scoped)
    */
-  async getByPeriodKey(periodKey: string): Promise<BudgetRuleDTO | null> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getByPeriodKey(periodKey: string, userId: string): Promise<BudgetRuleDTO | null> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: { budgetRule: true },
     });
 
@@ -18,11 +18,11 @@ export class BudgetRuleService {
   }
 
   /**
-   * Update budget rule for a period
+   * Update budget rule for a period (user-scoped)
    */
-  async update(periodKey: string, data: UpdateBudgetRuleDTO): Promise<BudgetRuleDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async update(periodKey: string, userId: string, data: UpdateBudgetRuleDTO): Promise<BudgetRuleDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: { budgetRule: true },
     });
 

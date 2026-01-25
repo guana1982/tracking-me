@@ -40,7 +40,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         periodKeySchema.parse(periodKey);
 
         const filters = expenseFiltersSchema.parse(request.query);
-        const result = await expenseService.getByPeriodKey(periodKey, filters);
+        const result = await expenseService.getByPeriodKey(periodKey, request.authUser!.id, filters);
 
         return { success: true, data: result };
       },
@@ -62,7 +62,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const { id } = request.params;
-      const expense = await expenseService.getById(id);
+      const expense = await expenseService.getById(id, request.authUser!.id);
 
       if (!expense) {
         reply.status(404);
@@ -104,7 +104,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         periodKeySchema.parse(periodKey);
 
         const data = createExpenseSchema.parse(request.body);
-        const expense = await expenseService.create(periodKey, data);
+        const expense = await expenseService.create(periodKey, request.authUser!.id, data);
 
         reply.status(201);
         return { success: true, data: expense };
@@ -138,7 +138,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const { id } = request.params;
       const data = updateExpenseSchema.parse(request.body);
-      const expense = await expenseService.update(id, data);
+      const expense = await expenseService.update(id, request.authUser!.id, data);
 
       return { success: true, data: expense };
     },
@@ -159,7 +159,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request) => {
       const { id } = request.params;
-      await expenseService.delete(id);
+      await expenseService.delete(id, request.authUser!.id);
       return { success: true };
     },
   });

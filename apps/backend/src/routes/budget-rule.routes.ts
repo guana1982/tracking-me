@@ -37,7 +37,7 @@ export const budgetRuleRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const rule = await budgetRuleService.getByPeriodKey(periodKey);
+      const rule = await budgetRuleService.getByPeriodKey(periodKey, request.authUser!.id);
       if (!rule) {
         reply.status(404);
         return { success: false, error: { code: 'NOT_FOUND', message: 'Budget rule not found' } };
@@ -84,7 +84,7 @@ export const budgetRuleRoutes: FastifyPluginAsync = async (fastify) => {
       periodKeySchema.parse(periodKey);
 
       const data = updateBudgetRuleSchema.parse(request.body);
-      const rule = await budgetRuleService.update(periodKey, data);
+      const rule = await budgetRuleService.update(periodKey, request.authUser!.id, data);
 
       return { success: true, data: rule };
     },

@@ -5,14 +5,15 @@ import type { Category } from '@budget/shared';
 
 export class ExpenseService {
   /**
-   * Get expenses for a period with filters and pagination
+   * Get expenses for a period with filters and pagination (user-scoped)
    */
   async getByPeriodKey(
     periodKey: string,
+    userId: string,
     filters: ExpenseFilters = {}
   ): Promise<PaginatedResponse<ExpenseDTO>> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -64,11 +65,11 @@ export class ExpenseService {
   }
 
   /**
-   * Get all expenses for a period (no pagination, for calculations)
+   * Get all expenses for a period (no pagination, for calculations) (user-scoped)
    */
-  async getAllByPeriodKey(periodKey: string): Promise<ExpenseDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getAllByPeriodKey(periodKey: string, userId: string): Promise<ExpenseDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         expenses: {
           orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
@@ -84,11 +85,11 @@ export class ExpenseService {
   }
 
   /**
-   * Get recent expenses for a period
+   * Get recent expenses for a period (user-scoped)
    */
-  async getRecent(periodKey: string, limit: number = 5): Promise<ExpenseDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getRecent(periodKey: string, userId: string, limit: number = 5): Promise<ExpenseDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -105,22 +106,25 @@ export class ExpenseService {
   }
 
   /**
-   * Get expense by ID
+   * Get expense by ID (user-scoped)
    */
-  async getById(id: string): Promise<ExpenseDTO | null> {
-    const expense = await prisma.expense.findUnique({
-      where: { id },
+  async getById(id: string, userId: string): Promise<ExpenseDTO | null> {
+    const expense = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     return expense ? this.toDTO(expense) : null;
   }
 
   /**
-   * Create a new expense
+   * Create a new expense (user-scoped)
    */
-  async create(periodKey: string, data: CreateExpenseDTO): Promise<ExpenseDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async create(periodKey: string, userId: string, data: CreateExpenseDTO): Promise<ExpenseDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -152,11 +156,14 @@ export class ExpenseService {
   }
 
   /**
-   * Update an expense
+   * Update an expense (user-scoped)
    */
-  async update(id: string, data: UpdateExpenseDTO): Promise<ExpenseDTO> {
-    const existing = await prisma.expense.findUnique({
-      where: { id },
+  async update(id: string, userId: string, data: UpdateExpenseDTO): Promise<ExpenseDTO> {
+    const existing = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -190,11 +197,14 @@ export class ExpenseService {
   }
 
   /**
-   * Delete an expense
+   * Delete an expense (user-scoped)
    */
-  async delete(id: string): Promise<void> {
-    const existing = await prisma.expense.findUnique({
-      where: { id },
+  async delete(id: string, userId: string): Promise<void> {
+    const existing = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -207,11 +217,11 @@ export class ExpenseService {
   }
 
   /**
-   * Get totals by category for a period
+   * Get totals by category for a period (user-scoped)
    */
-  async getTotalsByCategory(periodKey: string): Promise<Record<Category, number>> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getTotalsByCategory(periodKey: string, userId: string): Promise<Record<Category, number>> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {

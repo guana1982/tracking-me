@@ -9,11 +9,11 @@ import { expenseService } from './expense.service.js';
 
 export class DashboardService {
   /**
-   * Get dashboard summary for a period
+   * Get dashboard summary for a period (user-scoped)
    */
-  async getSummary(periodKey: string): Promise<DashboardSummaryDTO> {
+  async getSummary(periodKey: string, userId: string): Promise<DashboardSummaryDTO> {
     // Get or create period
-    let monthPeriod = await monthPeriodService.getByPeriodKey(periodKey);
+    let monthPeriod = await monthPeriodService.getByPeriodKey(periodKey, userId);
 
     if (!monthPeriod) {
       // Auto-create if it's the current period
@@ -22,14 +22,14 @@ export class DashboardService {
       const isCurrentPeriod = year === now.getFullYear() && month === now.getMonth() + 1;
 
       if (isCurrentPeriod) {
-        monthPeriod = await monthPeriodService.getOrCreateCurrent();
+        monthPeriod = await monthPeriodService.getOrCreateCurrent(userId);
       } else {
         throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
       }
     }
 
     // Get budget rule (with defaults)
-    let budgetRule = await budgetRuleService.getByPeriodKey(periodKey);
+    let budgetRule = await budgetRuleService.getByPeriodKey(periodKey, userId);
     if (!budgetRule) {
       budgetRule = {
         id: '',
@@ -42,9 +42,9 @@ export class DashboardService {
       };
     }
 
-    // Get incomes
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+    // Get incomes (user-scoped)
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         incomes: true,
         reallocations: true,
@@ -62,8 +62,8 @@ export class DashboardService {
       budgetRule.savingsPct
     );
 
-    // Get expense totals by category
-    const expenseTotals = await expenseService.getTotalsByCategory(periodKey);
+    // Get expense totals by category (user-scoped)
+    const expenseTotals = await expenseService.getTotalsByCategory(periodKey, userId);
     const totalSpent = expenseTotals.NEEDS + expenseTotals.WANTS + expenseTotals.SAVINGS;
 
     // Calculate reallocations impact (add to SAVINGS, subtract from NEEDS)
@@ -88,8 +88,8 @@ export class DashboardService {
       budgetRule.autoReallocateNeedsRemainder
     );
 
-    // Get all expenses for the period
-    const recentExpenses = await expenseService.getAllByPeriodKey(periodKey);
+    // Get all expenses for the period (user-scoped)
+    const recentExpenses = await expenseService.getAllByPeriodKey(periodKey, userId);
 
     // Calculate unallocated income (income not assigned to any budget yet)
     // This is conceptual - in our model, all income is allocated by the percentages

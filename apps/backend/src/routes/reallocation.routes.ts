@@ -30,7 +30,7 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const reallocations = await reallocationService.getByPeriodKey(periodKey);
+      const reallocations = await reallocationService.getByPeriodKey(periodKey, request.authUser!.id);
       return { success: true, data: reallocations };
     },
   });
@@ -61,7 +61,7 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const preview = await reallocationService.getPreview(periodKey);
+      const preview = await reallocationService.getPreview(periodKey, request.authUser!.id);
       return { success: true, data: preview };
     },
   });
@@ -105,7 +105,7 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
         periodKeySchema.parse(periodKey);
 
         const data = createReallocationSchema.parse(request.body);
-        const reallocation = await reallocationService.create(periodKey, data);
+        const reallocation = await reallocationService.create(periodKey, request.authUser!.id, data);
 
         reply.status(201);
         return { success: true, data: reallocation };
@@ -136,7 +136,7 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const { id } = request.params;
-      await reallocationService.delete(id);
+      await reallocationService.delete(id, request.authUser!.id);
       return { success: true };
     },
   });

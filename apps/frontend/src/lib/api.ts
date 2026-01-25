@@ -17,10 +17,11 @@ import type {
   CreateReallocationDTO,
   ReallocationPreviewDTO,
 } from '@budget/shared';
+import { useAuthStore } from '../stores/authStore';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
-class ApiError extends Error {
+export class ApiError extends Error {
   code: string;
   details?: unknown;
 
@@ -36,19 +37,33 @@ async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  const token = useAuthStore.getState().token;
+
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string>),
   };
+
+  // Add auth header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   // Only set Content-Type for requests with body
   if (options?.body) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`${API_BASE}/api${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include',
   });
+
+  // Handle 401 Unauthorized - logout user
+  if (response.status === 401) {
+    useAuthStore.getState().logout();
+    throw new ApiError('Sessione scaduta', 'UNAUTHORIZED');
+  }
 
   const data = (await response.json()) as ApiResponse<T>;
 

@@ -10,9 +10,9 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       tags: ['Dashboard'],
       summary: 'Get dashboard summary for current month',
     },
-    handler: async () => {
+    handler: async (request) => {
       const periodKey = getCurrentPeriodKey();
-      const summary = await dashboardService.getSummary(periodKey);
+      const summary = await dashboardService.getSummary(periodKey, request.authUser!.id);
       return { success: true, data: summary };
     },
   });
@@ -34,7 +34,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const summary = await dashboardService.getSummary(periodKey);
+      const summary = await dashboardService.getSummary(periodKey, request.authUser!.id);
       return { success: true, data: summary };
     },
   });

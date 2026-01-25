@@ -7,23 +7,45 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User - authenticated user via Google OAuth
+model User {
+  id        String   @id @default(cuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String?
+  picture   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations - user owns all their data
+  monthPeriods MonthPeriod[]
+
+  @@index([googleId])
+  @@index([email])
+  @@map("users")
+}
+
 // Month Period - represents a budget month (e.g., 2026-01)
 model MonthPeriod {
   id          String   @id @default(cuid())
+  userId      String
   year        Int
   month       Int      // 1-12
-  periodKey   String   @unique // YYYY-MM format for easy querying
+  periodKey   String   // YYYY-MM format for easy querying
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
   budgetRule    BudgetRule?
   incomes       Income[]
   expenses      Expense[]
   reallocations Reallocation[]
 
-  @@unique([year, month])
+  @@unique([userId, periodKey])
+  @@unique([userId, year, month])
   @@index([periodKey])
+  @@index([userId])
   @@map("month_periods")
 }
 

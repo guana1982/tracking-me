@@ -1,17 +1,20 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey } from '../lib/utils';
 import { usePeriods, useDashboard } from '../hooks/useQueries';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { QuickAddModal } from './QuickAddModal';
+import { useAuthStore } from '../stores/authStore';
 
 export function Layout() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isPeriodSelectorOpen, setIsPeriodSelectorOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { periodKey, setPeriodKey } = usePeriodStore();
   const { data: periods } = usePeriods();
   const { data: dashboard } = useDashboard(periodKey);
+  const { user, logout } = useAuthStore();
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
@@ -101,14 +104,63 @@ export function Layout() {
               </div>
             </div>
 
-            {/* Quick Add Button (Desktop) */}
-            <button
-              onClick={() => setIsQuickAddOpen(true)}
-              className="hidden sm:flex items-center gap-2 btn btn-primary"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Aggiungi spesa</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Quick Add Button (Desktop) */}
+              <button
+                onClick={() => setIsQuickAddOpen(true)}
+                className="hidden sm:flex items-center gap-2 btn btn-primary"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Aggiungi spesa</span>
+              </button>
+
+              {/* User Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  {user?.picture ? (
+                    <img
+                      src={user.picture}
+                      alt={user.name || 'User'}
+                      className="w-8 h-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                      <User className="w-4 h-4 text-slate-500" />
+                    </div>
+                  )}
+                </button>
+
+                {isUserMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-sm font-medium text-slate-900 truncate">
+                          {user?.name || 'Utente'}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          logout();
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Esci
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </header>

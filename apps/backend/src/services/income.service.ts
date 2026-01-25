@@ -4,11 +4,11 @@ import { AppError } from '../lib/error-handler.js';
 
 export class IncomeService {
   /**
-   * Get all incomes for a period
+   * Get all incomes for a period (user-scoped)
    */
-  async getByPeriodKey(periodKey: string): Promise<IncomeDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getByPeriodKey(periodKey: string, userId: string): Promise<IncomeDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         incomes: {
           orderBy: { createdAt: 'asc' },
@@ -24,22 +24,25 @@ export class IncomeService {
   }
 
   /**
-   * Get income by ID
+   * Get income by ID (user-scoped)
    */
-  async getById(id: string): Promise<IncomeDTO | null> {
-    const income = await prisma.income.findUnique({
-      where: { id },
+  async getById(id: string, userId: string): Promise<IncomeDTO | null> {
+    const income = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     return income ? this.toDTO(income) : null;
   }
 
   /**
-   * Create a new income entry
+   * Create a new income entry (user-scoped)
    */
-  async create(periodKey: string, data: CreateIncomeDTO): Promise<IncomeDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async create(periodKey: string, userId: string, data: CreateIncomeDTO): Promise<IncomeDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -58,11 +61,14 @@ export class IncomeService {
   }
 
   /**
-   * Update an income entry
+   * Update an income entry (user-scoped)
    */
-  async update(id: string, data: UpdateIncomeDTO): Promise<IncomeDTO> {
-    const existing = await prisma.income.findUnique({
-      where: { id },
+  async update(id: string, userId: string, data: UpdateIncomeDTO): Promise<IncomeDTO> {
+    const existing = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -81,11 +87,14 @@ export class IncomeService {
   }
 
   /**
-   * Delete an income entry
+   * Delete an income entry (user-scoped)
    */
-  async delete(id: string): Promise<void> {
-    const existing = await prisma.income.findUnique({
-      where: { id },
+  async delete(id: string, userId: string): Promise<void> {
+    const existing = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {

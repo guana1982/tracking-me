@@ -19,7 +19,7 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     handler: async (request, reply) => {
-      const periods = await monthPeriodService.getAll();
+      const periods = await monthPeriodService.getAll(request.authUser!.id);
       return { success: true, data: periods };
     },
   });
@@ -40,7 +40,7 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     handler: async (request, reply) => {
-      const period = await monthPeriodService.getOrCreateCurrent();
+      const period = await monthPeriodService.getOrCreateCurrent(request.authUser!.id);
       return { success: true, data: period };
     },
   });
@@ -78,7 +78,7 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const period = await monthPeriodService.getByPeriodKey(periodKey);
+      const period = await monthPeriodService.getByPeriodKey(periodKey, request.authUser!.id);
       if (!period) {
         reply.status(404);
         return { success: false, error: { code: 'NOT_FOUND', message: 'Month period not found' } };
@@ -113,7 +113,7 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const data = createMonthPeriodSchema.parse(request.body);
-      const period = await monthPeriodService.create(data);
+      const period = await monthPeriodService.create(request.authUser!.id, data);
       reply.status(201);
       return { success: true, data: period };
     },
@@ -144,7 +144,7 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      await monthPeriodService.delete(periodKey);
+      await monthPeriodService.delete(periodKey, request.authUser!.id);
       return { success: true };
     },
   });
