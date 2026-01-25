@@ -23,6 +23,10 @@ interface AuthState {
 // In production, VITE_API_URL points to the backend
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Auth endpoints are at /auth/*, not /api/auth/*
+// So we need the base URL without /api suffix
+const AUTH_BASE = API_BASE.replace(/\/api\/?$/, '');
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -38,7 +42,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false, isLoading: false });
         // Call logout endpoint to clear server cookie
-        fetch(`${API_BASE}/auth/logout`, {
+        fetch(`${AUTH_BASE}/auth/logout`, {
           method: 'POST',
           credentials: 'include',
         }).catch(() => {
@@ -59,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          const response = await fetch(`${API_BASE}/auth/me`, {
+          const response = await fetch(`${AUTH_BASE}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },

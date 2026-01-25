@@ -3,8 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Wallet } from 'lucide-react';
 
-// For OAuth redirects, we need the full backend URL (not proxied)
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// For OAuth redirects, we need the backend base URL (without /api suffix)
+// VITE_API_URL might be "https://backend.railway.app/api" but OAuth is at /auth/*
+function getBackendBaseUrl(): string {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  // Remove /api suffix if present
+  return apiUrl.replace(/\/api\/?$/, '');
+}
+const BACKEND_URL = getBackendBaseUrl();
 
 export function Login() {
   const navigate = useNavigate();
