@@ -36,9 +36,9 @@ UPDATE "month_periods" SET "userId" = 'default-migration-user' WHERE "userId" IS
 -- Make userId required
 ALTER TABLE "month_periods" ALTER COLUMN "userId" SET NOT NULL;
 
--- Drop old unique constraints
-ALTER TABLE "month_periods" DROP CONSTRAINT IF EXISTS "month_periods_periodKey_key";
-ALTER TABLE "month_periods" DROP CONSTRAINT IF EXISTS "month_periods_year_month_key";
+-- Drop old unique indexes (they were created with CREATE UNIQUE INDEX, not as constraints)
+DROP INDEX IF EXISTS "month_periods_periodKey_key";
+DROP INDEX IF EXISTS "month_periods_year_month_key";
 
 -- Add foreign key constraint
 ALTER TABLE "month_periods" ADD CONSTRAINT "month_periods_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
