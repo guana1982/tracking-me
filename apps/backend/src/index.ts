@@ -29,9 +29,32 @@ const fastify = Fastify({
   },
 });
 
-// Register plugins
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 await fastify.register(cors, {
-  origin: true, // Allow all origins in dev
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    // Check if origin is in allowed list
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, '')))) {
+      callback(null, origin);
+      return;
+    }
+    // In development, allow all
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, origin);
+      return;
+    }
+    callback(new Error('CORS not allowed'), false);
+  },
   credentials: true,
 });
 
