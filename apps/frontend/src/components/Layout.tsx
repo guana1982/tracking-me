@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
-import { cn, formatPeriodKey, getCurrentPeriodKey } from '../lib/utils';
+import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
 import { usePeriods, useDashboard } from '../hooks/useQueries';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { QuickAddModal } from './QuickAddModal';
@@ -53,28 +53,13 @@ export function Layout() {
                       className="fixed inset-0 z-10"
                       onClick={() => setIsPeriodSelectorOpen(false)}
                     />
-                    <div className="absolute left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 max-h-64 overflow-y-auto">
-                      {/* Current month option */}
-                      <button
-                        onClick={() => {
-                          setPeriodKey(getCurrentPeriodKey());
-                          setIsPeriodSelectorOpen(false);
-                        }}
-                        className={cn(
-                          'w-full px-4 py-2 text-left text-sm hover:bg-slate-50',
-                          periodKey === getCurrentPeriodKey() &&
-                            'bg-slate-100 font-medium'
-                        )}
-                      >
-                        <span className="capitalize">
-                          {formatPeriodKey(getCurrentPeriodKey())}
-                        </span>
-                        <span className="ml-2 text-xs text-slate-500">(corrente)</span>
-                      </button>
+                    <div className="absolute left-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 max-h-80 overflow-y-auto">
+                      {/* All months of current year */}
+                      {getAllPeriodsForYear(new Date().getFullYear()).map((period) => {
+                        const isCurrentMonth = period.periodKey === getCurrentPeriodKey();
+                        const hasData = periods?.some((p) => p.periodKey === period.periodKey);
 
-                      {periods
-                        ?.filter((p) => p.periodKey !== getCurrentPeriodKey())
-                        .map((period) => (
+                        return (
                           <button
                             key={period.periodKey}
                             onClick={() => {
@@ -82,14 +67,24 @@ export function Layout() {
                               setIsPeriodSelectorOpen(false);
                             }}
                             className={cn(
-                              'w-full px-4 py-2 text-left text-sm hover:bg-slate-50 capitalize',
-                              periodKey === period.periodKey &&
-                                'bg-slate-100 font-medium'
+                              'w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center justify-between',
+                              periodKey === period.periodKey && 'bg-slate-100 font-medium'
                             )}
                           >
-                            {formatPeriodKey(period.periodKey)}
+                            <span className="capitalize">
+                              {formatPeriodKey(period.periodKey)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              {isCurrentMonth && (
+                                <span className="text-xs text-slate-500">(corrente)</span>
+                              )}
+                              {hasData && (
+                                <span className="w-2 h-2 rounded-full bg-green-500" title="Ha dati" />
+                              )}
+                            </span>
                           </button>
-                        ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}

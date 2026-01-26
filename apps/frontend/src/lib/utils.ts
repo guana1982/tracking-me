@@ -37,6 +37,17 @@ export function getCurrentPeriodKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+export function generatePeriodKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+export function getAllPeriodsForYear(year: number): { periodKey: string; month: number }[] {
+  return Array.from({ length: 12 }, (_, i) => ({
+    periodKey: generatePeriodKey(year, i + 1),
+    month: i + 1,
+  }));
+}
+
 export function getCategoryColor(category: Category): {
   bg: string;
   text: string;
