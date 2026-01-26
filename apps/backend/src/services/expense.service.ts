@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import type { ExpenseDTO, CreateExpenseDTO, UpdateExpenseDTO, ExpenseFilters, PaginatedResponse } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import type { Category } from '@budget/shared';
+import { monthPeriodService } from './month-period.service.js';
 
 export class ExpenseService {
   /**
@@ -124,41 +125,17 @@ export class ExpenseService {
    * Auto-creates the month period if it doesn't exist
    */
   async create(periodKey: string, userId: string, data: CreateExpenseDTO): Promise<ExpenseDTO> {
-    let period = await prisma.monthPeriod.findFirst({
-      where: { periodKey, userId },
-    });
+    // Parse periodKey to get year and month
+    const [yearStr, monthStr] = periodKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
 
-    // Auto-create period if it doesn't exist
-    if (!period) {
-      const [yearStr, monthStr] = periodKey.split('-');
-      const year = parseInt(yearStr, 10);
-      const month = parseInt(monthStr, 10);
-
-      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-        throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
-      }
-
-      // Import default budget rule
-      const { DEFAULT_BUDGET_RULE } = await import('@budget/shared');
-
-      period = await prisma.monthPeriod.create({
-        data: {
-          userId,
-          year,
-          month,
-          periodKey,
-          budgetRule: {
-            create: {
-              needsPct: DEFAULT_BUDGET_RULE.needsPct,
-              wantsPct: DEFAULT_BUDGET_RULE.wantsPct,
-              savingsPct: DEFAULT_BUDGET_RULE.savingsPct,
-              cutoffDay: DEFAULT_BUDGET_RULE.cutoffDay,
-              autoReallocateNeedsRemainder: DEFAULT_BUDGET_RULE.autoReallocateNeedsRemainder,
-            },
-          },
-        },
-      });
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
     }
+
+    // Get or create period (handles race conditions)
+    const monthPeriod = await monthPeriodService.getOrCreate(userId, year, month);
 
     // Parse date properly to avoid timezone issues
     let parsedDate: Date;
@@ -172,7 +149,7 @@ export class ExpenseService {
 
     const expense = await prisma.expense.create({
       data: {
-        monthPeriodId: period.id,
+        monthPeriodId: monthPeriod.id,
         date: parsedDate,
         category: data.category,
         label: data.label,

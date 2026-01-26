@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import type { IncomeDTO, CreateIncomeDTO, UpdateIncomeDTO } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
+import { monthPeriodService } from './month-period.service.js';
 
 export class IncomeService {
   /**
@@ -42,45 +43,21 @@ export class IncomeService {
    * Auto-creates the month period if it doesn't exist
    */
   async create(periodKey: string, userId: string, data: CreateIncomeDTO): Promise<IncomeDTO> {
-    let period = await prisma.monthPeriod.findFirst({
-      where: { periodKey, userId },
-    });
+    // Parse periodKey to get year and month
+    const [yearStr, monthStr] = periodKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
 
-    // Auto-create period if it doesn't exist
-    if (!period) {
-      const [yearStr, monthStr] = periodKey.split('-');
-      const year = parseInt(yearStr, 10);
-      const month = parseInt(monthStr, 10);
-
-      if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-        throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
-      }
-
-      // Import default budget rule
-      const { DEFAULT_BUDGET_RULE } = await import('@budget/shared');
-
-      period = await prisma.monthPeriod.create({
-        data: {
-          userId,
-          year,
-          month,
-          periodKey,
-          budgetRule: {
-            create: {
-              needsPct: DEFAULT_BUDGET_RULE.needsPct,
-              wantsPct: DEFAULT_BUDGET_RULE.wantsPct,
-              savingsPct: DEFAULT_BUDGET_RULE.savingsPct,
-              cutoffDay: DEFAULT_BUDGET_RULE.cutoffDay,
-              autoReallocateNeedsRemainder: DEFAULT_BUDGET_RULE.autoReallocateNeedsRemainder,
-            },
-          },
-        },
-      });
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
     }
+
+    // Get or create period (handles race conditions)
+    const monthPeriod = await monthPeriodService.getOrCreate(userId, year, month);
 
     const income = await prisma.income.create({
       data: {
-        monthPeriodId: period.id,
+        monthPeriodId: monthPeriod.id,
         label: data.label,
         amount: data.amount,
       },

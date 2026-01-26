@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 import { generatePeriodKey, getCurrentPeriodKey } from '../lib/utils.js';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import type { MonthPeriodDTO, CreateMonthPeriodDTO, MonthListItemDTO } from '@budget/shared';
@@ -44,16 +45,48 @@ export class MonthPeriodService {
    * Get or create the current month period for a user
    */
   async getOrCreateCurrent(userId: string): Promise<MonthPeriodDTO> {
-    const periodKey = getCurrentPeriodKey();
-    const existing = await this.getByPeriodKey(periodKey, userId);
+    const now = new Date();
+    return this.getOrCreate(userId, now.getFullYear(), now.getMonth() + 1);
+  }
 
+  /**
+   * Get or create a month period for a user (handles race conditions)
+   */
+  async getOrCreate(userId: string, year: number, month: number): Promise<MonthPeriodDTO> {
+    const periodKey = generatePeriodKey(year, month);
+
+    // First, try to find existing
+    const existing = await this.getByPeriodKey(periodKey, userId);
     if (existing) return existing;
 
-    const now = new Date();
-    return this.create(userId, {
-      year: now.getFullYear(),
-      month: now.getMonth() + 1,
-    });
+    // Try to create, handling potential race conditions
+    try {
+      const period = await prisma.monthPeriod.create({
+        data: {
+          userId,
+          year,
+          month,
+          periodKey,
+          budgetRule: {
+            create: {
+              needsPct: DEFAULT_BUDGET_RULE.needsPct,
+              wantsPct: DEFAULT_BUDGET_RULE.wantsPct,
+              savingsPct: DEFAULT_BUDGET_RULE.savingsPct,
+              cutoffDay: DEFAULT_BUDGET_RULE.cutoffDay,
+              autoReallocateNeedsRemainder: DEFAULT_BUDGET_RULE.autoReallocateNeedsRemainder,
+            },
+          },
+        },
+      });
+      return this.toDTO(period);
+    } catch (error) {
+      // If unique constraint violation, another request created it - fetch and return
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const created = await this.getByPeriodKey(periodKey, userId);
+        if (created) return created;
+      }
+      throw error;
+    }
   }
 
   /**
