@@ -1,22 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { getCurrentPeriodKey } from '../lib/utils';
 
-export function usePeriodStore() {
-  const [periodKey, setPeriodKeyState] = useState(getCurrentPeriodKey());
-
-  const setPeriodKey = useCallback((key: string) => {
-    setPeriodKeyState(key);
-    // Save to localStorage for persistence
-    localStorage.setItem('budget-period', key);
-  }, []);
-
-  useEffect(() => {
-    // Restore from localStorage
-    const saved = localStorage.getItem('budget-period');
-    if (saved) {
-      setPeriodKeyState(saved);
-    }
-  }, []);
-
-  return { periodKey, setPeriodKey };
+interface PeriodState {
+  periodKey: string;
+  setPeriodKey: (key: string) => void;
 }
+
+export const usePeriodStore = create<PeriodState>()(
+  persist(
+    (set) => ({
+      periodKey: getCurrentPeriodKey(),
+      setPeriodKey: (key: string) => set({ periodKey: key }),
+    }),
+    {
+      name: 'budget-period',
+    }
+  )
+);
