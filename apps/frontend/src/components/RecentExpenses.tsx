@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
-import type { ExpenseDTO, Category } from '@budget/shared';
-import { Plus, Trash2, Receipt } from 'lucide-react';
+import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
+import { Plus, Trash2, Receipt, RefreshCw } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
@@ -11,6 +11,7 @@ interface ExpensesListProps {
   title: string;
   category: Category;
   emptyMessage?: string;
+  reallocations?: ReallocationDTO[];
 }
 
 type EditingField = {
@@ -19,7 +20,7 @@ type EditingField = {
   value: string;
 };
 
-export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata' }: ExpensesListProps) {
+export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [] }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +103,15 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   const colors = getCategoryColor(category);
 
+  // Filter reallocations that go TO this category (for SAVINGS)
+  const savingsReallocations = reallocations.filter(r => r.toCategory === category);
+
+  // Calculate totals including reallocations
+  const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const reallocationsTotal = savingsReallocations.reduce((sum, r) => sum + r.amount, 0);
+  const grandTotal = expensesTotal + reallocationsTotal;
+  const totalItems = expenses.length + savingsReallocations.length;
+
   const headerContent = (
     <div className={cn(
       'flex items-center justify-between px-4 py-3 -mx-4 -mt-4 mb-3 rounded-t-xl flex-shrink-0',
@@ -126,7 +136,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     </div>
   );
 
-  if (expenses.length === 0) {
+  if (expenses.length === 0 && savingsReallocations.length === 0) {
     return (
       <div className="card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col">
         {headerContent}
@@ -164,9 +174,35 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       {headerContent}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
+          {/* Reallocations - special blue entries */}
+          {savingsReallocations.map((reallocation) => (
+            <div
+              key={`realloc-${reallocation.id}`}
+              className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg bg-blue-50 border border-blue-200"
+            >
+              <div className="p-1.5 rounded-lg bg-blue-100">
+                <RefreshCw className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-blue-700 truncate leading-tight">
+                  Riallocazione automatica
+                </p>
+                <p className="text-xs text-blue-500 leading-tight mt-0.5">
+                  {formatDate(reallocation.executedAt)}
+                </p>
+              </div>
+              <p className="text-sm font-bold text-blue-700 whitespace-nowrap">
+                {formatCurrency(reallocation.amount)}
+              </p>
+            </div>
+          ))}
+
+          {/* Regular expenses */}
           {expenses.map((expense, index) => {
             const isEditingThis = editing?.id === expense.id;
-            const isEven = index % 2 === 0;
+            // Account for reallocations when determining alternating row colors
+            const adjustedIndex = index + savingsReallocations.length;
+            const isEven = adjustedIndex % 2 === 0;
 
             return (
               <div
@@ -279,10 +315,10 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
         colors.border
       )}>
         <span className="text-xs font-medium text-slate-500">
-          {expenses.length} {expenses.length === 1 ? 'voce' : 'voci'}
+          {totalItems} {totalItems === 1 ? 'voce' : 'voci'}
         </span>
         <span className={cn('text-sm font-bold', colors.text)}>
-          {formatCurrency(expenses.reduce((sum, e) => sum + e.amount, 0))}
+          {formatCurrency(grandTotal)}
         </span>
       </div>
 

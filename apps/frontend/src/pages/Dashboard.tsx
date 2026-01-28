@@ -1,5 +1,5 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useReallocations } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { ReallocationCard } from '../components/ReallocationCard';
@@ -10,6 +10,7 @@ export function Dashboard() {
   const { periodKey } = usePeriodStore();
   const { data, isLoading, error } = useDashboard(periodKey);
   const { data: savingsHistory } = useSavingsHistory(periodKey);
+  const { data: reallocations } = useReallocations(periodKey);
 
   if (isLoading) {
     return (
@@ -87,6 +88,7 @@ export function Dashboard() {
             title="Risparmi"
             category="SAVINGS"
             emptyMessage="Nessun risparmio"
+            reallocations={reallocations}
           />
         </div>
       </div>
