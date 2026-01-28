@@ -40,15 +40,19 @@ export function Dashboard() {
   const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
 
   return (
-    <div className="sm:ml-16 space-y-6">
+    <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
       {/* Chart with Stats - Full width responsive */}
-      <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} />
+      <div className="flex-shrink-0">
+        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} />
+      </div>
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:flex-1 md:min-h-0">
         {/* Necessità Column */}
-        <div className="space-y-4">
-          <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} />
+        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
+          <div className="flex-shrink-0">
+            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} />
+          </div>
           <ExpensesList
             expenses={needsExpenses}
             periodKey={periodKey}
@@ -59,8 +63,10 @@ export function Dashboard() {
         </div>
 
         {/* Svago Column */}
-        <div className="space-y-4">
-          <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} />
+        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
+          <div className="flex-shrink-0">
+            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} />
+          </div>
           <ExpensesList
             expenses={wantsExpenses}
             periodKey={periodKey}
@@ -71,8 +77,10 @@ export function Dashboard() {
         </div>
 
         {/* Risparmi Column */}
-        <div className="space-y-4">
-          <CategoryCard summary={categories.find((c) => c.category === 'SAVINGS')!} />
+        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
+          <div className="flex-shrink-0">
+            <CategoryCard summary={categories.find((c) => c.category === 'SAVINGS')!} />
+          </div>
           <ExpensesList
             expenses={savingsExpenses}
             periodKey={periodKey}
@@ -83,8 +91,10 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Reallocation Card (if available) */}
-      <ReallocationCard periodKey={periodKey} />
+      {/* Reallocation Card - hidden on desktop to prevent scroll */}
+      <div className="md:hidden">
+        <ReallocationCard periodKey={periodKey} />
+      </div>
     </div>
   );
 }

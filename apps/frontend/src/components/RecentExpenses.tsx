@@ -104,7 +104,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   const headerContent = (
     <div className={cn(
-      'flex items-center justify-between px-4 py-3 -mx-4 -mt-4 mb-3 rounded-t-xl',
+      'flex items-center justify-between px-4 py-3 -mx-4 -mt-4 mb-3 rounded-t-xl flex-shrink-0',
       'bg-gradient-to-r',
       category === 'NEEDS' && 'from-green-50 to-green-100/50 border-b border-green-200',
       category === 'WANTS' && 'from-orange-50 to-orange-100/50 border-b border-orange-200',
@@ -128,7 +128,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   if (expenses.length === 0) {
     return (
-      <div className="card h-full border border-slate-200 shadow-sm">
+      <div className="card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col">
         {headerContent}
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className={cn('p-3 rounded-full mb-3', colors.bg)}>
@@ -160,7 +160,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   }
 
   return (
-    <div className="card flex flex-col max-h-[calc(100vh-340px)] border border-slate-200 shadow-sm">
+    <div className="card flex flex-col max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0 border border-slate-200 shadow-sm">
       {headerContent}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
@@ -274,7 +274,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
       {/* Footer with total */}
       <div className={cn(
-        'flex items-center justify-between px-2 py-2 -mx-4 -mb-4 mt-3 rounded-b-xl border-t',
+        'flex items-center justify-between px-2 py-2 -mx-4 -mb-4 mt-3 rounded-b-xl border-t flex-shrink-0',
         colors.bg,
         colors.border
       )}>

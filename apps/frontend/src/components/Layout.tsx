@@ -25,7 +25,7 @@ export function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 md:h-screen md:overflow-hidden md:flex md:flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="px-4 sm:px-6 lg:px-8 sm:ml-16">
@@ -161,7 +161,7 @@ export function Layout() {
       </header>
 
       {/* Main Content */}
-      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6">
+      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6 md:flex-1 md:overflow-hidden">
         <Outlet />
       </main>
 
