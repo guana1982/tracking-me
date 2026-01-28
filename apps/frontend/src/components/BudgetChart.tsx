@@ -76,15 +76,15 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
         <div className="card py-4 px-5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             {/* Donut chart - larger */}
-            <div className="w-28 h-28 relative flex-shrink-0 mx-auto sm:mx-0">
+            <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data}
                     cx="50%"
                     cy="50%"
-                    innerRadius={32}
-                    outerRadius={52}
+                    innerRadius={42}
+                    outerRadius={68}
                     paddingAngle={2}
                     dataKey="value"
                   >
@@ -97,7 +97,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               </ResponsiveContainer>
               {/* Center text */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <p className="text-xs font-bold text-slate-700">
+                <p className="text-sm font-bold text-slate-700">
                   {formatCurrency(totalSpent)}
                 </p>
               </div>
