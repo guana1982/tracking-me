@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
+import { usePeriodStore } from '../hooks/usePeriod';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -16,6 +17,8 @@ interface BudgetChartProps {
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
 export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory }: BudgetChartProps) {
+  const { setPeriodKey } = usePeriodStore();
+
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
     value: cat.actualAmount,
@@ -65,9 +68,10 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number }) => ({
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; periodKey: string }) => ({
       name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
       risparmio: m.savings,
+      periodKey: m.periodKey,
     })) ?? [];
 
     return (
@@ -185,7 +189,17 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                     tickFormatter={(v) => `${v}`}
                   />
                   <Tooltip content={<BarChartTooltip />} />
-                  <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar
+                    dataKey="risparmio"
+                    fill="#3b82f6"
+                    radius={[3, 3, 0, 0]}
+                    cursor="pointer"
+                    onClick={(data) => {
+                      if (data?.periodKey) {
+                        setPeriodKey(data.periodKey);
+                      }
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
