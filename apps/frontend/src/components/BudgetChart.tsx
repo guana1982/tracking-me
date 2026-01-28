@@ -161,7 +161,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               </div>
 
               {/* Bar chart */}
-              <div className="w-full sm:w-56">
+              <div className="w-full sm:w-72">
                 <div className="h-32">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
