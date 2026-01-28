@@ -174,7 +174,15 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
             {/* Bar chart - full width */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <BarChart
+                  data={barData}
+                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  onClick={(data) => {
+                    if (data?.activePayload?.[0]?.payload?.periodKey) {
+                      setPeriodKey(data.activePayload[0].payload.periodKey);
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis
                     dataKey="name"
@@ -194,11 +202,6 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                     fill="#3b82f6"
                     radius={[3, 3, 0, 0]}
                     cursor="pointer"
-                    onClick={(data) => {
-                      if (data?.periodKey) {
-                        setPeriodKey(data.periodKey);
-                      }
-                    }}
                   />
                 </BarChart>
               </ResponsiveContainer>
