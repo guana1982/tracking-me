@@ -184,6 +184,21 @@ export interface ReallocationPreviewDTO {
   isAfterCutoff: boolean;
 }
 
+// Savings history for bar chart and cumulative totals
+export interface MonthlySavingsDTO {
+  periodKey: string;
+  month: number;
+  year: number;
+  savings: number; // actual savings amount for that month
+}
+
+export interface SavingsHistoryDTO {
+  months: MonthlySavingsDTO[];
+  currentMonthSavings: number;
+  previousMonthsTotal: number;
+  cumulativeTotal: number;
+}
+
 // Month list item for navigation
 export interface MonthListItemDTO {
   periodKey: string;

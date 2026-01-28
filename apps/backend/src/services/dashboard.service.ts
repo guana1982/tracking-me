@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary } from '@budget/shared';
+import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
@@ -104,6 +104,58 @@ export class DashboardService {
       categories,
       reallocationPreview,
       recentExpenses,
+    };
+  }
+
+  /**
+   * Get savings history across all months for a user
+   */
+  async getSavingsHistory(currentPeriodKey: string, userId: string): Promise<SavingsHistoryDTO> {
+    // Get all periods for this user, ordered chronologically
+    const periods = await prisma.monthPeriod.findMany({
+      where: { userId },
+      include: {
+        expenses: true,
+        reallocations: true,
+      },
+      orderBy: [{ year: 'asc' }, { month: 'asc' }],
+    });
+
+    const months = periods.map((period) => {
+      const savingsExpenses = period.expenses
+        .filter((e) => e.category === 'SAVINGS')
+        .reduce((sum, e) => sum + e.amount, 0);
+
+      const reallocatedToSavings = period.reallocations
+        .filter((r) => r.toCategory === 'SAVINGS')
+        .reduce((sum, r) => sum + r.amount, 0);
+
+      return {
+        periodKey: period.periodKey,
+        month: period.month,
+        year: period.year,
+        savings: roundCurrency(savingsExpenses + reallocatedToSavings),
+      };
+    });
+
+    const currentMonthData = months.find((m) => m.periodKey === currentPeriodKey);
+    const currentMonthSavings = currentMonthData?.savings ?? 0;
+
+    const previousMonthsTotal = roundCurrency(
+      months
+        .filter((m) => m.periodKey < currentPeriodKey)
+        .reduce((sum, m) => sum + m.savings, 0)
+    );
+
+    const cumulativeTotal = roundCurrency(
+      months.reduce((sum, m) => sum + m.savings, 0)
+    );
+
+    return {
+      months,
+      currentMonthSavings,
+      previousMonthsTotal,
+      cumulativeTotal,
     };
   }
 

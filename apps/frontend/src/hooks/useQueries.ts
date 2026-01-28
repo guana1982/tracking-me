@@ -20,6 +20,7 @@ import type {
 // Query keys
 export const queryKeys = {
   dashboard: (periodKey: string) => ['dashboard', periodKey] as const,
+  savingsHistory: (periodKey: string) => ['savingsHistory', periodKey] as const,
   periods: ['periods'] as const,
   period: (periodKey: string) => ['period', periodKey] as const,
   budgetRule: (periodKey: string) => ['budgetRule', periodKey] as const,
@@ -36,6 +37,14 @@ export function useDashboard(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.dashboard(periodKey),
     queryFn: () => dashboardApi.getSummary(periodKey),
+  });
+}
+
+// Savings History
+export function useSavingsHistory(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.savingsHistory(periodKey),
+    queryFn: () => dashboardApi.getSavingsHistory(periodKey),
   });
 }
 

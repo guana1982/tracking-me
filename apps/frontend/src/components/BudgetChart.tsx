@@ -1,15 +1,21 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
 import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
-import type { CategorySummary } from '@budget/shared';
+import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
   totalIncome: number;
   compact?: boolean;
   showStats?: boolean;
+  savingsHistory?: SavingsHistoryDTO | null;
 }
 
-export function BudgetChart({ categories, totalIncome, compact = false, showStats = false }: BudgetChartProps) {
+const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory }: BudgetChartProps) {
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
     value: cat.actualAmount,
@@ -44,36 +50,55 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
     return null;
   };
 
+  const BarChartTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-xs font-medium text-slate-900">{label}</p>
+          <p className="text-xs text-blue-600">{formatCurrency(payload[0].value)}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number }) => ({
+      name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
+      risparmio: m.savings,
+    })) ?? [];
+
     return (
       <div className="card py-4 px-5">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
           {/* Donut chart */}
-          <div className="w-24 h-24 relative flex-shrink-0 mx-auto sm:mx-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={28}
-                  outerRadius={44}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex flex-col items-center sm:items-start gap-3 flex-shrink-0">
+            <div className="w-24 h-24 relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={28}
+                    outerRadius={44}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {data.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Legend + Stats */}
-          <div className="flex-1 flex flex-col gap-3">
+          <div className="flex-1 flex flex-col gap-3 min-w-0">
             {/* Legend */}
             <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
               {data.map((entry, index) => (
@@ -107,7 +132,59 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                 </p>
               </div>
             </div>
+
+            {/* Savings summary */}
+            {savingsHistory && (
+              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Risparmi mese</p>
+                  <p className="text-sm font-bold text-blue-600">
+                    {formatCurrency(savingsHistory.currentMonthSavings)}
+                  </p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Mesi precedenti</p>
+                  <p className="text-sm font-bold text-slate-700">
+                    {formatCurrency(savingsHistory.previousMonthsTotal)}
+                  </p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Totale risparmi</p>
+                  <p className="text-sm font-bold text-blue-700">
+                    {formatCurrency(savingsHistory.cumulativeTotal)}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Savings bar chart */}
+          {savingsHistory && barData.length > 0 && (
+            <div className="flex-shrink-0 w-full sm:w-64">
+              <p className="text-xs text-slate-500 mb-1 text-center sm:text-left">Risparmi mensili</p>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${v}`}
+                    />
+                    <Tooltip content={<BarChartTooltip />} />
+                    <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

@@ -17,6 +17,26 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Get savings history across all months
+  fastify.get<{ Params: { periodKey: string } }>('/savings-history/:periodKey', {
+    schema: {
+      tags: ['Dashboard'],
+      summary: 'Get savings history for all months',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+    },
+    handler: async (request) => {
+      const { periodKey } = request.params;
+      const history = await dashboardService.getSavingsHistory(periodKey, request.authUser!.id);
+      return { success: true, data: history };
+    },
+  });
+
   // Get dashboard summary for a specific period
   fastify.get<{ Params: { periodKey: string } }>('/:periodKey', {
     schema: {

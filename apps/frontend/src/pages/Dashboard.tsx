@@ -1,5 +1,5 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { ReallocationCard } from '../components/ReallocationCard';
@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
   const { data, isLoading, error } = useDashboard(periodKey);
+  const { data: savingsHistory } = useSavingsHistory(periodKey);
 
   if (isLoading) {
     return (
@@ -41,7 +42,7 @@ export function Dashboard() {
   return (
     <div className="sm:ml-16 space-y-6">
       {/* Chart with Stats - Full width responsive */}
-      <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats />
+      <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} />
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
