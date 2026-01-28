@@ -133,9 +133,13 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               </div>
             </div>
 
-            {/* Savings summary */}
-            {savingsHistory && (
-              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+          </div>
+
+          {/* Savings section: labels + bar chart */}
+          {savingsHistory && barData.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 flex-shrink-0 sm:border-l sm:border-slate-100 sm:pl-6">
+              {/* Savings labels (like legend for the bar chart) */}
+              <div className="flex flex-row sm:flex-col justify-center sm:justify-start gap-4 sm:gap-2 flex-shrink-0">
                 <div className="text-center sm:text-left">
                   <p className="text-xs text-slate-500">Risparmi mese</p>
                   <p className="text-sm font-bold text-blue-600">
@@ -155,33 +159,30 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   </p>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Savings bar chart */}
-          {savingsHistory && barData.length > 0 && (
-            <div className="flex-shrink-0 w-full sm:w-64">
-              <p className="text-xs text-slate-500 mb-1 text-center sm:text-left">Risparmi mensili</p>
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 10, fill: '#64748b' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: '#64748b' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => `${v}`}
-                    />
-                    <Tooltip content={<BarChartTooltip />} />
-                    <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Bar chart */}
+              <div className="w-full sm:w-56">
+                <div className="h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => `${v}`}
+                      />
+                      <Tooltip content={<BarChartTooltip />} />
+                      <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           )}
