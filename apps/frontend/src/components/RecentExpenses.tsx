@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category } from '@budget/shared';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Receipt } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
@@ -28,7 +28,6 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const editingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Solo focus quando si inizia un nuovo editing (id cambia)
     if (editing && editing.id !== editingIdRef.current && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -48,7 +47,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     } else {
       value = expense.label;
     }
-    editingIdRef.current = null; // Reset per triggerare il focus
+    editingIdRef.current = null;
     setEditing({ id: expense.id, field, value });
   };
 
@@ -104,11 +103,22 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const colors = getCategoryColor(category);
 
   const headerContent = (
-    <div className={cn('flex items-center justify-between px-4 py-2 -mx-4 -mt-4 mb-3 rounded-t-xl border-b', colors.bg, colors.border)}>
+    <div className={cn(
+      'flex items-center justify-between px-4 py-3 -mx-4 -mt-4 mb-3 rounded-t-xl',
+      'bg-gradient-to-r',
+      category === 'NEEDS' && 'from-green-50 to-green-100/50 border-b border-green-200',
+      category === 'WANTS' && 'from-orange-50 to-orange-100/50 border-b border-orange-200',
+      category === 'SAVINGS' && 'from-blue-50 to-blue-100/50 border-b border-blue-200'
+    )}>
       <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
       <button
         onClick={() => setIsAddModalOpen(true)}
-        className={cn('p-1 rounded transition-colors', colors.text, 'hover:opacity-70')}
+        className={cn(
+          'p-1.5 rounded-lg transition-all',
+          'bg-white/80 shadow-sm hover:shadow',
+          colors.text,
+          'hover:scale-105 active:scale-95'
+        )}
         title="Aggiungi spesa"
       >
         <Plus className="w-4 h-4" />
@@ -118,11 +128,27 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   if (expenses.length === 0) {
     return (
-      <div className="card h-full border border-slate-200">
+      <div className="card h-full border border-slate-200 shadow-sm">
         {headerContent}
-        <p className="text-slate-500 text-center py-8">
-          {emptyMessage}
-        </p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className={cn('p-3 rounded-full mb-3', colors.bg)}>
+            <Receipt className={cn('w-6 h-6', colors.text, 'opacity-60')} />
+          </div>
+          <p className="text-slate-400 text-sm">
+            {emptyMessage}
+          </p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className={cn(
+              'mt-3 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors',
+              colors.text,
+              colors.bg,
+              'hover:opacity-80'
+            )}
+          >
+            Aggiungi la prima
+          </button>
+        </div>
         <QuickAddModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
@@ -134,17 +160,23 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   }
 
   return (
-    <div className="card flex flex-col max-h-[calc(100vh-340px)] border border-slate-200">
+    <div className="card flex flex-col max-h-[calc(100vh-340px)] border border-slate-200 shadow-sm">
       {headerContent}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
-        <div className="divide-y divide-slate-100">
-          {expenses.map((expense) => {
+        <div className="space-y-0">
+          {expenses.map((expense, index) => {
             const isEditingThis = editing?.id === expense.id;
+            const isEven = index % 2 === 0;
 
             return (
               <div
                 key={expense.id}
-                className="flex items-center gap-2 py-2 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
+                className={cn(
+                  'flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg transition-all',
+                  isEven ? 'bg-slate-50/50' : 'bg-white',
+                  'hover:bg-slate-100/80',
+                  isEditingThis && 'bg-blue-50/50 ring-1 ring-blue-200'
+                )}
               >
                 <div className="flex-1 min-w-0">
                   {isEditingThis && editing.field === 'label' ? (
@@ -158,11 +190,11 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
-                      className="text-sm font-medium text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      className="text-sm font-medium text-slate-900 bg-white border border-blue-300 rounded-md px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   ) : (
                     <p
-                      className="text-sm font-medium text-slate-900 truncate leading-tight cursor-pointer hover:text-slate-600"
+                      className="text-sm font-medium text-slate-800 truncate leading-tight cursor-pointer hover:text-slate-600 transition-colors"
                       onClick={() => startEditing(expense, 'label')}
                       title="Clicca per modificare"
                     >
@@ -181,11 +213,11 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
-                      className="text-xs text-slate-400 bg-white border border-slate-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      className="text-xs text-slate-500 bg-white border border-blue-300 rounded-md px-2 py-0.5 mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   ) : (
                     <p
-                      className="text-xs text-slate-400 leading-tight cursor-pointer hover:text-slate-600"
+                      className="text-xs text-slate-400 leading-tight cursor-pointer hover:text-slate-500 transition-colors mt-0.5"
                       onClick={() => startEditing(expense, 'date')}
                       title="Clicca per modificare"
                     >
@@ -207,11 +239,14 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                     }}
                     onKeyDown={handleKeyDown}
                     onBlur={saveEditing}
-                    className="text-sm font-semibold text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 w-20 text-right focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="text-sm font-bold text-slate-900 bg-white border border-blue-300 rounded-md px-2 py-1 w-24 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 ) : (
                   <p
-                    className="text-sm font-semibold text-slate-900 whitespace-nowrap cursor-pointer hover:text-slate-600"
+                    className={cn(
+                      'text-sm font-bold whitespace-nowrap cursor-pointer transition-colors',
+                      'text-slate-800 hover:text-slate-600'
+                    )}
                     onClick={() => startEditing(expense, 'amount')}
                     title="Clicca per modificare"
                   >
@@ -225,7 +260,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       e.preventDefault();
                       handleDelete(expense.id);
                     }}
-                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors ml-1"
+                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all ml-1"
                     title="Elimina spesa"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -236,6 +271,21 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           })}
         </div>
       </div>
+
+      {/* Footer with total */}
+      <div className={cn(
+        'flex items-center justify-between px-2 py-2 -mx-4 -mb-4 mt-3 rounded-b-xl border-t',
+        colors.bg,
+        colors.border
+      )}>
+        <span className="text-xs font-medium text-slate-500">
+          {expenses.length} {expenses.length === 1 ? 'voce' : 'voci'}
+        </span>
+        <span className={cn('text-sm font-bold', colors.text)}>
+          {formatCurrency(expenses.reduce((sum, e) => sum + e.amount, 0))}
+        </span>
+      </div>
+
       <QuickAddModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
