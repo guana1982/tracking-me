@@ -17,7 +17,11 @@ interface BudgetChartProps {
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
 export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory }: BudgetChartProps) {
-  const { setPeriodKey } = usePeriodStore();
+  const { periodKey, setPeriodKey } = usePeriodStore();
+
+  // Parse periodKey to get month label
+  const [year, month] = periodKey.split('-');
+  const currentMonthLabel = `${MONTH_LABELS[parseInt(month, 10) - 1]} ${year}`;
 
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
@@ -78,6 +82,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Card 1: Budget overview */}
         <div className="card py-4 px-5">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             {/* Donut chart - larger */}
             <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
