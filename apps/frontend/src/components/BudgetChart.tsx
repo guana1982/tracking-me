@@ -71,19 +71,20 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
     })) ?? [];
 
     return (
-      <div className="card py-4 px-5">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
-          {/* Donut chart */}
-          <div className="flex flex-col items-center sm:items-start gap-3 flex-shrink-0">
-            <div className="w-24 h-24 relative">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: Budget overview */}
+        <div className="card py-4 px-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            {/* Donut chart - larger */}
+            <div className="w-28 h-28 relative flex-shrink-0 mx-auto sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data}
                     cx="50%"
                     cy="50%"
-                    innerRadius={28}
-                    outerRadius={44}
+                    innerRadius={32}
+                    outerRadius={52}
                     paddingAngle={2}
                     dataKey="value"
                   >
@@ -94,99 +95,102 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   <Tooltip content={<CustomTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Legend + Stats */}
-          <div className="flex-1 flex flex-col gap-3 min-w-0">
-            {/* Legend */}
-            <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
-              {data.map((entry, index) => (
-                <div key={index} className="flex items-center gap-1.5">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span className="text-xs text-slate-600">{entry.name}</span>
-                  <span className="text-xs font-medium text-slate-800">
-                    {entry.percentage.toFixed(0)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Stats: Entrate, Speso, Rimanente */}
-            <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Entrate</p>
-                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Speso</p>
-                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Rimanente</p>
-                <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(remaining)}
+              {/* Center text */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <p className="text-xs font-bold text-slate-700">
+                  {formatCurrency(totalSpent)}
                 </p>
               </div>
             </div>
 
-          </div>
-
-          {/* Savings section: labels + bar chart */}
-          {savingsHistory && barData.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 flex-shrink-0 sm:border-l sm:border-slate-100 sm:pl-6">
-              {/* Savings labels (like legend for the bar chart) */}
-              <div className="flex flex-row sm:flex-col justify-center sm:justify-start gap-4 sm:gap-2 flex-shrink-0">
-                <div className="text-center sm:text-left">
-                  <p className="text-xs text-slate-500">Risparmi mese</p>
-                  <p className="text-sm font-bold text-blue-600">
-                    {formatCurrency(savingsHistory.currentMonthSavings)}
-                  </p>
-                </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-xs text-slate-500">Mesi precedenti</p>
-                  <p className="text-sm font-bold text-slate-700">
-                    {formatCurrency(savingsHistory.previousMonthsTotal)}
-                  </p>
-                </div>
-                <div className="text-center sm:text-left">
-                  <p className="text-xs text-slate-500">Totale risparmi</p>
-                  <p className="text-sm font-bold text-blue-700">
-                    {formatCurrency(savingsHistory.cumulativeTotal)}
-                  </p>
-                </div>
+            {/* Legend + Stats */}
+            <div className="flex-1 flex flex-col gap-3 min-w-0">
+              {/* Legend */}
+              <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
+                {data.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="text-xs text-slate-600">{entry.name}</span>
+                    <span className="text-xs font-medium text-slate-800">
+                      {entry.percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
               </div>
 
-              {/* Bar chart */}
-              <div className="w-full sm:w-72">
-                <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => `${v}`}
-                      />
-                      <Tooltip content={<BarChartTooltip />} />
-                      <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* Stats: Entrate, Speso, Rimanente */}
+              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Entrate</p>
+                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Speso</p>
+                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Rimanente</p>
+                  <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(remaining)}
+                  </p>
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Card 2: Savings overview */}
+        {savingsHistory && barData.length > 0 && (
+          <div className="card py-4 px-5">
+            {/* Savings header with labels */}
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-xs text-slate-500">Risparmi mese</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {formatCurrency(savingsHistory.currentMonthSavings)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Mesi precedenti</p>
+                <p className="text-lg font-bold text-slate-700">
+                  {formatCurrency(savingsHistory.previousMonthsTotal)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Totale risparmi</p>
+                <p className="text-lg font-bold text-blue-700">
+                  {formatCurrency(savingsHistory.cumulativeTotal)}
+                </p>
+              </div>
+            </div>
+
+            {/* Bar chart - full width */}
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v}`}
+                  />
+                  <Tooltip content={<BarChartTooltip />} />
+                  <Bar dataKey="risparmio" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
