@@ -161,7 +161,7 @@ export function Layout() {
       </header>
 
       {/* Main Content */}
-      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6 md:flex-1 md:overflow-hidden">
+      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6 md:flex-1 md:overflow-auto">
         <Outlet />
       </main>
 
