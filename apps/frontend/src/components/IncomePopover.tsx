@@ -190,7 +190,7 @@ export function IncomePopover({ periodKey, isOpen, onClose, anchorRef }: IncomeP
                       onChange={(e) => setEditing({ ...editing, value: e.target.value })}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
-                      className="w-full text-sm font-medium text-slate-900 bg-white border border-blue-300 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="w-full text-sm font-medium text-slate-900 bg-white border border-sky-300 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   ) : (
                     <p
@@ -213,11 +213,11 @@ export function IncomePopover({ periodKey, isOpen, onClose, anchorRef }: IncomeP
                     onChange={(e) => setEditing({ ...editing, value: e.target.value })}
                     onKeyDown={handleKeyDown}
                     onBlur={saveEditing}
-                    className="w-24 text-sm font-semibold text-slate-900 bg-white border border-blue-300 rounded px-2 py-0.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="w-24 text-sm font-semibold text-slate-900 bg-white border border-sky-300 rounded px-2 py-0.5 text-right focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 ) : (
                   <p
-                    className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-blue-600 transition-colors"
+                    className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-sky-600 transition-colors"
                     onClick={() => startEditing(income, 'amount')}
                     title="Clicca per modificare"
                   >
@@ -239,14 +239,14 @@ export function IncomePopover({ periodKey, isOpen, onClose, anchorRef }: IncomeP
 
             {/* Add new income form */}
             {isAdding && (
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50">
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-sky-50">
                 <input
                   type="text"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   onKeyDown={handleAddKeyDown}
                   placeholder="Descrizione"
-                  className="flex-1 text-sm bg-white border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  className="flex-1 text-sm bg-white border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
                   autoFocus
                 />
                 <input
@@ -256,12 +256,12 @@ export function IncomePopover({ periodKey, isOpen, onClose, anchorRef }: IncomeP
                   onChange={(e) => setNewAmount(e.target.value)}
                   onKeyDown={handleAddKeyDown}
                   placeholder="Importo"
-                  className="w-20 text-sm bg-white border border-slate-300 rounded px-2 py-1 text-right focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  className="w-20 text-sm bg-white border border-slate-300 rounded px-2 py-1 text-right focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
                 />
                 <button
                   onClick={handleAdd}
                   disabled={!newLabel.trim() || !newAmount || createIncome.isPending}
-                  className="p-1 text-green-600 hover:bg-green-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1 text-emerald-600 hover:bg-emerald-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {createIncome.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -281,7 +281,7 @@ export function IncomePopover({ periodKey, isOpen, onClose, anchorRef }: IncomeP
         {!isAdding && (
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+            className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-sky-600 hover:bg-sky-50 transition-colors"
           >
             <Plus className="w-4 h-4" />
             Aggiungi entrata

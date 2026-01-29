@@ -103,7 +103,7 @@ export function Dashboard() {
             className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all ${
               hasReallocation
                 ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-sky-600 text-white hover:bg-sky-700'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {(createReallocation.isPending || deleteReallocation.isPending) ? (

@@ -67,7 +67,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
       return (
         <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
           <p className="text-xs font-medium text-slate-900">{label}</p>
-          <p className="text-xs text-blue-600">{formatCurrency(payload[0].value)}</p>
+          <p className="text-xs text-sky-600">{formatCurrency(payload[0].value)}</p>
         </div>
       );
     }
@@ -141,7 +141,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   <p className="text-xs text-slate-500">Entrate</p>
                   <button
                     onClick={() => setIsIncomePopoverOpen(!isIncomePopoverOpen)}
-                    className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors"
+                    className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-sky-600 transition-colors"
                   >
                     {formatCurrency(totalIncome)}
                     <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -159,7 +159,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                 </div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs text-slate-500">Rimanente</p>
-                  <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-sm font-bold ${remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(remaining)}
                   </p>
                 </div>
@@ -175,7 +175,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
             <div className="flex justify-between items-start mb-3">
               <div>
                 <p className="text-xs text-slate-500">Risparmi mese</p>
-                <p className="text-lg font-bold text-blue-600">
+                <p className="text-lg font-bold text-sky-600">
                   {formatCurrency(savingsHistory.currentMonthSavings)}
                 </p>
               </div>
@@ -187,7 +187,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">Totale risparmi</p>
-                <p className="text-lg font-bold text-blue-700">
+                <p className="text-lg font-bold text-sky-700">
                   {formatCurrency(savingsHistory.cumulativeTotal)}
                 </p>
               </div>
@@ -221,7 +221,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   <Tooltip content={<BarChartTooltip />} />
                   <Bar
                     dataKey="risparmio"
-                    fill="#3b82f6"
+                    fill="#0ea5e9"
                     radius={[3, 3, 0, 0]}
                     cursor="pointer"
                   />
