@@ -82,8 +82,10 @@ export class DashboardService {
 
     // Calculate reallocation preview
     const needsCategory = categories.find((c) => c.category === 'NEEDS')!;
+    const wantsCategory = categories.find((c) => c.category === 'WANTS')!;
     const reallocationPreview = this.buildReallocationPreview(
       needsCategory.remaining,
+      wantsCategory.remaining,
       budgetRule.cutoffDay,
       budgetRule.autoReallocateNeedsRemainder
     );
@@ -161,16 +163,19 @@ export class DashboardService {
 
   private buildReallocationPreview(
     needsRemainder: number,
+    wantsRemainder: number,
     cutoffDay: number,
     autoReallocate: boolean
   ): ReallocationPreviewDTO {
     const isAfterCutoff = isPastCutoffDay(cutoffDay);
-    const available = needsRemainder > 0 && (autoReallocate || isAfterCutoff);
+    const totalRemainder = Math.max(0, needsRemainder) + Math.max(0, wantsRemainder);
+    const available = totalRemainder > 0 && (autoReallocate || isAfterCutoff);
 
     return {
       available,
       needsRemainder: roundCurrency(Math.max(0, needsRemainder)),
-      suggestedAmount: available ? roundCurrency(needsRemainder) : 0,
+      wantsRemainder: roundCurrency(Math.max(0, wantsRemainder)),
+      suggestedAmount: available ? roundCurrency(totalRemainder) : 0,
       cutoffDay,
       isAfterCutoff,
     };

@@ -179,7 +179,8 @@ export interface DashboardSummaryDTO {
 export interface ReallocationPreviewDTO {
   available: boolean; // Is reallocation possible?
   needsRemainder: number; // Amount left in NEEDS
-  suggestedAmount: number; // Suggested transfer to SAVINGS
+  wantsRemainder: number; // Amount left in WANTS
+  suggestedAmount: number; // Suggested total transfer to SAVINGS
   cutoffDay: number;
   isAfterCutoff: boolean;
 }

@@ -15,26 +15,47 @@ export function Dashboard() {
   const createReallocation = useCreateReallocation(periodKey);
   const deleteReallocation = useDeleteReallocation(periodKey);
 
-  // Check if reallocation exists for current period
-  const existingReallocation = reallocations?.find(r => r.toCategory === 'SAVINGS');
-  const hasReallocation = !!existingReallocation;
+  // Check if reallocations exist for current period (one for NEEDS, one for WANTS)
+  const needsReallocation = reallocations?.find(r => r.fromCategory === 'NEEDS' && r.toCategory === 'SAVINGS');
+  const wantsReallocation = reallocations?.find(r => r.fromCategory === 'WANTS' && r.toCategory === 'SAVINGS');
+  const hasReallocation = !!(needsReallocation || wantsReallocation);
 
   // Check if we can show the reallocation button (after cutoff day and has available amount)
   const canShowReallocationButton = reallocationPreview?.isAfterCutoff &&
     (reallocationPreview?.suggestedAmount > 0 || hasReallocation);
 
   const handleReallocation = async () => {
-    if (hasReallocation && existingReallocation) {
-      // Undo reallocation
-      await deleteReallocation.mutateAsync(existingReallocation.id);
+    if (hasReallocation) {
+      // Undo all reallocations
+      if (needsReallocation) {
+        await deleteReallocation.mutateAsync(needsReallocation.id);
+      }
+      if (wantsReallocation) {
+        await deleteReallocation.mutateAsync(wantsReallocation.id);
+      }
     } else if (reallocationPreview) {
-      // Create reallocation
-      await createReallocation.mutateAsync({
-        fromCategory: 'NEEDS',
-        toCategory: 'SAVINGS',
-        amount: reallocationPreview.suggestedAmount,
-        reason: 'Riallocazione manuale avanzo',
-      });
+      // Create reallocations for both NEEDS and WANTS if they have remainders
+      const promises: Promise<unknown>[] = [];
+
+      if (reallocationPreview.needsRemainder > 0) {
+        promises.push(createReallocation.mutateAsync({
+          fromCategory: 'NEEDS',
+          toCategory: 'SAVINGS',
+          amount: reallocationPreview.needsRemainder,
+          reason: 'Riallocazione automatica - Necessità',
+        }));
+      }
+
+      if (reallocationPreview.wantsRemainder > 0) {
+        promises.push(createReallocation.mutateAsync({
+          fromCategory: 'WANTS',
+          toCategory: 'SAVINGS',
+          amount: reallocationPreview.wantsRemainder,
+          reason: 'Riallocazione automatica - Svago',
+        }));
+      }
+
+      await Promise.all(promises);
     }
   };
 

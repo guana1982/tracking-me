@@ -57,6 +57,7 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
               properties: {
                 available: { type: 'boolean' },
                 needsRemainder: { type: 'number' },
+                wantsRemainder: { type: 'number' },
                 suggestedAmount: { type: 'number' },
                 cutoffDay: { type: 'number' },
                 isAfterCutoff: { type: 'boolean' },

@@ -185,7 +185,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-blue-700 truncate leading-tight">
-                  Riallocazione automatica
+                  {reallocation.reason || 'Riallocazione automatica'}
                 </p>
                 <p className="text-xs text-blue-500 leading-tight mt-0.5">
                   {formatDate(reallocation.executedAt)}

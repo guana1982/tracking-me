@@ -64,15 +64,18 @@ export class ReallocationService {
     // Get expense totals
     const expenseTotals = await expenseService.getTotalsByCategory(periodKey, userId);
     const needsRemainder = targets.needs - expenseTotals.NEEDS;
+    const wantsRemainder = targets.wants - expenseTotals.WANTS;
 
-    // Check if reallocation is available
+    // Check if reallocation is available (either NEEDS or WANTS has remainder)
     const isAfterCutoff = isPastCutoffDay(budgetRule.cutoffDay);
-    const available = needsRemainder > 0 && (budgetRule.autoReallocateNeedsRemainder || isAfterCutoff);
+    const totalRemainder = Math.max(0, needsRemainder) + Math.max(0, wantsRemainder);
+    const available = totalRemainder > 0 && (budgetRule.autoReallocateNeedsRemainder || isAfterCutoff);
 
     return {
       available,
       needsRemainder: roundCurrency(Math.max(0, needsRemainder)),
-      suggestedAmount: available ? roundCurrency(needsRemainder) : 0,
+      wantsRemainder: roundCurrency(Math.max(0, wantsRemainder)),
+      suggestedAmount: available ? roundCurrency(totalRemainder) : 0,
       cutoffDay: budgetRule.cutoffDay,
       isAfterCutoff,
     };
@@ -90,10 +93,10 @@ export class ReallocationService {
       throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
     }
 
-    // Validate: can only reallocate from NEEDS to SAVINGS
-    if (data.fromCategory !== 'NEEDS' || data.toCategory !== 'SAVINGS') {
+    // Validate: can only reallocate from NEEDS or WANTS to SAVINGS
+    if (data.toCategory !== 'SAVINGS' || (data.fromCategory !== 'NEEDS' && data.fromCategory !== 'WANTS')) {
       throw new AppError(
-        'Only reallocation from NEEDS to SAVINGS is supported',
+        'Only reallocation from NEEDS or WANTS to SAVINGS is supported',
         400,
         'INVALID_REALLOCATION'
       );
@@ -102,9 +105,11 @@ export class ReallocationService {
     // Get preview to validate amount
     const preview = await this.getPreview(periodKey, userId);
 
-    if (data.amount > preview.needsRemainder) {
+    // Check against the appropriate remainder
+    const availableAmount = data.fromCategory === 'NEEDS' ? preview.needsRemainder : preview.wantsRemainder;
+    if (data.amount > availableAmount) {
       throw new AppError(
-        `Cannot reallocate more than available (${preview.needsRemainder})`,
+        `Cannot reallocate more than available (${availableAmount})`,
         400,
         'INSUFFICIENT_FUNDS'
       );
