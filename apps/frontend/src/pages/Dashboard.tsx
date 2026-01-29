@@ -1,16 +1,42 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useReallocations } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
-import { ReallocationCard } from '../components/ReallocationCard';
 import { ExpensesList } from '../components/RecentExpenses';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw, Undo2 } from 'lucide-react';
+import { formatCurrency } from '../lib/utils';
 
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
   const { data, isLoading, error } = useDashboard(periodKey);
   const { data: savingsHistory } = useSavingsHistory(periodKey);
   const { data: reallocations } = useReallocations(periodKey);
+  const { data: reallocationPreview } = useReallocationPreview(periodKey);
+  const createReallocation = useCreateReallocation(periodKey);
+  const deleteReallocation = useDeleteReallocation(periodKey);
+
+  // Check if reallocation exists for current period
+  const existingReallocation = reallocations?.find(r => r.toCategory === 'SAVINGS');
+  const hasReallocation = !!existingReallocation;
+
+  // Check if we can show the reallocation button (after cutoff day and has available amount)
+  const canShowReallocationButton = reallocationPreview?.isAfterCutoff &&
+    (reallocationPreview?.suggestedAmount > 0 || hasReallocation);
+
+  const handleReallocation = async () => {
+    if (hasReallocation && existingReallocation) {
+      // Undo reallocation
+      await deleteReallocation.mutateAsync(existingReallocation.id);
+    } else if (reallocationPreview) {
+      // Create reallocation
+      await createReallocation.mutateAsync({
+        fromCategory: 'NEEDS',
+        toCategory: 'SAVINGS',
+        amount: reallocationPreview.suggestedAmount,
+        reason: 'Riallocazione manuale avanzo',
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -46,6 +72,32 @@ export function Dashboard() {
       <div className="flex-shrink-0">
         <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} />
       </div>
+
+      {/* Reallocation Button - visible only after cutoff day */}
+      {canShowReallocationButton && (
+        <div className="flex-shrink-0">
+          <button
+            onClick={handleReallocation}
+            disabled={createReallocation.isPending || deleteReallocation.isPending}
+            className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all ${
+              hasReallocation
+                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {(createReallocation.isPending || deleteReallocation.isPending) ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : hasReallocation ? (
+              <Undo2 className="w-4 h-4" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            {hasReallocation
+              ? 'Annulla riallocazione'
+              : `Rialloca ${formatCurrency(reallocationPreview?.suggestedAmount || 0)} nei risparmi`}
+          </button>
+        </div>
+      )}
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:flex-1 md:min-h-0">
@@ -91,11 +143,6 @@ export function Dashboard() {
             reallocations={reallocations}
           />
         </div>
-      </div>
-
-      {/* Reallocation Card - hidden on desktop to prevent scroll */}
-      <div className="md:hidden">
-        <ReallocationCard periodKey={periodKey} />
       </div>
     </div>
   );

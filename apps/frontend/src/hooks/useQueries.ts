@@ -196,6 +196,25 @@ export function useCreateReallocation(periodKey: string) {
         queryKey: queryKeys.reallocationPreview(periodKey),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsHistory(periodKey) });
+    },
+  });
+}
+
+export function useDeleteReallocation(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => reallocationsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.reallocations(periodKey),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.reallocationPreview(periodKey),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsHistory(periodKey) });
     },
   });
 }
