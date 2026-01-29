@@ -32,7 +32,7 @@ export function Layout() {
           <div className="flex items-center justify-between h-16">
             {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-slate-900">Budget</h1>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">Budget</h1>
               <span className="text-xl font-bold text-slate-900">
                 {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
               </span>
