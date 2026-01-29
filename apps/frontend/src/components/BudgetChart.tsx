@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -5,6 +6,8 @@ import {
 import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
+import { IncomePopover } from './IncomePopover';
+import { Pencil } from 'lucide-react';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -18,6 +21,8 @@ const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'S
 
 export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
+  const [isIncomePopoverOpen, setIsIncomePopoverOpen] = useState(false);
+  const incomeRef = useRef<HTMLDivElement>(null);
 
   // Parse periodKey to get month label
   const [year, month] = periodKey.split('-');
@@ -132,9 +137,21 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
 
               {/* Stats: Entrate, Speso, Rimanente */}
               <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
-                <div className="text-center sm:text-left">
+                <div className="text-center sm:text-left relative" ref={incomeRef}>
                   <p className="text-xs text-slate-500">Entrate</p>
-                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
+                  <button
+                    onClick={() => setIsIncomePopoverOpen(!isIncomePopoverOpen)}
+                    className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors"
+                  >
+                    {formatCurrency(totalIncome)}
+                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                  <IncomePopover
+                    periodKey={periodKey}
+                    isOpen={isIncomePopoverOpen}
+                    onClose={() => setIsIncomePopoverOpen(false)}
+                    anchorRef={incomeRef}
+                  />
                 </div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs text-slate-500">Speso</p>
