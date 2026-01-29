@@ -221,10 +221,17 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   <Tooltip content={<BarChartTooltip />} />
                   <Bar
                     dataKey="risparmio"
-                    fill="#0ea5e9"
                     radius={[3, 3, 0, 0]}
                     cursor="pointer"
-                  />
+                  >
+                    {barData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'}
+                        opacity={entry.periodKey === periodKey ? 1 : 0.7}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
