@@ -67,7 +67,7 @@ export class ReallocationService {
     const wantsRemainder = targets.wants - expenseTotals.WANTS;
 
     // Check if reallocation is available (either NEEDS or WANTS has remainder)
-    const isAfterCutoff = isPastCutoffDay(budgetRule.cutoffDay);
+    const isAfterCutoff = isPastCutoffDay(budgetRule.cutoffDay, periodKey);
     const totalRemainder = Math.max(0, needsRemainder) + Math.max(0, wantsRemainder);
     const available = totalRemainder > 0 && (budgetRule.autoReallocateNeedsRemainder || isAfterCutoff);
 

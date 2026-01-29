@@ -72,9 +72,29 @@ export function buildCategorySummary(
 
 /**
  * Check if we're past the cutoff day for reallocation
+ * - For current month: check if today >= cutoffDay
+ * - For past months: always true (can reallocate)
+ * - For future months: always false (can't reallocate yet)
  */
-export function isPastCutoffDay(cutoffDay: number): boolean {
-  const today = new Date().getDate();
+export function isPastCutoffDay(cutoffDay: number, periodKey: string): boolean {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const today = now.getDate();
+
+  const { year: periodYear, month: periodMonth } = parsePeriodKey(periodKey);
+
+  // Future month - can't reallocate yet
+  if (periodYear > currentYear || (periodYear === currentYear && periodMonth > currentMonth)) {
+    return false;
+  }
+
+  // Past month - can always reallocate
+  if (periodYear < currentYear || (periodYear === currentYear && periodMonth < currentMonth)) {
+    return true;
+  }
+
+  // Current month - check if past cutoff day
   return today >= cutoffDay;
 }
 

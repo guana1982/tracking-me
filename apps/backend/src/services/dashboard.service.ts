@@ -87,7 +87,8 @@ export class DashboardService {
       needsCategory.remaining,
       wantsCategory.remaining,
       budgetRule.cutoffDay,
-      budgetRule.autoReallocateNeedsRemainder
+      budgetRule.autoReallocateNeedsRemainder,
+      periodKey
     );
 
     // Get all expenses for the period (user-scoped)
@@ -165,9 +166,10 @@ export class DashboardService {
     needsRemainder: number,
     wantsRemainder: number,
     cutoffDay: number,
-    autoReallocate: boolean
+    autoReallocate: boolean,
+    periodKey: string
   ): ReallocationPreviewDTO {
-    const isAfterCutoff = isPastCutoffDay(cutoffDay);
+    const isAfterCutoff = isPastCutoffDay(cutoffDay, periodKey);
     const totalRemainder = Math.max(0, needsRemainder) + Math.max(0, wantsRemainder);
     const available = totalRemainder > 0 && (autoReallocate || isAfterCutoff);
 
