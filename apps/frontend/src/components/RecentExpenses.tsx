@@ -114,11 +114,11 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   const headerContent = (
     <div className={cn(
-      'flex items-center justify-between px-4 py-3 -mx-4 -mt-4 mb-3 rounded-t-xl flex-shrink-0',
+      'flex items-center justify-between px-4 py-3 -mx-5 -mt-5 mb-3 rounded-t-2xl flex-shrink-0',
       'bg-gradient-to-r',
-      category === 'NEEDS' && 'from-green-50 to-green-100/50 border-b border-green-200',
-      category === 'WANTS' && 'from-orange-50 to-orange-100/50 border-b border-orange-200',
-      category === 'SAVINGS' && 'from-blue-50 to-blue-100/50 border-b border-blue-200'
+      category === 'NEEDS' && 'from-emerald-50 to-emerald-100/50 border-b border-emerald-200',
+      category === 'WANTS' && 'from-amber-50 to-amber-100/50 border-b border-amber-200',
+      category === 'SAVINGS' && 'from-sky-50 to-sky-100/50 border-b border-sky-200'
     )}>
       <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
       <button
@@ -174,24 +174,24 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       {headerContent}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
-          {/* Reallocations - special blue entries */}
+          {/* Reallocations - special sky entries */}
           {savingsReallocations.map((reallocation) => (
             <div
               key={`realloc-${reallocation.id}`}
-              className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg bg-blue-50 border border-blue-200"
+              className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl bg-sky-50 border border-sky-200"
             >
-              <div className="p-1.5 rounded-lg bg-blue-100">
-                <RefreshCw className="w-4 h-4 text-blue-600" />
+              <div className="p-1.5 rounded-lg bg-sky-100">
+                <RefreshCw className="w-4 h-4 text-sky-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-blue-700 truncate leading-tight">
+                <p className="text-sm font-medium text-sky-700 truncate leading-tight">
                   {reallocation.reason || 'Riallocazione automatica'}
                 </p>
-                <p className="text-xs text-blue-500 leading-tight mt-0.5">
+                <p className="text-xs text-sky-500 leading-tight mt-0.5">
                   {formatDate(reallocation.executedAt)}
                 </p>
               </div>
-              <p className="text-sm font-bold text-blue-700 whitespace-nowrap">
+              <p className="text-sm font-bold text-sky-700 whitespace-nowrap">
                 {formatCurrency(reallocation.amount)}
               </p>
             </div>
@@ -208,10 +208,10 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
               <div
                 key={expense.id}
                 className={cn(
-                  'flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg transition-all',
+                  'flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl transition-all',
                   isEven ? 'bg-slate-50/50' : 'bg-white',
                   'hover:bg-slate-100/80',
-                  isEditingThis && 'bg-blue-50/50 ring-1 ring-blue-200'
+                  isEditingThis && 'bg-sky-50/50 ring-1 ring-sky-200'
                 )}
               >
                 <div className="flex-1 min-w-0">
@@ -226,7 +226,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
-                      className="text-sm font-medium text-slate-900 bg-white border border-blue-300 rounded-md px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="text-sm font-medium text-slate-900 bg-white border border-sky-300 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   ) : (
                     <p
@@ -249,7 +249,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       }}
                       onKeyDown={handleKeyDown}
                       onBlur={saveEditing}
-                      className="text-xs text-slate-500 bg-white border border-blue-300 rounded-md px-2 py-0.5 mt-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="text-xs text-slate-500 bg-white border border-sky-300 rounded-lg px-2 py-0.5 mt-0.5 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   ) : (
                     <p
@@ -275,7 +275,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                     }}
                     onKeyDown={handleKeyDown}
                     onBlur={saveEditing}
-                    className="text-sm font-bold text-slate-900 bg-white border border-blue-300 rounded-md px-2 py-1 w-24 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="text-sm font-bold text-slate-900 bg-white border border-sky-300 rounded-lg px-2 py-1 w-24 text-right focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 ) : (
                   <p
@@ -310,7 +310,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
       {/* Footer with total */}
       <div className={cn(
-        'flex items-center justify-between px-2 py-2 -mx-4 -mb-4 mt-3 rounded-b-xl border-t flex-shrink-0',
+        'flex items-center justify-between px-3 py-2.5 -mx-5 -mb-5 mt-3 rounded-b-2xl border-t flex-shrink-0',
         colors.bg,
         colors.border
       )}>

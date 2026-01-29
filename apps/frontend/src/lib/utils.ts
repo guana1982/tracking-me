@@ -57,24 +57,24 @@ export function getCategoryColor(category: Category): {
   switch (category) {
     case 'NEEDS':
       return {
-        bg: 'bg-green-50',
-        text: 'text-green-700',
-        border: 'border-green-200',
-        fill: '#22c55e',
+        bg: 'bg-emerald-50',
+        text: 'text-emerald-700',
+        border: 'border-emerald-200',
+        fill: '#10B981', // Emerald-500
       };
     case 'WANTS':
       return {
-        bg: 'bg-orange-50',
-        text: 'text-orange-700',
-        border: 'border-orange-200',
-        fill: '#f97316',
+        bg: 'bg-amber-50',
+        text: 'text-amber-700',
+        border: 'border-amber-200',
+        fill: '#F59E0B', // Amber-500
       };
     case 'SAVINGS':
       return {
-        bg: 'bg-blue-50',
-        text: 'text-blue-700',
-        border: 'border-blue-200',
-        fill: '#3b82f6',
+        bg: 'bg-sky-50',
+        text: 'text-sky-700',
+        border: 'border-sky-200',
+        fill: '#0EA5E9', // Sky-500
       };
   }
 }
