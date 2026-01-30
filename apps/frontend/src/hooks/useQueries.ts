@@ -68,7 +68,8 @@ export function useCloseMonth(periodKey: string) {
 
   return useMutation({
     mutationFn: () => periodsApi.close(periodKey),
-    onSuccess: () => {
+    onSettled: () => {
+      // Invalidate queries regardless of success/failure to sync UI with server state
       queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.periods });
@@ -81,7 +82,8 @@ export function useReopenMonth(periodKey: string) {
 
   return useMutation({
     mutationFn: () => periodsApi.reopen(periodKey),
-    onSuccess: () => {
+    onSettled: () => {
+      // Invalidate queries regardless of success/failure to sync UI with server state
       queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.periods });
