@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
-import type { ExpenseDTO, Category, ReallocationDTO, TricountType } from '@budget/shared';
+import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
 import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
