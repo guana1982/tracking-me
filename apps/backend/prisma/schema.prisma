@@ -92,17 +92,25 @@ enum Category {
   SAVINGS
 }
 
+// Tricount type enum for shared expenses
+enum TricountType {
+  IO
+  FRA
+}
+
 // Expense - individual expense entry
 model Expense {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   monthPeriodId String
   date          DateTime
   category      Category
   label         String
-  amount        Float    // Store as float (EUR)
+  amount        Float         // Store as float (EUR)
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isFixed       Boolean       @default(false)  // Fixed monthly expense
+  tricountType  TricountType?                  // Shared expense type (IO/FRA)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
   monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)

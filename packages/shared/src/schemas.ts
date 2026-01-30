@@ -4,6 +4,9 @@ import { CATEGORIES } from './constants';
 // Category enum schema
 export const categorySchema = z.enum(CATEGORIES);
 
+// Tricount type schema for shared expenses
+export const tricountTypeSchema = z.enum(['IO', 'FRA']);
+
 // Month Period schemas
 export const createMonthPeriodSchema = z.object({
   year: z.number().int().min(2020).max(2100),
@@ -55,6 +58,8 @@ export const createExpenseSchema = z.object({
   label: z.string().min(1).max(200).trim(),
   amount: z.number().positive().multipleOf(0.01),
   notes: z.string().max(500).trim().optional(),
+  isFixed: z.boolean().optional().default(false),
+  tricountType: tricountTypeSchema.nullable().optional(),
 });
 
 export const updateExpenseSchema = z.object({
@@ -63,6 +68,8 @@ export const updateExpenseSchema = z.object({
   label: z.string().min(1).max(200).trim().optional(),
   amount: z.number().positive().multipleOf(0.01).optional(),
   notes: z.string().max(500).trim().optional().nullable(),
+  isFixed: z.boolean().optional(),
+  tricountType: tricountTypeSchema.nullable().optional(),
 });
 
 // Reallocation schemas

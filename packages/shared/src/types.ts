@@ -39,7 +39,12 @@ export interface Expense extends BaseEntity {
   label: string;
   amount: number; // in cents
   notes?: string | null;
+  isFixed: boolean;
+  tricountType: TricountType | null;
 }
+
+// Tricount type for shared expenses
+export type TricountType = 'IO' | 'FRA';
 
 // Reallocation - transfer between categories at end of month
 export interface Reallocation extends BaseEntity {
@@ -116,6 +121,8 @@ export interface ExpenseDTO {
   label: string;
   amount: number;
   notes?: string | null;
+  isFixed: boolean;
+  tricountType: TricountType | null;
   createdAt: string;
 }
 
@@ -125,6 +132,8 @@ export interface CreateExpenseDTO {
   label: string;
   amount: number;
   notes?: string;
+  isFixed?: boolean;
+  tricountType?: TricountType | null;
 }
 
 export interface UpdateExpenseDTO {
@@ -133,6 +142,8 @@ export interface UpdateExpenseDTO {
   label?: string;
   amount?: number;
   notes?: string | null;
+  isFixed?: boolean;
+  tricountType?: TricountType | null;
 }
 
 // Reallocation DTOs

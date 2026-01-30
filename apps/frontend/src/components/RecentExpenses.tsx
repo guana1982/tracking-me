@@ -247,16 +247,33 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                       className="text-sm font-medium text-slate-900 bg-white border border-sky-300 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   ) : (
-                    <p
-                      className={cn(
-                        'text-sm font-medium text-slate-800 truncate leading-tight transition-colors',
-                        !isClosed && 'cursor-pointer hover:text-slate-600'
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p
+                        className={cn(
+                          'text-sm font-medium text-slate-800 truncate leading-tight transition-colors',
+                          !isClosed && 'cursor-pointer hover:text-slate-600'
+                        )}
+                        onClick={() => startEditing(expense, 'label')}
+                        title={isClosed ? undefined : 'Clicca per modificare'}
+                      >
+                        {expense.label}
+                      </p>
+                      {expense.isFixed && (
+                        <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 rounded">
+                          Fisso
+                        </span>
                       )}
-                      onClick={() => startEditing(expense, 'label')}
-                      title={isClosed ? undefined : 'Clicca per modificare'}
-                    >
-                      {expense.label}
-                    </p>
+                      {expense.tricountType && (
+                        <span className={cn(
+                          "flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded",
+                          expense.tricountType === 'IO'
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-pink-100 text-pink-700"
+                        )}>
+                          {expense.tricountType === 'IO' ? 'Io' : 'Fra'}
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {isEditingThis && editing.field === 'date' ? (

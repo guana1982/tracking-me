@@ -147,14 +147,23 @@ export class ExpenseService {
       parsedDate = new Date(data.date);
     }
 
+    // Calculate final amount and label for tricount expenses
+    const finalAmount = data.tricountType ? data.amount / 2 : data.amount;
+    const tricountPrefix = data.tricountType
+      ? `Tricount ${data.tricountType === 'IO' ? 'Io' : 'Fra'}: `
+      : '';
+    const finalLabel = tricountPrefix + data.label;
+
     const expense = await prisma.expense.create({
       data: {
         monthPeriodId: monthPeriod.id,
         date: parsedDate,
         category: data.category,
-        label: data.label,
-        amount: data.amount,
+        label: finalLabel,
+        amount: finalAmount,
         notes: data.notes || null,
+        isFixed: data.isFixed ?? false,
+        tricountType: data.tricountType ?? null,
       },
     });
 
@@ -196,6 +205,8 @@ export class ExpenseService {
         label: data.label ?? undefined,
         amount: data.amount ?? undefined,
         notes: data.notes !== undefined ? data.notes : undefined,
+        isFixed: data.isFixed ?? undefined,
+        tricountType: data.tricountType !== undefined ? data.tricountType : undefined,
       },
     });
 
@@ -255,6 +266,8 @@ export class ExpenseService {
     label: string;
     amount: number;
     notes: string | null;
+    isFixed: boolean;
+    tricountType: string | null;
     createdAt: Date;
   }): ExpenseDTO {
     return {
@@ -265,6 +278,8 @@ export class ExpenseService {
       label: expense.label,
       amount: expense.amount,
       notes: expense.notes,
+      isFixed: expense.isFixed,
+      tricountType: expense.tricountType as 'IO' | 'FRA' | null,
       createdAt: expense.createdAt.toISOString(),
     };
   }
