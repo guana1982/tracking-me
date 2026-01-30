@@ -59,6 +59,8 @@ export interface MonthPeriodDTO {
   year: number;
   month: number;
   periodKey: string;
+  isClosed: boolean;
+  closedAt: string | null;
   createdAt: string;
 }
 

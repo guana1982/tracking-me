@@ -15,11 +15,12 @@ interface BudgetChartProps {
   compact?: boolean;
   showStats?: boolean;
   savingsHistory?: SavingsHistoryDTO | null;
+  isClosed?: boolean;
 }
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory, isClosed = false }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomePopoverOpen, setIsIncomePopoverOpen] = useState(false);
   const incomeRef = useRef<HTMLDivElement>(null);
@@ -139,13 +140,19 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
                 <div className="text-center sm:text-left relative" ref={incomeRef}>
                   <p className="text-xs text-slate-500">Entrate</p>
-                  <button
-                    onClick={() => setIsIncomePopoverOpen(!isIncomePopoverOpen)}
-                    className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-sky-600 transition-colors"
-                  >
-                    {formatCurrency(totalIncome)}
-                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
+                  {isClosed ? (
+                    <p className="text-sm font-bold text-slate-900">
+                      {formatCurrency(totalIncome)}
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => setIsIncomePopoverOpen(!isIncomePopoverOpen)}
+                      className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-sky-600 transition-colors"
+                    >
+                      {formatCurrency(totalIncome)}
+                      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
                   <IncomePopover
                     periodKey={periodKey}
                     isOpen={isIncomePopoverOpen}

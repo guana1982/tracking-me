@@ -32,6 +32,8 @@ model MonthPeriod {
   year        Int
   month       Int      // 1-12
   periodKey   String   // YYYY-MM format for easy querying
+  isClosed    Boolean  @default(false) // When true, no edits allowed
+  closedAt    DateTime? // When the month was closed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

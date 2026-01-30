@@ -119,6 +119,68 @@ export const monthPeriodRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Close a month period
+  fastify.post<{ Params: { periodKey: string } }>('/:periodKey/close', {
+    schema: {
+      tags: ['Month Periods'],
+      summary: 'Close a month period (no more edits allowed)',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+
+      const period = await monthPeriodService.closeMonth(periodKey, request.authUser!.id);
+      return { success: true, data: period };
+    },
+  });
+
+  // Reopen a month period
+  fastify.post<{ Params: { periodKey: string } }>('/:periodKey/reopen', {
+    schema: {
+      tags: ['Month Periods'],
+      summary: 'Reopen a closed month period',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+
+      const period = await monthPeriodService.reopenMonth(periodKey, request.authUser!.id);
+      return { success: true, data: period };
+    },
+  });
+
   // Delete a month period
   fastify.delete<{ Params: { periodKey: string } }>('/:periodKey', {
     schema: {

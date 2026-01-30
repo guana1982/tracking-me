@@ -107,6 +107,16 @@ export const periodsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  close: (periodKey: string) =>
+    fetchApi<MonthPeriodDTO>(`/periods/${periodKey}/close`, {
+      method: 'POST',
+    }),
+
+  reopen: (periodKey: string) =>
+    fetchApi<MonthPeriodDTO>(`/periods/${periodKey}/reopen`, {
+      method: 'POST',
+    }),
 };
 
 // Budget Rules

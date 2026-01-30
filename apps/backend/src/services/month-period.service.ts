@@ -143,12 +143,68 @@ export class MonthPeriodService {
     });
   }
 
-  private toDTO(period: { id: string; year: number; month: number; periodKey: string; createdAt: Date }): MonthPeriodDTO {
+  /**
+   * Close a month period (no more edits allowed)
+   */
+  async closeMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
+    });
+
+    if (!period) {
+      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    }
+
+    if (period.isClosed) {
+      throw new AppError(`Month period ${periodKey} is already closed`, 400, 'ALREADY_CLOSED');
+    }
+
+    const updated = await prisma.monthPeriod.update({
+      where: { id: period.id },
+      data: {
+        isClosed: true,
+        closedAt: new Date(),
+      },
+    });
+
+    return this.toDTO(updated);
+  }
+
+  /**
+   * Reopen a closed month period
+   */
+  async reopenMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
+    });
+
+    if (!period) {
+      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    }
+
+    if (!period.isClosed) {
+      throw new AppError(`Month period ${periodKey} is not closed`, 400, 'NOT_CLOSED');
+    }
+
+    const updated = await prisma.monthPeriod.update({
+      where: { id: period.id },
+      data: {
+        isClosed: false,
+        closedAt: null,
+      },
+    });
+
+    return this.toDTO(updated);
+  }
+
+  private toDTO(period: { id: string; year: number; month: number; periodKey: string; isClosed: boolean; closedAt: Date | null; createdAt: Date }): MonthPeriodDTO {
     return {
       id: period.id,
       year: period.year,
       month: period.month,
       periodKey: period.periodKey,
+      isClosed: period.isClosed,
+      closedAt: period.closedAt?.toISOString() ?? null,
       createdAt: period.createdAt.toISOString(),
     };
   }

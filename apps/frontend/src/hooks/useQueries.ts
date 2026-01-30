@@ -56,6 +56,39 @@ export function usePeriods() {
   });
 }
 
+export function usePeriod(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.period(periodKey),
+    queryFn: () => periodsApi.getByKey(periodKey),
+  });
+}
+
+export function useCloseMonth(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => periodsApi.close(periodKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.periods });
+    },
+  });
+}
+
+export function useReopenMonth(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => periodsApi.reopen(periodKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.periods });
+    },
+  });
+}
+
 // Incomes
 export function useIncomes(periodKey: string) {
   return useQuery({

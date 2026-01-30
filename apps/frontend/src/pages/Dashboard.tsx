@@ -1,9 +1,9 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { ExpensesList } from '../components/RecentExpenses';
-import { Loader2, RefreshCw, Undo2 } from 'lucide-react';
+import { Loader2, RefreshCw, Undo2, Lock, Unlock } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 
 export function Dashboard() {
@@ -12,8 +12,14 @@ export function Dashboard() {
   const { data: savingsHistory } = useSavingsHistory(periodKey);
   const { data: reallocations } = useReallocations(periodKey);
   const { data: reallocationPreview } = useReallocationPreview(periodKey);
+  const { data: monthPeriod } = usePeriod(periodKey);
   const createReallocation = useCreateReallocation(periodKey);
   const deleteReallocation = useDeleteReallocation(periodKey);
+  const closeMonth = useCloseMonth(periodKey);
+  const reopenMonth = useReopenMonth(periodKey);
+
+  // Check if the month is closed
+  const isClosed = monthPeriod?.isClosed ?? false;
 
   // Check if reallocations exist for current period (one for NEEDS, one for WANTS)
   const needsReallocation = reallocations?.find(r => r.fromCategory === 'NEEDS' && r.toCategory === 'SAVINGS');
@@ -91,11 +97,11 @@ export function Dashboard() {
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
       {/* Chart with Stats - Full width responsive */}
       <div className="flex-shrink-0">
-        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} />
+        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} isClosed={isClosed} />
       </div>
 
-      {/* Reallocation Button - visible only after cutoff day */}
-      {canShowReallocationButton && (
+      {/* Reallocation Button - visible only after cutoff day and when month is not closed */}
+      {canShowReallocationButton && !isClosed && (
         <div className="flex-shrink-0">
           <button
             onClick={handleReallocation}
@@ -133,6 +139,7 @@ export function Dashboard() {
             title="Spese Necessarie"
             category="NEEDS"
             emptyMessage="Nessuna spesa necessaria"
+            isClosed={isClosed}
           />
         </div>
 
@@ -147,6 +154,7 @@ export function Dashboard() {
             title="Spese Svago"
             category="WANTS"
             emptyMessage="Nessuna spesa svago"
+            isClosed={isClosed}
           />
         </div>
 
@@ -162,9 +170,34 @@ export function Dashboard() {
             category="SAVINGS"
             emptyMessage="Nessun risparmio"
             reallocations={reallocations}
+            isClosed={isClosed}
           />
         </div>
       </div>
+
+      {/* Close/Reopen Month Button - visible after cutoff day */}
+      {reallocationPreview?.isAfterCutoff && (
+        <div className="flex-shrink-0 mt-4">
+          <button
+            onClick={() => isClosed ? reopenMonth.mutate() : closeMonth.mutate()}
+            disabled={closeMonth.isPending || reopenMonth.isPending}
+            className={`w-full py-3 px-4 rounded-lg font-semibold text-base flex items-center justify-center gap-2 transition-all ${
+              isClosed
+                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-2 border-amber-400'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 border-2 border-emerald-700'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {(closeMonth.isPending || reopenMonth.isPending) ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : isClosed ? (
+              <Unlock className="w-5 h-5" />
+            ) : (
+              <Lock className="w-5 h-5" />
+            )}
+            {isClosed ? 'Riapri il mese' : 'Chiusura mese'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

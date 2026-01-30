@@ -12,6 +12,7 @@ interface ExpensesListProps {
   category: Category;
   emptyMessage?: string;
   reallocations?: ReallocationDTO[];
+  isClosed?: boolean;
 }
 
 type EditingField = {
@@ -20,7 +21,7 @@ type EditingField = {
   value: string;
 };
 
-export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [] }: ExpensesListProps) {
+export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [], isClosed = false }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +41,8 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   }, [editing?.id, editing?.field]);
 
   const startEditing = (expense: ExpenseDTO, field: 'label' | 'amount' | 'date') => {
+    if (isClosed) return; // Don't allow editing when month is closed
+
     let value: string;
     if (field === 'amount') {
       value = expense.amount.toString();
@@ -121,18 +124,20 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       category === 'SAVINGS' && 'from-sky-50 to-sky-100/50 border-b border-sky-200'
     )}>
       <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
-      <button
-        onClick={() => setIsAddModalOpen(true)}
-        className={cn(
-          'p-1.5 rounded-lg transition-all',
-          'bg-white/80 shadow-sm hover:shadow',
-          colors.text,
-          'hover:scale-105 active:scale-95'
-        )}
-        title="Aggiungi spesa"
-      >
-        <Plus className="w-4 h-4" />
-      </button>
+      {!isClosed && (
+        <button
+          onClick={() => setIsAddModalOpen(true)}
+          className={cn(
+            'p-1.5 rounded-lg transition-all',
+            'bg-white/80 shadow-sm hover:shadow',
+            colors.text,
+            'hover:scale-105 active:scale-95'
+          )}
+          title="Aggiungi spesa"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 
@@ -147,17 +152,19 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           <p className="text-slate-400 text-sm">
             {emptyMessage}
           </p>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className={cn(
-              'mt-3 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors',
-              colors.text,
-              colors.bg,
-              'hover:opacity-80'
-            )}
-          >
-            Aggiungi la prima
-          </button>
+          {!isClosed && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className={cn(
+                'mt-3 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors',
+                colors.text,
+                colors.bg,
+                'hover:opacity-80'
+              )}
+            >
+              Aggiungi la prima
+            </button>
+          )}
         </div>
         <QuickAddModal
           isOpen={isAddModalOpen}
@@ -230,9 +237,12 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                     />
                   ) : (
                     <p
-                      className="text-sm font-medium text-slate-800 truncate leading-tight cursor-pointer hover:text-slate-600 transition-colors"
+                      className={cn(
+                        'text-sm font-medium text-slate-800 truncate leading-tight transition-colors',
+                        !isClosed && 'cursor-pointer hover:text-slate-600'
+                      )}
                       onClick={() => startEditing(expense, 'label')}
-                      title="Clicca per modificare"
+                      title={isClosed ? undefined : 'Clicca per modificare'}
                     >
                       {expense.label}
                     </p>
@@ -253,9 +263,12 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                     />
                   ) : (
                     <p
-                      className="text-xs text-slate-400 leading-tight cursor-pointer hover:text-slate-500 transition-colors mt-0.5"
+                      className={cn(
+                        'text-xs text-slate-400 leading-tight transition-colors mt-0.5',
+                        !isClosed && 'cursor-pointer hover:text-slate-500'
+                      )}
                       onClick={() => startEditing(expense, 'date')}
-                      title="Clicca per modificare"
+                      title={isClosed ? undefined : 'Clicca per modificare'}
                     >
                       {formatDate(expense.date)}
                     </p>
@@ -280,11 +293,11 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                 ) : (
                   <p
                     className={cn(
-                      'text-sm font-bold whitespace-nowrap cursor-pointer transition-colors',
-                      'text-slate-800 hover:text-slate-600'
+                      'text-sm font-bold whitespace-nowrap transition-colors text-slate-800',
+                      !isClosed && 'cursor-pointer hover:text-slate-600'
                     )}
                     onClick={() => startEditing(expense, 'amount')}
-                    title="Clicca per modificare"
+                    title={isClosed ? undefined : 'Clicca per modificare'}
                   >
                     {formatCurrency(expense.amount)}
                   </p>
