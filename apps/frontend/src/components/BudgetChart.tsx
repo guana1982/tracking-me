@@ -7,7 +7,7 @@ import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomePopover } from './IncomePopover';
-import { Pencil } from 'lucide-react';
+import { Pencil, Lock } from 'lucide-react';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -139,9 +139,12 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               {/* Stats: Entrate, Speso, Rimanente */}
               <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
                 <div className="text-center sm:text-left relative" ref={incomeRef}>
-                  <p className="text-xs text-slate-500">Entrate</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-slate-500">Entrate</p>
+                    {isClosed && <Lock className="w-3 h-3 text-slate-400" />}
+                  </div>
                   {isClosed ? (
-                    <p className="text-sm font-bold text-slate-900">
+                    <p className="text-sm font-bold text-slate-500">
                       {formatCurrency(totalIncome)}
                     </p>
                   ) : (

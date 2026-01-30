@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
-import { Plus, Trash2, Receipt, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Receipt, RefreshCw, Lock } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
@@ -123,7 +123,12 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       category === 'WANTS' && 'from-amber-50 to-amber-100/50 border-b border-amber-200',
       category === 'SAVINGS' && 'from-sky-50 to-sky-100/50 border-b border-sky-200'
     )}>
-      <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
+      <div className="flex items-center gap-2">
+        <h3 className={cn('font-semibold', colors.text)}>{title}</h3>
+        {isClosed && (
+          <Lock className="w-3.5 h-3.5 text-slate-400" />
+        )}
+      </div>
       {!isClosed && (
         <button
           onClick={() => setIsAddModalOpen(true)}
@@ -143,7 +148,10 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   if (expenses.length === 0 && savingsReallocations.length === 0) {
     return (
-      <div className="card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col">
+      <div className={cn(
+        "card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col",
+        isClosed && "opacity-75"
+      )}>
         {headerContent}
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className={cn('p-3 rounded-full mb-3', colors.bg)}>
@@ -177,7 +185,10 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   }
 
   return (
-    <div className="card flex flex-col max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0 border border-slate-200 shadow-sm">
+    <div className={cn(
+      "card flex flex-col max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0 border border-slate-200 shadow-sm",
+      isClosed && "opacity-75"
+    )}>
       {headerContent}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
