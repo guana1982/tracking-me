@@ -5,6 +5,9 @@ import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users } from 'lucide-
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
+const EXPENSE_ID_DRAG_MIME = 'application/x-budget-expense-id';
+const EXPENSE_CATEGORY_DRAG_MIME = 'application/x-budget-expense-category';
+
 interface ExpensesListProps {
   expenses: ExpenseDTO[];
   periodKey: string;
@@ -24,6 +27,8 @@ type EditingField = {
 export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [], isClosed = false }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [draggingExpenseId, setDraggingExpenseId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
   const deleteExpense = useDeleteExpense(periodKey);
@@ -126,6 +131,71 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     }
   };
 
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, expense: ExpenseDTO) => {
+    if (isClosed) return;
+
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(EXPENSE_ID_DRAG_MIME, expense.id);
+    event.dataTransfer.setData(EXPENSE_CATEGORY_DRAG_MIME, expense.category);
+    event.dataTransfer.setData('text/plain', expense.id);
+    setDraggingExpenseId(expense.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingExpenseId(null);
+    setIsDragOver(false);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (isClosed) return;
+
+    const draggedExpenseId =
+      event.dataTransfer.getData(EXPENSE_ID_DRAG_MIME) ||
+      event.dataTransfer.getData('text/plain');
+    const sourceCategory = event.dataTransfer.getData(EXPENSE_CATEGORY_DRAG_MIME) as Category | '';
+
+    if (!draggedExpenseId || sourceCategory === category) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    setDraggingExpenseId(null);
+
+    if (isClosed) return;
+
+    const draggedExpenseId =
+      event.dataTransfer.getData(EXPENSE_ID_DRAG_MIME) ||
+      event.dataTransfer.getData('text/plain');
+    const sourceCategory = event.dataTransfer.getData(EXPENSE_CATEGORY_DRAG_MIME) as Category | '';
+
+    if (!draggedExpenseId || sourceCategory === category || updateExpense.isPending) {
+      return;
+    }
+
+    try {
+      await updateExpense.mutateAsync({
+        id: draggedExpenseId,
+        data: { category },
+      });
+    } catch (error) {
+      console.error('Failed to move expense between categories:', error);
+    }
+  };
+
   const colors = getCategoryColor(category);
 
   // Filter reallocations that go TO this category (for SAVINGS)
@@ -171,10 +241,20 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   if (expenses.length === 0 && savingsReallocations.length === 0) {
     return (
       <div className={cn(
-        "card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col",
-        isClosed && "opacity-75"
-      )}>
+        "card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col transition-all",
+        isClosed && "opacity-75",
+        !isClosed && isDragOver && "ring-2 ring-dashed ring-sky-400 bg-sky-50/40"
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      >
         {headerContent}
+        {!isClosed && isDragOver && (
+          <div className="mx-1 mb-2 rounded-lg border border-sky-300 bg-sky-100/70 px-3 py-1.5 text-xs font-medium text-sky-700">
+            Rilascia qui per spostare in questa categoria
+          </div>
+        )}
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <div className={cn('p-3 rounded-full mb-3', colors.bg)}>
             <Receipt className={cn('w-6 h-6', colors.text, 'opacity-60')} />
@@ -208,10 +288,20 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   return (
     <div className={cn(
-      "card flex flex-col max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0 border border-slate-200 shadow-sm",
-      isClosed && "opacity-75"
-    )}>
+      "card flex flex-col max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0 border border-slate-200 shadow-sm transition-all",
+      isClosed && "opacity-75",
+      !isClosed && isDragOver && "ring-2 ring-dashed ring-sky-400 bg-sky-50/40"
+    )}
+    onDragOver={handleDragOver}
+    onDragLeave={handleDragLeave}
+    onDrop={handleDrop}
+    >
       {headerContent}
+      {!isClosed && isDragOver && (
+        <div className="mx-1 mb-2 rounded-lg border border-sky-300 bg-sky-100/70 px-3 py-1.5 text-xs font-medium text-sky-700">
+          Rilascia qui per spostare in questa categoria
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
           {/* Reallocations - special sky entries */}
@@ -252,8 +342,13 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                     'flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl transition-all',
                     isEven ? 'bg-slate-50/50' : 'bg-white',
                     'hover:bg-slate-100/80',
-                    isEditingThis && 'bg-sky-50/50 ring-1 ring-sky-200 rounded-b-none'
+                    isEditingThis && 'bg-sky-50/50 ring-1 ring-sky-200 rounded-b-none',
+                    draggingExpenseId === expense.id && 'opacity-50 scale-[0.99]',
+                    !isClosed && !isEditingThis && 'cursor-grab active:cursor-grabbing'
                   )}
+                  draggable={!isClosed && !isEditingThis}
+                  onDragStart={(event) => handleDragStart(event, expense)}
+                  onDragEnd={handleDragEnd}
                 >
                   <div className="flex-1 min-w-0">
                     {isEditingThis && editing.field === 'label' ? (
