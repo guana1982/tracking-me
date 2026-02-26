@@ -8,6 +8,8 @@ import { QuickAddModal } from './QuickAddModal';
 const EXPENSE_ID_DRAG_MIME = 'application/x-budget-expense-id';
 const EXPENSE_CATEGORY_DRAG_MIME = 'application/x-budget-expense-category';
 
+let activeDraggedExpense: { id: string; category: Category } | null = null;
+
 interface ExpensesListProps {
   expenses: ExpenseDTO[];
   periodKey: string;
@@ -138,10 +140,12 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     event.dataTransfer.setData(EXPENSE_ID_DRAG_MIME, expense.id);
     event.dataTransfer.setData(EXPENSE_CATEGORY_DRAG_MIME, expense.category);
     event.dataTransfer.setData('text/plain', expense.id);
+    activeDraggedExpense = { id: expense.id, category: expense.category };
     setDraggingExpenseId(expense.id);
   };
 
   const handleDragEnd = () => {
+    activeDraggedExpense = null;
     setDraggingExpenseId(null);
     setIsDragOver(false);
   };
@@ -149,12 +153,16 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     if (isClosed) return;
 
-    const draggedExpenseId =
-      event.dataTransfer.getData(EXPENSE_ID_DRAG_MIME) ||
-      event.dataTransfer.getData('text/plain');
-    const sourceCategory = event.dataTransfer.getData(EXPENSE_CATEGORY_DRAG_MIME) as Category | '';
+    const sourceCategory = activeDraggedExpense?.category;
+    const hasDragPayload =
+      activeDraggedExpense !== null ||
+      event.dataTransfer.types.includes(EXPENSE_ID_DRAG_MIME) ||
+      event.dataTransfer.types.includes('text/plain');
 
-    if (!draggedExpenseId || sourceCategory === category) return;
+    if (!hasDragPayload || sourceCategory === category) {
+      setIsDragOver(false);
+      return;
+    }
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -179,8 +187,15 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
     const draggedExpenseId =
       event.dataTransfer.getData(EXPENSE_ID_DRAG_MIME) ||
-      event.dataTransfer.getData('text/plain');
-    const sourceCategory = event.dataTransfer.getData(EXPENSE_CATEGORY_DRAG_MIME) as Category | '';
+      event.dataTransfer.getData('text/plain') ||
+      activeDraggedExpense?.id ||
+      '';
+    const sourceCategory =
+      (event.dataTransfer.getData(EXPENSE_CATEGORY_DRAG_MIME) as Category | '') ||
+      activeDraggedExpense?.category ||
+      '';
+
+    activeDraggedExpense = null;
 
     if (!draggedExpenseId || sourceCategory === category || updateExpense.isPending) {
       return;
