@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
-import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users } from 'lucide-react';
+import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 
@@ -29,6 +29,7 @@ type EditingField = {
 export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [], isClosed = false }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggingExpenseId, setDraggingExpenseId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +216,26 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
 
   // Filter reallocations that go TO this category (for SAVINGS)
   const savingsReallocations = reallocations.filter(r => r.toCategory === category);
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredExpenses = normalizedSearchQuery
+    ? expenses.filter((expense) => {
+      const dateText = formatDate(expense.date).toLowerCase();
+      return (
+        expense.label.toLowerCase().includes(normalizedSearchQuery) ||
+        (expense.notes ?? '').toLowerCase().includes(normalizedSearchQuery) ||
+        dateText.includes(normalizedSearchQuery)
+      );
+    })
+    : expenses;
+  const filteredSavingsReallocations = normalizedSearchQuery
+    ? savingsReallocations.filter((reallocation) => {
+      const reason = (reallocation.reason || 'Riallocazione automatica').toLowerCase();
+      const dateText = formatDate(reallocation.executedAt).toLowerCase();
+      return reason.includes(normalizedSearchQuery) || dateText.includes(normalizedSearchQuery);
+    })
+    : savingsReallocations;
+  const hasAnyItems = expenses.length > 0 || savingsReallocations.length > 0;
+  const hasVisibleItems = filteredExpenses.length > 0 || filteredSavingsReallocations.length > 0;
 
   // Calculate totals including reallocations
   const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -253,7 +274,20 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     </div>
   );
 
-  if (expenses.length === 0 && savingsReallocations.length === 0) {
+  const searchBar = (
+    <div className="relative mb-3">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Cerca spesa..."
+        className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
+      />
+    </div>
+  );
+
+  if (!hasAnyItems) {
     return (
       <div className={cn(
         "card border border-slate-200 shadow-sm md:flex-1 md:min-h-0 md:flex md:flex-col transition-all",
@@ -265,6 +299,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       onDrop={handleDrop}
       >
         {headerContent}
+        {searchBar}
         {!isClosed && isDragOver && (
           <div className="mx-1 mb-2 rounded-lg border border-sky-300 bg-sky-100/70 px-3 py-1.5 text-xs font-medium text-sky-700">
             Rilascia qui per spostare in questa categoria
@@ -312,6 +347,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
     onDrop={handleDrop}
     >
       {headerContent}
+      {searchBar}
       {!isClosed && isDragOver && (
         <div className="mx-1 mb-2 rounded-lg border border-sky-300 bg-sky-100/70 px-3 py-1.5 text-xs font-medium text-sky-700">
           Rilascia qui per spostare in questa categoria
@@ -319,8 +355,14 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       )}
       <div className="flex-1 overflow-y-auto -mx-4 px-4 min-h-0">
         <div className="space-y-0">
+          {!hasVisibleItems && (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+              Nessun risultato per "{searchQuery.trim()}"
+            </div>
+          )}
+
           {/* Reallocations - special sky entries */}
-          {savingsReallocations.map((reallocation) => (
+          {filteredSavingsReallocations.map((reallocation) => (
             <div
               key={`realloc-${reallocation.id}`}
               className="flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-xl bg-sky-50 border border-sky-200"
@@ -343,10 +385,10 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           ))}
 
           {/* Regular expenses */}
-          {expenses.map((expense, index) => {
+          {filteredExpenses.map((expense, index) => {
             const isEditingThis = editing?.id === expense.id;
             // Account for reallocations when determining alternating row colors
-            const adjustedIndex = index + savingsReallocations.length;
+            const adjustedIndex = index + filteredSavingsReallocations.length;
             const isEven = adjustedIndex % 2 === 0;
 
             return (
