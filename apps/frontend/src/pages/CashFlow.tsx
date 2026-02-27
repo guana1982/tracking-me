@@ -234,7 +234,7 @@ export function CashFlow() {
   const [rows, setRows] = useState<CashFlowRow[]>([]);
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
-  const [isNewCheckOpen, setIsNewCheckOpen] = useState(false);
+  const [isNewCheckModalOpen, setIsNewCheckModalOpen] = useState(false);
   const [isTrendOpen, setIsTrendOpen] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
   const [newInlineDraft, setNewInlineDraft] = useState<CashFlowFormState | null>(null);
@@ -422,6 +422,7 @@ export function CashFlow() {
       ...INITIAL_FORM,
       date: prev.date || today,
     }));
+    setIsNewCheckModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
@@ -552,11 +553,23 @@ export function CashFlow() {
   return (
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
       <div className="card flex-shrink-0">
-        <h2 className="text-lg font-semibold text-slate-900">Cash Flow Patrimonio</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          Struttura allineata al file Excel: colonne input, differenze sul check precedente e blocco
-          azionario calcolato automaticamente.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Cash Flow Patrimonio</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Struttura allineata al file Excel: colonne input, differenze sul check precedente e blocco
+              azionario calcolato automaticamente.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary flex-shrink-0"
+            onClick={() => setIsNewCheckModalOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            Nuovo check
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
@@ -702,205 +715,6 @@ export function CashFlow() {
           </>
         )}
       </div>
-
-      <form className="card flex-shrink-0" onSubmit={handleSubmit}>
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 text-base font-semibold text-slate-900"
-            onClick={() => setIsNewCheckOpen((prev) => !prev)}
-          >
-            <ChevronDown
-              className={`w-4 h-4 text-slate-500 transition-transform ${
-                isNewCheckOpen ? 'rotate-0' : '-rotate-90'
-              }`}
-            />
-            Nuovo Check
-          </button>
-
-          {isNewCheckOpen && (
-            <button type="submit" className="btn btn-primary">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Aggiungi riga
-            </button>
-          )}
-        </div>
-
-        {isNewCheckOpen && (
-          <div className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <div>
-                <label className="label">Commissione per ETF</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input"
-                  value={settings.commissionPerEtf}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      commissionPerEtf: parseAmount(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">Numero ETF totali</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  className="input"
-                  value={settings.etfCount}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))),
-                    }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col justify-end">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Y5 = Comm. Totali</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">
-                  {formatCurrency(commissionTotal)}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="label">Nome check</label>
-                <input
-                  className="input"
-                  placeholder="Es. CHECK post stipendio"
-                  value={form.checkLabel}
-                  onChange={(e) => handleInputChange('checkLabel', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">Data</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="label">BBVA c/c (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.bbva}
-                  onChange={(e) => handleInputChange('bbva', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">TRADE REP. (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.tradeRepublic}
-                  onChange={(e) => handleInputChange('tradeRepublic', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">WEBANK c/c (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.webankCc}
-                  onChange={(e) => handleInputChange('webankCc', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">WEBANK Obbl (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.webankObbl}
-                  onChange={(e) => handleInputChange('webankObbl', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">ETF tutti LORDO (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.etfLordo}
-                  onChange={(e) => handleInputChange('etfLordo', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">RENDIM. LORDO (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.rendimentoLordo}
-                  onChange={(e) => handleInputChange('rendimentoLordo', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">BPER c/c (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.bper}
-                  onChange={(e) => handleInputChange('bper', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">TRIC DEB/CRED (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.tricount}
-                  onChange={(e) => handleInputChange('tricount', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">CartaWeBank (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.cartaWebank}
-                  onChange={(e) => handleInputChange('cartaWebank', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">EDENRED (input)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input bg-emerald-50"
-                  value={form.edenred}
-                  onChange={(e) => handleInputChange('edenred', e.target.value)}
-                />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-4">
-                <label className="label">Note</label>
-                <input
-                  className="input"
-                  placeholder="Annotazioni libere"
-                  value={form.notes}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </form>
 
       <div className="card md:flex-1 md:min-h-0 md:flex md:flex-col">
         <div className="mb-3 flex-shrink-0 flex items-center justify-between">
@@ -1211,6 +1025,206 @@ export function CashFlow() {
           </div>
         )}
       </div>
+
+      {isNewCheckModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" />
+          <div className="relative w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h3 className="text-base font-semibold text-slate-900">Nuovo Check</h3>
+              <button
+                type="button"
+                onClick={() => setIsNewCheckModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                aria-label="Chiudi modale nuovo check"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
+              <div className="px-5 py-4 space-y-4 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <div>
+                    <label className="label">Commissione per ETF</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input"
+                      value={settings.commissionPerEtf}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          commissionPerEtf: parseAmount(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Numero ETF totali</label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      className="input"
+                      value={settings.etfCount}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Y5 = Comm. Totali</p>
+                    <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">
+                      {formatCurrency(commissionTotal)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="label">Nome check</label>
+                    <input
+                      className="input"
+                      placeholder="Es. CHECK post stipendio"
+                      value={form.checkLabel}
+                      onChange={(e) => handleInputChange('checkLabel', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Data</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={form.date}
+                      onChange={(e) => handleInputChange('date', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">BBVA c/c (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.bbva}
+                      onChange={(e) => handleInputChange('bbva', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">TRADE REP. (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.tradeRepublic}
+                      onChange={(e) => handleInputChange('tradeRepublic', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">WEBANK c/c (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.webankCc}
+                      onChange={(e) => handleInputChange('webankCc', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">WEBANK Obbl (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.webankObbl}
+                      onChange={(e) => handleInputChange('webankObbl', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">ETF tutti LORDO (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.etfLordo}
+                      onChange={(e) => handleInputChange('etfLordo', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">RENDIM. LORDO (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.rendimentoLordo}
+                      onChange={(e) => handleInputChange('rendimentoLordo', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">BPER c/c (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.bper}
+                      onChange={(e) => handleInputChange('bper', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">TRIC DEB/CRED (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.tricount}
+                      onChange={(e) => handleInputChange('tricount', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">CartaWeBank (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.cartaWebank}
+                      onChange={(e) => handleInputChange('cartaWebank', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">EDENRED (input)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input bg-emerald-50"
+                      value={form.edenred}
+                      onChange={(e) => handleInputChange('edenred', e.target.value)}
+                    />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <label className="label">Note</label>
+                    <input
+                      className="input"
+                      placeholder="Annotazioni libere"
+                      value={form.notes}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 border-t border-slate-200 flex justify-end">
+                <button type="submit" className="btn btn-primary">
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
