@@ -513,7 +513,7 @@ export function CashFlow() {
                   tick={{ fill: '#64748b', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(value: number) => `${formatCompactAmount(value)}€`}
+                  tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
                   width={58}
                 />
                 <Tooltip
@@ -521,15 +521,26 @@ export function CashFlow() {
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) return null;
                     const point = payload[0]?.payload as
-                      | { checkLabel: string; dateLabel: string; total: number }
+                      | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
                       | undefined;
                     if (!point) return null;
+
+                    const totalPoint = payload.find((entry) => entry.dataKey === 'total');
+                    const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
 
                     return (
                       <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                         <p className="text-xs text-slate-500">{point.dateLabel}</p>
                         <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
-                        <p className="text-sm font-bold text-blue-600">{formatCurrency(point.total)}</p>
+                        <p className="text-sm font-bold text-blue-600">
+                          Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
+                        </p>
+                        {showAzionarioTrend && (
+                          <p className="text-sm font-semibold text-emerald-600">
+                            Comparto azionario:{' '}
+                            {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
+                          </p>
+                        )}
                       </div>
                     );
                   }}
@@ -542,6 +553,16 @@ export function CashFlow() {
                   dot={false}
                   activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
                 />
+                {showAzionarioTrend && (
+                  <Line
+                    type="monotone"
+                    dataKey="stockComparto"
+                    stroke="#16a34a"
+                    strokeWidth={1.8}
+                    dot={false}
+                    activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
