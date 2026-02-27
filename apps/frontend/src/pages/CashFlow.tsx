@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
 
 const STORAGE_KEY = 'budget-cashflow-checks-v2';
 const LEGACY_STORAGE_KEY = 'budget-cashflow-checks-v1';
@@ -209,6 +209,7 @@ export function CashFlow() {
   const [rows, setRows] = useState<CashFlowRow[]>([]);
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
+  const [isNewCheckOpen, setIsNewCheckOpen] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
 
@@ -401,8 +402,8 @@ export function CashFlow() {
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
 
   return (
-    <div className="sm:ml-16 space-y-4">
-      <div className="card">
+    <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
+      <div className="card flex-shrink-0">
         <h2 className="text-lg font-semibold text-slate-900">Cash Flow Patrimonio</h2>
         <p className="text-sm text-slate-500 mt-1">
           Struttura allineata al file Excel: colonne input, differenze sul check precedente e blocco
@@ -410,47 +411,7 @@ export function CashFlow() {
         </p>
       </div>
 
-      <div className="card grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="label">Commissione per ETF</label>
-          <input
-            type="number"
-            step="0.01"
-            className="input"
-            value={settings.commissionPerEtf}
-            onChange={(e) =>
-              setSettings((prev) => ({
-                ...prev,
-                commissionPerEtf: parseAmount(e.target.value),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="label">Numero ETF totali</label>
-          <input
-            type="number"
-            step="1"
-            min="0"
-            className="input"
-            value={settings.etfCount}
-            onChange={(e) =>
-              setSettings((prev) => ({
-                ...prev,
-                etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))),
-              }))
-            }
-          />
-        </div>
-        <div className="flex flex-col justify-end">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Y5 = Comm. Totali</p>
-          <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">
-            {formatCurrency(commissionTotal)}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
         <div className="card">
           <p className="text-xs uppercase tracking-wide text-slate-500">Check totali</p>
           <p className="text-2xl font-bold text-slate-900 tabular-nums mt-1">
@@ -469,154 +430,212 @@ export function CashFlow() {
         </div>
       </div>
 
-      <form className="card space-y-4" onSubmit={handleSubmit}>
+      <form className="card flex-shrink-0" onSubmit={handleSubmit}>
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">Nuovo Check</h3>
-          <button type="submit" className="btn btn-primary">
-            <Plus className="w-4 h-4 mr-1.5" />
-            Aggiungi riga
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 text-base font-semibold text-slate-900"
+            onClick={() => setIsNewCheckOpen((prev) => !prev)}
+          >
+            <ChevronDown
+              className={`w-4 h-4 text-slate-500 transition-transform ${
+                isNewCheckOpen ? 'rotate-0' : '-rotate-90'
+              }`}
+            />
+            Nuovo Check
           </button>
+
+          {isNewCheckOpen && (
+            <button type="submit" className="btn btn-primary">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Aggiungi riga
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div>
-            <label className="label">Nome check</label>
-            <input
-              className="input"
-              placeholder="Es. CHECK post stipendio"
-              value={form.checkLabel}
-              onChange={(e) => handleInputChange('checkLabel', e.target.value)}
-            />
+        {isNewCheckOpen && (
+          <div className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div>
+                <label className="label">Commissione per ETF</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input"
+                  value={settings.commissionPerEtf}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      commissionPerEtf: parseAmount(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Numero ETF totali</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  className="input"
+                  value={settings.etfCount}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))),
+                    }))
+                  }
+                />
+              </div>
+              <div className="flex flex-col justify-end">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Y5 = Comm. Totali</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums mt-1">
+                  {formatCurrency(commissionTotal)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="label">Nome check</label>
+                <input
+                  className="input"
+                  placeholder="Es. CHECK post stipendio"
+                  value={form.checkLabel}
+                  onChange={(e) => handleInputChange('checkLabel', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Data</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={form.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">BBVA c/c (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.bbva}
+                  onChange={(e) => handleInputChange('bbva', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">TRADE REP. (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.tradeRepublic}
+                  onChange={(e) => handleInputChange('tradeRepublic', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">WEBANK c/c (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.webankCc}
+                  onChange={(e) => handleInputChange('webankCc', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">WEBANK Obbl (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.webankObbl}
+                  onChange={(e) => handleInputChange('webankObbl', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">ETF tutti LORDO (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.etfLordo}
+                  onChange={(e) => handleInputChange('etfLordo', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">RENDIM. LORDO (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.rendimentoLordo}
+                  onChange={(e) => handleInputChange('rendimentoLordo', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">BPER c/c (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.bper}
+                  onChange={(e) => handleInputChange('bper', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">TRIC DEB/CRED (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.tricount}
+                  onChange={(e) => handleInputChange('tricount', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">CartaWeBank (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.cartaWebank}
+                  onChange={(e) => handleInputChange('cartaWebank', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">EDENRED (input)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input bg-emerald-50"
+                  value={form.edenred}
+                  onChange={(e) => handleInputChange('edenred', e.target.value)}
+                />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label className="label">Note</label>
+                <input
+                  className="input"
+                  placeholder="Annotazioni libere"
+                  value={form.notes}
+                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="label">Data</label>
-            <input
-              type="date"
-              className="input"
-              value={form.date}
-              onChange={(e) => handleInputChange('date', e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="label">BBVA c/c (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.bbva}
-              onChange={(e) => handleInputChange('bbva', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">TRADE REP. (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.tradeRepublic}
-              onChange={(e) => handleInputChange('tradeRepublic', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">WEBANK c/c (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.webankCc}
-              onChange={(e) => handleInputChange('webankCc', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">WEBANK Obbl (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.webankObbl}
-              onChange={(e) => handleInputChange('webankObbl', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">ETF tutti LORDO (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.etfLordo}
-              onChange={(e) => handleInputChange('etfLordo', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">RENDIM. LORDO (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.rendimentoLordo}
-              onChange={(e) => handleInputChange('rendimentoLordo', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">BPER c/c (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.bper}
-              onChange={(e) => handleInputChange('bper', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">TRIC DEB/CRED (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.tricount}
-              onChange={(e) => handleInputChange('tricount', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">CartaWeBank (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.cartaWebank}
-              onChange={(e) => handleInputChange('cartaWebank', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label">EDENRED (input)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input bg-emerald-50"
-              value={form.edenred}
-              onChange={(e) => handleInputChange('edenred', e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-4">
-            <label className="label">Note</label>
-            <input
-              className="input"
-              placeholder="Annotazioni libere"
-              value={form.notes}
-              onChange={(e) => handleInputChange('notes', e.target.value)}
-            />
-          </div>
-        </div>
+        )}
       </form>
 
-      <div className="card">
-        <h3 className="text-base font-semibold text-slate-900 mb-3">Storico Check</h3>
+      <div className="card md:flex-1 md:min-h-0 md:flex md:flex-col">
+        <h3 className="text-base font-semibold text-slate-900 mb-3 flex-shrink-0">Storico Check</h3>
 
         {rowsWithComputed.length === 0 ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto md:flex-1 md:min-h-0">
             <table className="min-w-[2300px] w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-200">
