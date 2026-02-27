@@ -5,6 +5,9 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -14,6 +17,7 @@ import {
 const STORAGE_KEY = 'budget-cashflow-checks-v2';
 const LEGACY_STORAGE_KEY = 'budget-cashflow-checks-v1';
 const SETTINGS_STORAGE_KEY = 'budget-cashflow-settings-v1';
+const ALLOCATION_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#14b8a6', '#2563eb'];
 
 type CashFlowRow = {
   id: string;
@@ -351,6 +355,32 @@ export function CashFlow() {
     return Array.from(perDay.values()).reverse();
   }, [rowsWithComputed]);
   const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+  const allocationData = useMemo(() => {
+    if (!latestRow) return [];
+
+    const raw = [
+      { label: 'BPER-Hub', value: latestRow.bper },
+      { label: 'BBVA-FondoEmergenze', value: latestRow.bbva },
+      { label: 'Trade Rep.-Vacanza&Extra', value: latestRow.tradeRepublic },
+      { label: 'WeBank-Investimenti', value: latestRow.webankCc },
+      { label: 'Obbligazioni', value: latestRow.webankObbl },
+      { label: 'Azionario', value: latestRow.azionarioNetto },
+    ];
+
+    const sanitized = raw.map((item, index) => ({
+      ...item,
+      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
+      chartValue: Math.max(0, item.value),
+    }));
+
+    const total = sanitized.reduce((sum, item) => sum + item.chartValue, 0);
+
+    return sanitized.map((item) => ({
+      ...item,
+      percentage: total > 0 ? (item.chartValue / total) * 100 : 0,
+    }));
+  }, [latestRow]);
+  const allocationTotal = allocationData.reduce((sum, item) => sum + item.chartValue, 0);
   const newInlinePreview = useMemo(() => {
     if (!newInlineDraft) return null;
 
@@ -649,83 +679,134 @@ export function CashFlow() {
         </div>
 
         {isTrendOpen && (
-          <>
-            {trendData.length < 2 ? (
-              <p className="text-sm text-slate-500">
-                Aggiungi almeno 2 check per visualizzare il trend.
-              </p>
-            ) : (
-              <div className="h-56 md:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
-                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="dateLabel"
-                      tick={{ fill: '#64748b', fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-                      minTickGap={20}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      tick={{ fill: '#64748b', fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
-                      width={58}
-                    />
-                    <Tooltip
-                      cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
-                      content={({ active, payload }) => {
-                        if (!active || !payload || payload.length === 0) return null;
-                        const point = payload[0]?.payload as
-                          | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
-                          | undefined;
-                        if (!point) return null;
+          <div className="grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+              <p className="text-sm font-semibold text-slate-800 mb-3">Suddivisione Ultimo Check</p>
+              {allocationTotal <= 0 ? (
+                <p className="text-sm text-slate-500">Dati insufficienti per visualizzare la torta.</p>
+              ) : (
+                <>
+                  <div className="h-52">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={allocationData}
+                          dataKey="chartValue"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={52}
+                          outerRadius={78}
+                          paddingAngle={2}
+                          stroke="#ffffff"
+                          strokeWidth={1}
+                        >
+                          {allocationData.map((item) => (
+                            <Cell key={item.label} fill={item.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
 
-                        const totalPoint = payload.find((entry) => entry.dataKey === 'total');
-                        const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 mt-2">
+                    {allocationData.map((item) => (
+                      <div key={item.label} className="rounded-lg bg-white/80 border border-slate-200 px-2.5 py-1.5">
+                        <div className="flex items-start gap-2">
+                          <span
+                            className="mt-0.5 inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <p className="text-xs font-medium text-slate-700 leading-tight">{item.label}</p>
+                        </div>
+                        <p className="pl-5 text-[11px] text-slate-500">
+                          {item.percentage.toFixed(1)}%
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
 
-                        return (
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                            <p className="text-xs text-slate-500">{point.dateLabel}</p>
-                            <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
-                            <p className="text-sm font-bold text-blue-600">
-                              Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
-                            </p>
-                            {showAzionarioTrend && (
-                              <p className="text-sm font-semibold text-emerald-600">
-                                Comparto azionario:{' '}
-                                {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              {trendData.length < 2 ? (
+                <p className="text-sm text-slate-500">
+                  Aggiungi almeno 2 check per visualizzare il trend.
+                </p>
+              ) : (
+                <div className="h-56 md:h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="dateLabel"
+                        tick={{ fill: '#64748b', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={20}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        tick={{ fill: '#64748b', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
+                        width={58}
+                      />
+                      <Tooltip
+                        cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const point = payload[0]?.payload as
+                            | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
+                            | undefined;
+                          if (!point) return null;
+
+                          const totalPoint = payload.find((entry) => entry.dataKey === 'total');
+                          const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-xs text-slate-500">{point.dateLabel}</p>
+                              <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
+                              <p className="text-sm font-bold text-blue-600">
+                                Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
                               </p>
-                            )}
-                          </div>
-                        );
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#2563eb"
-                      strokeWidth={1.8}
-                      dot={false}
-                      activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
-                    />
-                    {showAzionarioTrend && (
+                              {showAzionarioTrend && (
+                                <p className="text-sm font-semibold text-emerald-600">
+                                  Comparto azionario:{' '}
+                                  {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
                       <Line
                         type="monotone"
-                        dataKey="stockComparto"
-                        stroke="#16a34a"
+                        dataKey="total"
+                        stroke="#2563eb"
                         strokeWidth={1.8}
                         dot={false}
-                        activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
+                        activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
                       />
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </>
+                      {showAzionarioTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="stockComparto"
+                          stroke="#16a34a"
+                          strokeWidth={1.8}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
