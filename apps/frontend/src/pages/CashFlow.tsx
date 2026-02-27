@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 
 const STORAGE_KEY = 'budget-cashflow-checks-v2';
 const LEGACY_STORAGE_KEY = 'budget-cashflow-checks-v1';
@@ -43,6 +43,18 @@ type CashFlowFormState = {
   edenred: string;
   notes: string;
 };
+
+type NumericFieldKey =
+  | 'bbva'
+  | 'tradeRepublic'
+  | 'webankCc'
+  | 'webankObbl'
+  | 'etfLordo'
+  | 'rendimentoLordo'
+  | 'bper'
+  | 'tricount'
+  | 'cartaWebank'
+  | 'edenred';
 
 type ComputedCashFlowRow = CashFlowRow & {
   diffBbva: number | null;
@@ -164,6 +176,24 @@ function normalizeStoredRows(raw: unknown): CashFlowRow[] {
     .filter((row): row is CashFlowRow => row !== null);
 }
 
+function rowToFormState(row: CashFlowRow): CashFlowFormState {
+  return {
+    checkLabel: row.checkLabel,
+    date: row.date.slice(0, 10),
+    bbva: String(row.bbva),
+    tradeRepublic: String(row.tradeRepublic),
+    webankCc: String(row.webankCc),
+    webankObbl: String(row.webankObbl),
+    etfLordo: String(row.etfLordo),
+    rendimentoLordo: String(row.rendimentoLordo),
+    bper: String(row.bper),
+    tricount: String(row.tricount),
+    cartaWebank: String(row.cartaWebank),
+    edenred: String(row.edenred),
+    notes: row.notes,
+  };
+}
+
 function diffClass(value: number | null): string {
   if (value === null) return 'text-slate-400';
   if (value >= 0) return 'text-emerald-600 font-medium';
@@ -179,6 +209,8 @@ export function CashFlow() {
   const [rows, setRows] = useState<CashFlowRow[]>([]);
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
 
   useEffect(() => {
     try {
@@ -303,6 +335,67 @@ export function CashFlow() {
 
   const handleDelete = (id: string) => {
     setRows((prev) => prev.filter((row) => row.id !== id));
+    if (editingId === id) {
+      setEditingId(null);
+      setEditingDraft(null);
+    }
+  };
+
+  const startInlineEdit = (row: CashFlowRow) => {
+    setEditingId(row.id);
+    setEditingDraft(rowToFormState(row));
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingId(null);
+    setEditingDraft(null);
+  };
+
+  const handleInlineChange = (key: keyof CashFlowFormState, value: string) => {
+    setEditingDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const saveInlineEdit = () => {
+    if (!editingId || !editingDraft) return;
+
+    setRows((prev) =>
+      prev.map((row, index) => {
+        if (row.id !== editingId) return row;
+
+        const nextLabel = editingDraft.checkLabel.trim() || row.checkLabel || `CHECK ${index + 1}`;
+        return {
+          ...row,
+          checkLabel: nextLabel,
+          date: editingDraft.date || row.date,
+          bbva: parseAmount(editingDraft.bbva),
+          tradeRepublic: parseAmount(editingDraft.tradeRepublic),
+          webankCc: parseAmount(editingDraft.webankCc),
+          webankObbl: parseAmount(editingDraft.webankObbl),
+          etfLordo: parseAmount(editingDraft.etfLordo),
+          rendimentoLordo: parseAmount(editingDraft.rendimentoLordo),
+          bper: parseAmount(editingDraft.bper),
+          tricount: parseAmount(editingDraft.tricount),
+          cartaWebank: parseAmount(editingDraft.cartaWebank),
+          edenred: parseAmount(editingDraft.edenred),
+          notes: editingDraft.notes.trim(),
+        };
+      })
+    );
+
+    setEditingId(null);
+    setEditingDraft(null);
+  };
+
+  const handleInlineKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveInlineEdit();
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelInlineEdit();
+    }
   };
 
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
@@ -555,51 +648,168 @@ export function CashFlow() {
                 </tr>
               </thead>
               <tbody>
-                {rowsWithComputed.map((row, index) => (
-                  <tr
-                    key={row.id}
-                    className={
-                      index % 2 === 0
-                        ? 'bg-slate-50/50 border-b border-slate-100'
-                        : 'border-b border-slate-100'
-                    }
-                  >
-                    <td className="py-2 pr-3 font-medium text-slate-800">{row.checkLabel}</td>
-                    <td className="py-2 pr-3 text-slate-600 whitespace-nowrap">{formatDate(row.date)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.bbva)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffBbva)}`}>{diffDisplay(row.diffBbva)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.tradeRepublic)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTradeRepublic)}`}>{diffDisplay(row.diffTradeRepublic)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.webankCc)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffWebankCc)}`}>{diffDisplay(row.diffWebankCc)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.webankObbl)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffWebankObbl)}`}>{diffDisplay(row.diffWebankObbl)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.etfLordo)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.rendimentoLordo)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(row.tasseComm)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(row.rendimentoNetto)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-medium">{formatCurrency(row.azionarioNetto)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffAzionarioNetto)}`}>{diffDisplay(row.diffAzionarioNetto)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.bper)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffBper)}`}>{diffDisplay(row.diffBper)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.tricount)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.cartaWebank)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">{formatCurrency(row.edenred)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums font-semibold text-emerald-700">{formatCurrency(row.total)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTotal)}`}>{diffDisplay(row.diffTotal)}</td>
-                    <td className="py-2 px-2 text-slate-600">{row.notes || '-'}</td>
-                    <td className="py-2 pl-3 text-right">
-                      <button
-                        type="button"
-                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
-                        onClick={() => handleDelete(row.id)}
-                        title="Elimina riga"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                {rowsWithComputed.map((row, index) => {
+                  const isEditing = editingId === row.id && editingDraft !== null;
+                  const inputBase =
+                    'w-full min-w-[105px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-300';
+
+                  const renderNumericCell = (
+                    key: NumericFieldKey,
+                    value: number,
+                    extraClass: string = ''
+                  ) => (
+                    <td className={`py-2 px-2 text-right tabular-nums ${extraClass}`}>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className={inputBase}
+                          value={editingDraft[key]}
+                          onChange={(e) => handleInlineChange(key, e.target.value)}
+                          onKeyDown={handleInlineKeyDown}
+                        />
+                      ) : (
+                        formatCurrency(value)
+                      )}
                     </td>
-                  </tr>
-                ))}
+                  );
+
+                  return (
+                    <tr
+                      key={row.id}
+                      className={
+                        index % 2 === 0
+                          ? 'bg-slate-50/50 border-b border-slate-100'
+                          : 'border-b border-slate-100'
+                      }
+                    >
+                      <td className="py-2 pr-3 font-medium text-slate-800">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            className="w-full min-w-[190px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                            value={editingDraft.checkLabel}
+                            onChange={(e) => handleInlineChange('checkLabel', e.target.value)}
+                            onKeyDown={handleInlineKeyDown}
+                          />
+                        ) : (
+                          row.checkLabel
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-3 text-slate-600 whitespace-nowrap">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            className="w-full min-w-[140px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                            value={editingDraft.date}
+                            onChange={(e) => handleInlineChange('date', e.target.value)}
+                            onKeyDown={handleInlineKeyDown}
+                          />
+                        ) : (
+                          formatDate(row.date)
+                        )}
+                      </td>
+
+                      {renderNumericCell('bbva', row.bbva, 'bg-emerald-50/40')}
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffBbva)}`}>
+                        {diffDisplay(row.diffBbva)}
+                      </td>
+                      {renderNumericCell('tradeRepublic', row.tradeRepublic, 'bg-emerald-50/40')}
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTradeRepublic)}`}>
+                        {diffDisplay(row.diffTradeRepublic)}
+                      </td>
+                      {renderNumericCell('webankCc', row.webankCc, 'bg-emerald-50/40')}
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffWebankCc)}`}>
+                        {diffDisplay(row.diffWebankCc)}
+                      </td>
+                      {renderNumericCell('webankObbl', row.webankObbl, 'bg-emerald-50/40')}
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffWebankObbl)}`}>
+                        {diffDisplay(row.diffWebankObbl)}
+                      </td>
+                      {renderNumericCell('etfLordo', row.etfLordo, 'bg-emerald-50/40')}
+                      {renderNumericCell('rendimentoLordo', row.rendimentoLordo, 'bg-emerald-50/40')}
+                      <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(row.tasseComm)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(row.rendimentoNetto)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums font-medium">
+                        {formatCurrency(row.azionarioNetto)}
+                      </td>
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffAzionarioNetto)}`}>
+                        {diffDisplay(row.diffAzionarioNetto)}
+                      </td>
+                      {renderNumericCell('bper', row.bper, 'bg-emerald-50/40')}
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffBper)}`}>
+                        {diffDisplay(row.diffBper)}
+                      </td>
+                      {renderNumericCell('tricount', row.tricount, 'bg-emerald-50/40')}
+                      {renderNumericCell('cartaWebank', row.cartaWebank, 'bg-emerald-50/40')}
+                      {renderNumericCell('edenred', row.edenred, 'bg-emerald-50/40')}
+                      <td className="py-2 px-2 text-right tabular-nums font-semibold text-emerald-700">
+                        {formatCurrency(row.total)}
+                      </td>
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTotal)}`}>
+                        {diffDisplay(row.diffTotal)}
+                      </td>
+
+                      <td className="py-2 px-2 text-slate-600">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            className="w-full min-w-[220px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                            value={editingDraft.notes}
+                            onChange={(e) => handleInlineChange('notes', e.target.value)}
+                            onKeyDown={handleInlineKeyDown}
+                          />
+                        ) : (
+                          row.notes || '-'
+                        )}
+                      </td>
+
+                      <td className="py-2 pl-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                onClick={saveInlineEdit}
+                                title="Salva"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                                onClick={cancelInlineEdit}
+                                title="Annulla"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors"
+                              onClick={() => startInlineEdit(row)}
+                              title="Modifica riga"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                            onClick={() => handleDelete(row.id)}
+                            title="Elimina riga"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
