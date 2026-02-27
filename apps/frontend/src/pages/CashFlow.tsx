@@ -1,6 +1,15 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { Plus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 
 const STORAGE_KEY = 'budget-cashflow-checks-v2';
 const LEGACY_STORAGE_KEY = 'budget-cashflow-checks-v1';
@@ -205,6 +214,13 @@ function diffDisplay(value: number | null): string {
   return formatCurrency(value);
 }
 
+function formatCompactAmount(value: number): string {
+  return new Intl.NumberFormat('it-IT', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function CashFlow() {
   const [rows, setRows] = useState<CashFlowRow[]>([]);
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
@@ -298,6 +314,18 @@ export function CashFlow() {
   const latestRow =
     rowsWithComputed.length > 0 ? rowsWithComputed[rowsWithComputed.length - 1] : null;
   const positiveDiffCount = rowsWithComputed.filter((row) => (row.diffTotal ?? 0) > 0).length;
+  const trendData = useMemo(() => {
+    const sorted = [...rowsWithComputed].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    return sorted.map((row) => ({
+      id: row.id,
+      checkLabel: row.checkLabel,
+      dateLabel: formatDate(row.date),
+      total: row.total,
+    }));
+  }, [rowsWithComputed]);
 
   const handleInputChange = (key: keyof CashFlowFormState, value: string) => {
     setForm((prev) => ({
@@ -428,6 +456,70 @@ export function CashFlow() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Check in crescita</p>
           <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">{positiveDiffCount}</p>
         </div>
+      </div>
+
+      <div className="card flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold text-slate-900">Andamento Totale Nel Tempo</h3>
+          <p className="text-sm text-slate-500">
+            Ultimo valore: <span className="font-semibold text-slate-800">{formatCurrency(latestRow?.total ?? 0)}</span>
+          </p>
+        </div>
+
+        {trendData.length < 2 ? (
+          <p className="text-sm text-slate-500">
+            Aggiungi almeno 2 check per visualizzare il trend.
+          </p>
+        ) : (
+          <div className="h-56 md:h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="dateLabel"
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={20}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value: number) => `${formatCompactAmount(value)}€`}
+                  width={58}
+                />
+                <Tooltip
+                  cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const point = payload[0]?.payload as
+                      | { checkLabel: string; dateLabel: string; total: number }
+                      | undefined;
+                    if (!point) return null;
+
+                    return (
+                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                        <p className="text-xs text-slate-500">{point.dateLabel}</p>
+                        <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
+                        <p className="text-sm font-bold text-blue-600">{formatCurrency(point.total)}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#2563eb"
+                  strokeWidth={1.8}
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       <form className="card flex-shrink-0" onSubmit={handleSubmit}>
