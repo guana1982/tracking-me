@@ -359,12 +359,12 @@ export function CashFlow() {
     if (!latestRow) return [];
 
     const raw = [
-      { label: 'BPER-Hub', value: latestRow.bper },
-      { label: 'BBVA-FondoEmergenze', value: latestRow.bbva },
-      { label: 'Trade Rep.-Vacanza&Extra', value: latestRow.tradeRepublic },
-      { label: 'WeBank-Investimenti', value: latestRow.webankCc },
-      { label: 'Obbligazioni', value: latestRow.webankObbl },
-      { label: 'Azionario', value: latestRow.azionarioNetto },
+      { label: 'BPER-Hub', shortLabel: 'BPER', value: latestRow.bper },
+      { label: 'BBVA-FondoEmergenze', shortLabel: 'BBVA', value: latestRow.bbva },
+      { label: 'Trade Rep.-Vacanza&Extra', shortLabel: 'TR', value: latestRow.tradeRepublic },
+      { label: 'WeBank-Investimenti', shortLabel: 'WBK', value: latestRow.webankCc },
+      { label: 'Obbligazioni', shortLabel: 'OBBL', value: latestRow.webankObbl },
+      { label: 'Azionario', shortLabel: 'AZ', value: latestRow.azionarioNetto },
     ];
 
     const sanitized = raw.map((item, index) => ({
@@ -381,6 +381,34 @@ export function CashFlow() {
     }));
   }, [latestRow]);
   const allocationTotal = allocationData.reduce((sum, item) => sum + item.chartValue, 0);
+  const renderAllocationLabel = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    outerRadius: number;
+    index: number;
+  }) => {
+    const { cx, cy, midAngle, outerRadius, index } = props;
+    const point = allocationData[index];
+    if (!point || point.percentage <= 0) return null;
+
+    const angle = (-midAngle * Math.PI) / 180;
+    const radius = outerRadius + 22;
+    const x = cx + radius * Math.cos(angle);
+    const y = cy + radius * Math.sin(angle);
+    const anchor = x > cx ? 'start' : 'end';
+
+    return (
+      <text x={x} y={y} textAnchor={anchor} fill="#334155">
+        <tspan x={x} dy="0" fontSize={10} fontWeight={600}>
+          {point.shortLabel}
+        </tspan>
+        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
+          {point.percentage.toFixed(1)}%
+        </tspan>
+      </text>
+    );
+  };
   const newInlinePreview = useMemo(() => {
     if (!newInlineDraft) return null;
 
@@ -679,53 +707,53 @@ export function CashFlow() {
         </div>
 
         {isTrendOpen && (
-          <div className="grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[420px,1fr] gap-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
               <p className="text-sm font-semibold text-slate-800 mb-3">Suddivisione Ultimo Check</p>
               {allocationTotal <= 0 ? (
                 <p className="text-sm text-slate-500">Dati insufficienti per visualizzare la torta.</p>
               ) : (
-                <>
-                  <div className="h-52">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={allocationData}
-                          dataKey="chartValue"
-                          nameKey="label"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={52}
-                          outerRadius={78}
-                          paddingAngle={2}
-                          stroke="#ffffff"
-                          strokeWidth={1}
-                        >
-                          {allocationData.map((item) => (
-                            <Cell key={item.label} fill={item.color} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        dataKey="chartValue"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={56}
+                        outerRadius={88}
+                        paddingAngle={2}
+                        stroke="#ffffff"
+                        strokeWidth={1}
+                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                        label={renderAllocationLabel}
+                      >
+                        {allocationData.map((item) => (
+                          <Cell key={item.label} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const point = payload[0]?.payload as
+                            | { label: string; value: number; percentage: number; color: string }
+                            | undefined;
+                          if (!point) return null;
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 mt-2">
-                    {allocationData.map((item) => (
-                      <div key={item.label} className="rounded-lg bg-white/80 border border-slate-200 px-2.5 py-1.5">
-                        <div className="flex items-start gap-2">
-                          <span
-                            className="mt-0.5 inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <p className="text-xs font-medium text-slate-700 leading-tight">{item.label}</p>
-                        </div>
-                        <p className="pl-5 text-[11px] text-slate-500">
-                          {item.percentage.toFixed(1)}%
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                              <p className="text-sm text-slate-700">{formatCurrency(point.value)}</p>
+                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                            </div>
+                          );
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </div>
 
