@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Receipt, LineChart, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
@@ -11,10 +11,12 @@ export function Layout() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isPeriodSelectorOpen, setIsPeriodSelectorOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const location = useLocation();
   const { periodKey, setPeriodKey } = usePeriodStore();
   const { data: periods } = usePeriods();
   const { data: dashboard } = useDashboard(periodKey);
   const { user, logout } = useAuthStore();
+  const isCashFlowPage = location.pathname.startsWith('/cash-flow');
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
@@ -33,63 +35,69 @@ export function Layout() {
           <div className="flex items-center justify-between h-16">
             {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">Budget</h1>
-              <span className="text-xl font-bold text-slate-900">
-                {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
-              </span>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">
+                {isCashFlowPage ? 'Net Worth' : 'Budget'}
+              </h1>
+              {!isCashFlowPage && (
+                <span className="text-xl font-bold text-slate-900">
+                  {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
+                </span>
+              )}
 
               {/* Period Selector */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsPeriodSelectorOpen(!isPeriodSelectorOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-                >
-                  <span className="capitalize">{formatPeriodKey(periodKey)}</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
+              {!isCashFlowPage && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsPeriodSelectorOpen(!isPeriodSelectorOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    <span className="capitalize">{formatPeriodKey(periodKey)}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
 
-                {isPeriodSelectorOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setIsPeriodSelectorOpen(false)}
-                    />
-                    <div className="absolute left-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 max-h-80 overflow-y-auto">
-                      {/* All months of current year */}
-                      {getAllPeriodsForYear(new Date().getFullYear()).map((period) => {
-                        const isCurrentMonth = period.periodKey === getCurrentPeriodKey();
-                        const hasData = periods?.some((p) => p.periodKey === period.periodKey);
+                  {isPeriodSelectorOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setIsPeriodSelectorOpen(false)}
+                      />
+                      <div className="absolute left-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 max-h-80 overflow-y-auto">
+                        {/* All months of current year */}
+                        {getAllPeriodsForYear(new Date().getFullYear()).map((period) => {
+                          const isCurrentMonth = period.periodKey === getCurrentPeriodKey();
+                          const hasData = periods?.some((p) => p.periodKey === period.periodKey);
 
-                        return (
-                          <button
-                            key={period.periodKey}
-                            onClick={() => {
-                              setPeriodKey(period.periodKey);
-                              setIsPeriodSelectorOpen(false);
-                            }}
-                            className={cn(
-                              'w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center justify-between',
-                              periodKey === period.periodKey && 'bg-slate-100 font-medium'
-                            )}
-                          >
-                            <span className="capitalize">
-                              {formatPeriodKey(period.periodKey)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              {isCurrentMonth && (
-                                <span className="text-xs text-slate-500">(corrente)</span>
+                          return (
+                            <button
+                              key={period.periodKey}
+                              onClick={() => {
+                                setPeriodKey(period.periodKey);
+                                setIsPeriodSelectorOpen(false);
+                              }}
+                              className={cn(
+                                'w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center justify-between',
+                                periodKey === period.periodKey && 'bg-slate-100 font-medium'
                               )}
-                              {hasData && (
-                                <span className="w-2 h-2 rounded-full bg-green-500" title="Ha dati" />
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
+                            >
+                              <span className="capitalize">
+                                {formatPeriodKey(period.periodKey)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                {isCurrentMonth && (
+                                  <span className="text-xs text-slate-500">(corrente)</span>
+                                )}
+                                {hasData && (
+                                  <span className="w-2 h-2 rounded-full bg-green-500" title="Ha dati" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Today's Date */}
               <div className="text-sm text-slate-500">
@@ -102,13 +110,15 @@ export function Layout() {
 
             <div className="flex items-center gap-3">
               {/* Quick Add Button (Desktop) */}
-              <button
-                onClick={() => setIsQuickAddOpen(true)}
-                className="hidden sm:flex items-center gap-2 btn btn-primary"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Aggiungi spesa</span>
-              </button>
+              {!isCashFlowPage && (
+                <button
+                  onClick={() => setIsQuickAddOpen(true)}
+                  className="hidden sm:flex items-center gap-2 btn btn-primary"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Aggiungi spesa</span>
+                </button>
+              )}
 
               {/* User Menu */}
               <div className="relative">
@@ -209,12 +219,14 @@ export function Layout() {
       </nav>
 
       {/* Floating Action Button (Mobile) */}
-      <button
-        onClick={() => setIsQuickAddOpen(true)}
-        className="sm:hidden fixed bottom-20 right-4 z-50 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {!isCashFlowPage && (
+        <button
+          onClick={() => setIsQuickAddOpen(true)}
+          className="sm:hidden fixed bottom-20 right-4 z-50 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
 
       {/* Quick Add Modal */}
       <QuickAddModal
