@@ -157,6 +157,15 @@ function computeTotal(row: CashFlowRow, settings: CashFlowSettings): number {
   );
 }
 
+function getRowDateTimestamp(row: Pick<CashFlowRow, 'date'>): number {
+  const timestamp = new Date(row.date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortRowsByDateDesc(input: CashFlowRow[]): CashFlowRow[] {
+  return [...input].sort((a, b) => getRowDateTimestamp(b) - getRowDateTimestamp(a));
+}
+
 function normalizeStoredRows(raw: unknown): CashFlowRow[] {
   if (!Array.isArray(raw)) return [];
 
@@ -239,7 +248,7 @@ export function CashFlow() {
 
       if (source) {
         const normalized = normalizeStoredRows(JSON.parse(source));
-        setRows(normalized);
+        setRows(sortRowsByDateDesc(normalized));
       }
     } catch (error) {
       console.error('Failed to read cash flow rows from localStorage:', error);
@@ -281,9 +290,11 @@ export function CashFlow() {
     }
   }, [settings]);
 
+  const sortedRows = useMemo(() => sortRowsByDateDesc(rows), [rows]);
+
   const rowsWithComputed = useMemo<ComputedCashFlowRow[]>(() => {
-    return rows.map((row, index) => {
-      const previous = index > 0 ? rows[index - 1] : null;
+    return sortedRows.map((row, index) => {
+      const previous = index > 0 ? sortedRows[index - 1] : null;
       const { tasseComm, rendimentoNetto, azionarioNetto } = computeStockValues(row, settings);
       const total = computeTotal(row, settings);
 
@@ -311,10 +322,9 @@ export function CashFlow() {
         diffTotal: prevTotal === null ? null : total - prevTotal,
       };
     });
-  }, [rows, settings]);
+  }, [sortedRows, settings]);
 
-  const latestRow =
-    rowsWithComputed.length > 0 ? rowsWithComputed[rowsWithComputed.length - 1] : null;
+  const latestRow = rowsWithComputed.length > 0 ? rowsWithComputed[0] : null;
   const positiveDiffCount = rowsWithComputed.filter((row) => (row.diffTotal ?? 0) > 0).length;
   const trendData = useMemo(() => {
     const sorted = [...rowsWithComputed].sort(
@@ -350,9 +360,11 @@ export function CashFlow() {
       notes: newInlineDraft.notes.trim(),
     };
 
+    const sortedWithDraft = sortRowsByDateDesc([...rows, draftRow]);
+    const draftIndex = sortedWithDraft.findIndex((row) => row.id === draftRow.id);
+    const previous = draftIndex > 0 ? sortedWithDraft[draftIndex - 1] : null;
     const { tasseComm, rendimentoNetto, azionarioNetto } = computeStockValues(draftRow, settings);
     const total = computeTotal(draftRow, settings);
-    const previous = rows.length > 0 ? rows[rows.length - 1] : null;
     const previousAzionario = previous ? computeStockValues(previous, settings).azionarioNetto : null;
     const previousTotal = previous ? computeTotal(previous, settings) : null;
 
@@ -401,7 +413,7 @@ export function CashFlow() {
       notes: form.notes.trim(),
     };
 
-    setRows((prev) => [...prev, newRow]);
+    setRows((prev) => sortRowsByDateDesc([...prev, newRow]));
     setForm((prev) => ({
       ...INITIAL_FORM,
       date: prev.date || today,
@@ -435,7 +447,7 @@ export function CashFlow() {
     if (!editingId || !editingDraft) return;
 
     setRows((prev) =>
-      prev.map((row, index) => {
+      sortRowsByDateDesc(prev.map((row, index) => {
         if (row.id !== editingId) return row;
 
         const nextLabel = editingDraft.checkLabel.trim() || row.checkLabel || `CHECK ${index + 1}`;
@@ -455,7 +467,7 @@ export function CashFlow() {
           edenred: parseAmount(editingDraft.edenred),
           notes: editingDraft.notes.trim(),
         };
-      })
+      }))
     );
 
     setEditingId(null);
@@ -513,7 +525,7 @@ export function CashFlow() {
       notes: newInlineDraft.notes.trim(),
     };
 
-    setRows((prev) => [...prev, newRow]);
+    setRows((prev) => sortRowsByDateDesc([...prev, newRow]));
     setNewInlineDraft(null);
   };
 
