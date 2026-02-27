@@ -227,6 +227,7 @@ export function CashFlow() {
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
   const [isNewCheckOpen, setIsNewCheckOpen] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
+  const [newInlineDraft, setNewInlineDraft] = useState<CashFlowFormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
 
@@ -329,6 +330,48 @@ export function CashFlow() {
     }));
   }, [rowsWithComputed]);
   const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+  const newInlinePreview = useMemo(() => {
+    if (!newInlineDraft) return null;
+
+    const draftRow: CashFlowRow = {
+      id: 'new-inline-row',
+      checkLabel: newInlineDraft.checkLabel.trim() || `CHECK ${rows.length + 1}`,
+      date: newInlineDraft.date || today,
+      bbva: parseAmount(newInlineDraft.bbva),
+      tradeRepublic: parseAmount(newInlineDraft.tradeRepublic),
+      webankCc: parseAmount(newInlineDraft.webankCc),
+      webankObbl: parseAmount(newInlineDraft.webankObbl),
+      etfLordo: parseAmount(newInlineDraft.etfLordo),
+      rendimentoLordo: parseAmount(newInlineDraft.rendimentoLordo),
+      bper: parseAmount(newInlineDraft.bper),
+      tricount: parseAmount(newInlineDraft.tricount),
+      cartaWebank: parseAmount(newInlineDraft.cartaWebank),
+      edenred: parseAmount(newInlineDraft.edenred),
+      notes: newInlineDraft.notes.trim(),
+    };
+
+    const { tasseComm, rendimentoNetto, azionarioNetto } = computeStockValues(draftRow, settings);
+    const total = computeTotal(draftRow, settings);
+    const previous = rows.length > 0 ? rows[rows.length - 1] : null;
+    const previousAzionario = previous ? computeStockValues(previous, settings).azionarioNetto : null;
+    const previousTotal = previous ? computeTotal(previous, settings) : null;
+
+    return {
+      row: draftRow,
+      tasseComm,
+      rendimentoNetto,
+      azionarioNetto,
+      total,
+      diffBbva: previous ? draftRow.bbva - previous.bbva : null,
+      diffTradeRepublic: previous ? draftRow.tradeRepublic - previous.tradeRepublic : null,
+      diffWebankCc: previous ? draftRow.webankCc - previous.webankCc : null,
+      diffWebankObbl: previous ? draftRow.webankObbl - previous.webankObbl : null,
+      diffAzionarioNetto:
+        previousAzionario === null ? null : azionarioNetto - previousAzionario,
+      diffBper: previous ? draftRow.bper - previous.bper : null,
+      diffTotal: previousTotal === null ? null : total - previousTotal,
+    };
+  }, [newInlineDraft, rows, settings]);
 
   const handleInputChange = (key: keyof CashFlowFormState, value: string) => {
     setForm((prev) => ({
@@ -374,6 +417,7 @@ export function CashFlow() {
   };
 
   const startInlineEdit = (row: CashFlowRow) => {
+    setNewInlineDraft(null);
     setEditingId(row.id);
     setEditingDraft(rowToFormState(row));
   };
@@ -430,7 +474,64 @@ export function CashFlow() {
     }
   };
 
+  const openInlineNewRow = () => {
+    setEditingId(null);
+    setEditingDraft(null);
+    setNewInlineDraft({
+      ...INITIAL_FORM,
+      date: today,
+      checkLabel: `CHECK ${rows.length + 1}`,
+    });
+  };
+
+  const handleNewInlineChange = (key: keyof CashFlowFormState, value: string) => {
+    setNewInlineDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const cancelInlineNewRow = () => {
+    setNewInlineDraft(null);
+  };
+
+  const saveInlineNewRow = () => {
+    if (!newInlineDraft) return;
+
+    const nextIndex = rows.length;
+    const newRow: CashFlowRow = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      checkLabel: buildCheckLabel(newInlineDraft.checkLabel, nextIndex),
+      date: newInlineDraft.date || today,
+      bbva: parseAmount(newInlineDraft.bbva),
+      tradeRepublic: parseAmount(newInlineDraft.tradeRepublic),
+      webankCc: parseAmount(newInlineDraft.webankCc),
+      webankObbl: parseAmount(newInlineDraft.webankObbl),
+      etfLordo: parseAmount(newInlineDraft.etfLordo),
+      rendimentoLordo: parseAmount(newInlineDraft.rendimentoLordo),
+      bper: parseAmount(newInlineDraft.bper),
+      tricount: parseAmount(newInlineDraft.tricount),
+      cartaWebank: parseAmount(newInlineDraft.cartaWebank),
+      edenred: parseAmount(newInlineDraft.edenred),
+      notes: newInlineDraft.notes.trim(),
+    };
+
+    setRows((prev) => [...prev, newRow]);
+    setNewInlineDraft(null);
+  };
+
+  const handleNewInlineKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveInlineNewRow();
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelInlineNewRow();
+    }
+  };
+
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+  const inlineCellInputClass =
+    'w-full min-w-[105px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-300';
 
   return (
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
@@ -769,9 +870,21 @@ export function CashFlow() {
       </form>
 
       <div className="card md:flex-1 md:min-h-0 md:flex md:flex-col">
-        <h3 className="text-base font-semibold text-slate-900 mb-3 flex-shrink-0">Storico Check</h3>
+        <div className="mb-3 flex-shrink-0 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-slate-900">Storico Check</h3>
+          <button
+            type="button"
+            onClick={openInlineNewRow}
+            disabled={newInlineDraft !== null}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Nuova riga direttamente in tabella"
+          >
+            <Plus className="w-4 h-4" />
+            Nuova riga
+          </button>
+        </div>
 
-        {rowsWithComputed.length === 0 ? (
+        {rowsWithComputed.length === 0 && !newInlineDraft ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
         ) : (
           <div className="overflow-auto md:flex-1 md:min-h-0">
@@ -806,10 +919,102 @@ export function CashFlow() {
                 </tr>
               </thead>
               <tbody>
+                {newInlineDraft && (
+                  <tr className="bg-sky-50/70 border-b border-sky-200">
+                    <td className="py-2 pr-3 font-medium text-slate-800">
+                      <input
+                        type="text"
+                        className="w-full min-w-[190px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        value={newInlineDraft.checkLabel}
+                        onChange={(e) => handleNewInlineChange('checkLabel', e.target.value)}
+                        onKeyDown={handleNewInlineKeyDown}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <input
+                        type="date"
+                        className="w-full min-w-[140px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        value={newInlineDraft.date}
+                        onChange={(e) => handleNewInlineChange('date', e.target.value)}
+                        onKeyDown={handleNewInlineKeyDown}
+                      />
+                    </td>
+
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.bbva} onChange={(e) => handleNewInlineChange('bbva', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffBbva ?? null)}`}>{diffDisplay(newInlinePreview?.diffBbva ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.tradeRepublic} onChange={(e) => handleNewInlineChange('tradeRepublic', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffTradeRepublic ?? null)}`}>{diffDisplay(newInlinePreview?.diffTradeRepublic ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.webankCc} onChange={(e) => handleNewInlineChange('webankCc', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffWebankCc ?? null)}`}>{diffDisplay(newInlinePreview?.diffWebankCc ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.webankObbl} onChange={(e) => handleNewInlineChange('webankObbl', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffWebankObbl ?? null)}`}>{diffDisplay(newInlinePreview?.diffWebankObbl ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.etfLordo} onChange={(e) => handleNewInlineChange('etfLordo', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.rendimentoLordo} onChange={(e) => handleNewInlineChange('rendimentoLordo', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(newInlinePreview?.tasseComm ?? 0)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(newInlinePreview?.rendimentoNetto ?? 0)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums font-medium">{formatCurrency(newInlinePreview?.azionarioNetto ?? 0)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffAzionarioNetto ?? null)}`}>{diffDisplay(newInlinePreview?.diffAzionarioNetto ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.bper} onChange={(e) => handleNewInlineChange('bper', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffBper ?? null)}`}>{diffDisplay(newInlinePreview?.diffBper ?? null)}</td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.tricount} onChange={(e) => handleNewInlineChange('tricount', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.cartaWebank} onChange={(e) => handleNewInlineChange('cartaWebank', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className="py-2 px-2 bg-emerald-50/40">
+                      <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.edenred} onChange={(e) => handleNewInlineChange('edenred', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums font-semibold text-emerald-700">{formatCurrency(newInlinePreview?.total ?? 0)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffTotal ?? null)}`}>{diffDisplay(newInlinePreview?.diffTotal ?? null)}</td>
+                    <td className="py-2 px-2">
+                      <input
+                        type="text"
+                        className="w-full min-w-[220px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        value={newInlineDraft.notes}
+                        onChange={(e) => handleNewInlineChange('notes', e.target.value)}
+                        onKeyDown={handleNewInlineKeyDown}
+                      />
+                    </td>
+                    <td className="py-2 pl-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          onClick={saveInlineNewRow}
+                          title="Salva nuova riga"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                          onClick={cancelInlineNewRow}
+                          title="Annulla nuova riga"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
                 {rowsWithComputed.map((row, index) => {
                   const isEditing = editingId === row.id && editingDraft !== null;
-                  const inputBase =
-                    'w-full min-w-[105px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-300';
 
                   const renderNumericCell = (
                     key: NumericFieldKey,
@@ -821,7 +1026,7 @@ export function CashFlow() {
                         <input
                           type="number"
                           step="0.01"
-                          className={inputBase}
+                          className={inlineCellInputClass}
                           value={editingDraft[key]}
                           onChange={(e) => handleInlineChange(key, e.target.value)}
                           onKeyDown={handleInlineKeyDown}
