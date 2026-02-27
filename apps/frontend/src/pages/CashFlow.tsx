@@ -294,7 +294,7 @@ export function CashFlow() {
 
   const rowsWithComputed = useMemo<ComputedCashFlowRow[]>(() => {
     return sortedRows.map((row, index) => {
-      const previous = index > 0 ? sortedRows[index - 1] : null;
+      const previous = index < sortedRows.length - 1 ? sortedRows[index + 1] : null;
       const { tasseComm, rendimentoNetto, azionarioNetto } = computeStockValues(row, settings);
       const total = computeTotal(row, settings);
 
@@ -362,7 +362,10 @@ export function CashFlow() {
 
     const sortedWithDraft = sortRowsByDateDesc([...rows, draftRow]);
     const draftIndex = sortedWithDraft.findIndex((row) => row.id === draftRow.id);
-    const previous = draftIndex > 0 ? sortedWithDraft[draftIndex - 1] : null;
+    const previous =
+      draftIndex >= 0 && draftIndex < sortedWithDraft.length - 1
+        ? sortedWithDraft[draftIndex + 1]
+        : null;
     const { tasseComm, rendimentoNetto, azionarioNetto } = computeStockValues(draftRow, settings);
     const total = computeTotal(draftRow, settings);
     const previousAzionario = previous ? computeStockValues(previous, settings).azionarioNetto : null;
