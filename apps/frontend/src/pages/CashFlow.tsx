@@ -226,6 +226,7 @@ export function CashFlow() {
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
   const [isNewCheckOpen, setIsNewCheckOpen] = useState(true);
+  const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
 
@@ -324,8 +325,10 @@ export function CashFlow() {
       checkLabel: row.checkLabel,
       dateLabel: formatDate(row.date),
       total: row.total,
+      stockComparto: row.webankObbl + row.azionarioNetto,
     }));
   }, [rowsWithComputed]);
+  const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
 
   const handleInputChange = (key: keyof CashFlowFormState, value: string) => {
     setForm((prev) => ({
@@ -459,11 +462,34 @@ export function CashFlow() {
       </div>
 
       <div className="card flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
           <h3 className="text-base font-semibold text-slate-900">Andamento Totale Nel Tempo</h3>
-          <p className="text-sm text-slate-500">
-            Ultimo valore: <span className="font-semibold text-slate-800">{formatCurrency(latestRow?.total ?? 0)}</span>
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-slate-500">
+              Ultimo totale:{' '}
+              <span className="font-semibold text-slate-800">
+                {formatCurrency(latestTrendPoint?.total ?? 0)}
+              </span>
+            </p>
+            <label className="inline-flex items-center gap-2 select-none">
+              <span className="text-sm text-slate-600">Comparto azionario</span>
+              <button
+                type="button"
+                aria-label="Mostra linea comparto azionario"
+                aria-pressed={showAzionarioTrend}
+                onClick={() => setShowAzionarioTrend((prev) => !prev)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  showAzionarioTrend ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                    showAzionarioTrend ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
         </div>
 
         {trendData.length < 2 ? (
