@@ -328,17 +328,27 @@ export function CashFlow() {
   const latestRow = rowsWithComputed.length > 0 ? rowsWithComputed[0] : null;
   const positiveDiffCount = rowsWithComputed.filter((row) => (row.diffTotal ?? 0) > 0).length;
   const trendData = useMemo(() => {
-    const sorted = [...rowsWithComputed].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    // Use only one point per day (the first row for that day in table order) to avoid
+    // duplicated x-axis labels and mismatched perception between table and chart.
+    const perDay = new Map<
+      string,
+      { id: string; checkLabel: string; dateLabel: string; total: number; stockComparto: number }
+    >();
 
-    return sorted.map((row) => ({
-      id: row.id,
-      checkLabel: row.checkLabel,
-      dateLabel: formatDate(row.date),
-      total: row.total,
-      stockComparto: row.webankObbl + row.azionarioNetto,
-    }));
+    rowsWithComputed.forEach((row) => {
+      const dayKey = row.date.split('T')[0];
+      if (perDay.has(dayKey)) return;
+
+      perDay.set(dayKey, {
+        id: row.id,
+        checkLabel: row.checkLabel,
+        dateLabel: formatDate(row.date),
+        total: row.total,
+        stockComparto: row.webankObbl + row.azionarioNetto,
+      });
+    });
+
+    return Array.from(perDay.values()).reverse();
   }, [rowsWithComputed]);
   const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
   const newInlinePreview = useMemo(() => {
@@ -604,6 +614,9 @@ export function CashFlow() {
               }`}
             />
             Andamento Totale Nel Tempo
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              (ultimo check per ogni data)
+            </span>
           </button>
           <div className="flex items-center gap-4">
             <p className="text-sm text-slate-500">
