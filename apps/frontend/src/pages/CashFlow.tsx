@@ -234,7 +234,8 @@ export function CashFlow() {
   const [rows, setRows] = useState<CashFlowRow[]>([]);
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
-  const [isNewCheckOpen, setIsNewCheckOpen] = useState(true);
+  const [isNewCheckOpen, setIsNewCheckOpen] = useState(false);
+  const [isTrendOpen, setIsTrendOpen] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
   const [newInlineDraft, setNewInlineDraft] = useState<CashFlowFormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -579,7 +580,18 @@ export function CashFlow() {
 
       <div className="card flex-shrink-0">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <h3 className="text-base font-semibold text-slate-900">Andamento Totale Nel Tempo</h3>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 text-base font-semibold text-slate-900"
+            onClick={() => setIsTrendOpen((prev) => !prev)}
+          >
+            <ChevronDown
+              className={`w-4 h-4 text-slate-500 transition-transform ${
+                isTrendOpen ? 'rotate-0' : '-rotate-90'
+              }`}
+            />
+            Andamento Totale Nel Tempo
+          </button>
           <div className="flex items-center gap-4">
             <p className="text-sm text-slate-500">
               Ultimo totale:{' '}
@@ -587,101 +599,107 @@ export function CashFlow() {
                 {formatCurrency(latestTrendPoint?.total ?? 0)}
               </span>
             </p>
-            <label className="inline-flex items-center gap-2 select-none">
-              <span className="text-sm text-slate-600">Comparto azionario</span>
-              <button
-                type="button"
-                aria-label="Mostra linea comparto azionario"
-                aria-pressed={showAzionarioTrend}
-                onClick={() => setShowAzionarioTrend((prev) => !prev)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  showAzionarioTrend ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                    showAzionarioTrend ? 'translate-x-5' : 'translate-x-1'
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none">
+                <span className="text-sm text-slate-600">Comparto azionario</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea comparto azionario"
+                  aria-pressed={showAzionarioTrend}
+                  onClick={() => setShowAzionarioTrend((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    showAzionarioTrend ? 'bg-emerald-500' : 'bg-slate-300'
                   }`}
-                />
-              </button>
-            </label>
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showAzionarioTrend ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
           </div>
         </div>
 
-        {trendData.length < 2 ? (
-          <p className="text-sm text-slate-500">
-            Aggiungi almeno 2 check per visualizzare il trend.
-          </p>
-        ) : (
-          <div className="h-56 md:h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="dateLabel"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={20}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
-                  width={58}
-                />
-                <Tooltip
-                  cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload || payload.length === 0) return null;
-                    const point = payload[0]?.payload as
-                      | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
-                      | undefined;
-                    if (!point) return null;
+        {isTrendOpen && (
+          <>
+            {trendData.length < 2 ? (
+              <p className="text-sm text-slate-500">
+                Aggiungi almeno 2 check per visualizzare il trend.
+              </p>
+            ) : (
+              <div className="h-56 md:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="dateLabel"
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      minTickGap={20}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fill: '#64748b', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
+                      width={58}
+                    />
+                    <Tooltip
+                      cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const point = payload[0]?.payload as
+                          | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
+                          | undefined;
+                        if (!point) return null;
 
-                    const totalPoint = payload.find((entry) => entry.dataKey === 'total');
-                    const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
+                        const totalPoint = payload.find((entry) => entry.dataKey === 'total');
+                        const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
 
-                    return (
-                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                        <p className="text-xs text-slate-500">{point.dateLabel}</p>
-                        <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
-                        <p className="text-sm font-bold text-blue-600">
-                          Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
-                        </p>
-                        {showAzionarioTrend && (
-                          <p className="text-sm font-semibold text-emerald-600">
-                            Comparto azionario:{' '}
-                            {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#2563eb"
-                  strokeWidth={1.8}
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
-                />
-                {showAzionarioTrend && (
-                  <Line
-                    type="monotone"
-                    dataKey="stockComparto"
-                    stroke="#16a34a"
-                    strokeWidth={1.8}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+                        return (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                            <p className="text-xs text-slate-500">{point.dateLabel}</p>
+                            <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
+                            <p className="text-sm font-bold text-blue-600">
+                              Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
+                            </p>
+                            {showAzionarioTrend && (
+                              <p className="text-sm font-semibold text-emerald-600">
+                                Comparto azionario:{' '}
+                                {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      stroke="#2563eb"
+                      strokeWidth={1.8}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
+                    />
+                    {showAzionarioTrend && (
+                      <Line
+                        type="monotone"
+                        dataKey="stockComparto"
+                        stroke="#16a34a"
+                        strokeWidth={1.8}
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </>
         )}
       </div>
 
