@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Receipt, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, Receipt, LineChart, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
 import { usePeriods, useDashboard } from '../hooks/useQueries';
@@ -21,6 +21,7 @@ export function Layout() {
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/expenses', icon: Receipt, label: 'Spese' },
+    { to: '/cash-flow', icon: LineChart, label: 'Cash Flow' },
     { to: '/settings', icon: Settings, label: 'Impostazioni' },
   ];
 
