@@ -696,6 +696,9 @@ export function CashFlow() {
   const diffTotColumnClass = 'w-[120px] min-w-[120px]';
   const noteColumnClass = 'w-[260px] min-w-[260px] max-w-[260px]';
   const actionsColumnClass = 'w-[76px] min-w-[76px]';
+  const stickyHeaderBaseClass = 'sticky top-0 z-20 border-b border-slate-200';
+  const stickyHeaderPlainClass = `${stickyHeaderBaseClass} bg-white/95 backdrop-blur`;
+  const stickyHeaderInputClass = `${stickyHeaderBaseClass} bg-emerald-50/95`;
 
   return (
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
@@ -1105,33 +1108,33 @@ export function CashFlow() {
           >
             <table className="min-w-[2300px] w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
-                <tr className="border-b border-slate-200">
-                  <th className={`text-left py-2 pl-2 pr-2 ${actionsColumnClass}`}>Azioni</th>
-                  <th className="text-left py-2 pr-3">Check</th>
-                  <th className="text-left py-2 pr-3">Data</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">BBVA c/c</th>
-                  <th className="text-right py-2 px-2">Diff BBVA</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">TRADE REP.</th>
-                  <th className="text-right py-2 px-2">Diff TR</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">WEBANK c/c</th>
-                  <th className="text-right py-2 px-2">Diff WEBANK</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">WEBANK Obbl</th>
-                  <th className="text-right py-2 px-2">Diff OBBLIG</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">ETF tutti LORDO</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">RENDIM. LORDO</th>
-                  <th className="text-right py-2 px-2">TASSE+COMM</th>
-                  <th className="text-right py-2 px-2">REND. NETTO</th>
-                  <th className="text-right py-2 px-2">AZIONARIO NETTO</th>
-                  <th className="text-right py-2 px-2">Diff AZ. NETTO</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">BPER c/c</th>
-                  <th className="text-right py-2 px-2">Diff BPER</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">TRIC DEB/CRED</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">CartaWeBank</th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/70">EDENRED</th>
-                  <th className={`text-right py-2 px-2 ${totalHeaderClass}`}>Tot Attuale</th>
-                  <th className={`text-right py-2 px-2 ${diffTotColumnClass}`}>Diff Tot</th>
-                  <th className={`text-left py-2 px-2 ${noteColumnClass}`}>Note</th>
-                  <th className={`text-right py-2 pl-3 ${actionsColumnClass}`}>Azioni</th>
+                <tr>
+                  <th className={`text-left py-2 pl-2 pr-2 ${stickyHeaderPlainClass} ${actionsColumnClass}`}>Azioni</th>
+                  <th className={`text-left py-2 pr-3 ${stickyHeaderPlainClass}`}>Check</th>
+                  <th className={`text-left py-2 pr-3 ${stickyHeaderPlainClass}`}>Data</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>BBVA c/c</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff BBVA</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>TRADE REP.</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff TR</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>WEBANK c/c</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff WEBANK</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>WEBANK Obbl</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff OBBLIG</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>ETF tutti LORDO</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>RENDIM. LORDO</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>TASSE+COMM</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>REND. NETTO</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>AZIONARIO NETTO</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff AZ. NETTO</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>BPER c/c</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass}`}>Diff BPER</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>TRIC DEB/CRED</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>CartaWeBank</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderInputClass}`}>EDENRED</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderBaseClass} ${totalHeaderClass}`}>Tot Attuale</th>
+                  <th className={`text-right py-2 px-2 ${stickyHeaderPlainClass} ${diffTotColumnClass}`}>Diff Tot</th>
+                  <th className={`text-left py-2 px-2 ${stickyHeaderPlainClass} ${noteColumnClass}`}>Note</th>
+                  <th className={`text-right py-2 pl-3 ${stickyHeaderPlainClass} ${actionsColumnClass}`}>Azioni</th>
                 </tr>
               </thead>
               <tbody>
