@@ -1100,6 +1100,7 @@ export function CashFlow() {
             <table className="min-w-[2300px] w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-200">
+                  <th className={`text-left py-2 pl-2 pr-2 ${actionsColumnClass}`}>Azioni</th>
                   <th className="text-left py-2 pr-3">Check</th>
                   <th className="text-left py-2 pr-3">Data</th>
                   <th className="text-right py-2 px-2 bg-emerald-50/70">BBVA c/c</th>
@@ -1130,6 +1131,26 @@ export function CashFlow() {
               <tbody>
                 {newInlineDraft && (
                   <tr className="bg-sky-50/70 border-b border-sky-200" data-row-editing="true">
+                    <td className={`py-2 pl-2 pr-2 text-left ${actionsColumnClass}`}>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          onClick={saveInlineNewRow}
+                          title="Salva nuova riga"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                          onClick={cancelInlineNewRow}
+                          title="Annulla nuova riga"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                     <td className="py-2 pr-3 font-medium text-slate-800">
                       <input
                         type="text"
@@ -1256,6 +1277,48 @@ export function CashFlow() {
                           : 'border-b border-slate-100'
                       }
                     >
+                      <td className={`py-2 pl-2 pr-2 text-left ${actionsColumnClass}`}>
+                        <div className="flex items-center gap-1.5">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                onClick={saveInlineEdit}
+                                title="Salva"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                                onClick={cancelInlineEdit}
+                                title="Annulla"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors"
+                              onClick={() => startInlineEdit(row)}
+                              title="Modifica riga"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                            onClick={() => handleDelete(row.id)}
+                            title="Elimina riga"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                       <td className="py-2 pr-3 font-medium text-slate-800">
                         {isEditing ? (
                           <input
