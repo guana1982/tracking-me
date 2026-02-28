@@ -241,6 +241,10 @@ export function CashFlow() {
   const [isNewCheckModalOpen, setIsNewCheckModalOpen] = useState(false);
   const [isTrendOpen, setIsTrendOpen] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
+  const [showBbvaTrend, setShowBbvaTrend] = useState(false);
+  const [showTradeRepTrend, setShowTradeRepTrend] = useState(false);
+  const [showWebankTrend, setShowWebankTrend] = useState(false);
+  const [showBperTrend, setShowBperTrend] = useState(false);
   const [newInlineDraft, setNewInlineDraft] = useState<CashFlowFormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
@@ -336,7 +340,17 @@ export function CashFlow() {
     // duplicated x-axis labels and mismatched perception between table and chart.
     const perDay = new Map<
       string,
-      { id: string; checkLabel: string; dateLabel: string; total: number; stockComparto: number }
+      {
+        id: string;
+        checkLabel: string;
+        dateLabel: string;
+        total: number;
+        stockComparto: number;
+        bbva: number;
+        tradeRepublic: number;
+        webankCc: number;
+        bper: number;
+      }
     >();
 
     rowsWithComputed.forEach((row) => {
@@ -349,6 +363,10 @@ export function CashFlow() {
         dateLabel: formatDate(row.date),
         total: row.total,
         stockComparto: row.webankObbl + row.azionarioNetto,
+        bbva: row.bbva,
+        tradeRepublic: row.tradeRepublic,
+        webankCc: row.webankCc,
+        bper: row.bper,
       });
     });
 
@@ -676,7 +694,7 @@ export function CashFlow() {
               (ultimo check per ogni data)
             </span>
           </button>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <p className="text-sm text-slate-500">
               Ultimo totale:{' '}
               <span className="font-semibold text-slate-800">
@@ -684,8 +702,9 @@ export function CashFlow() {
               </span>
             </p>
             {isTrendOpen && (
-              <label className="inline-flex items-center gap-2 select-none">
-                <span className="text-sm text-slate-600">Comparto azionario</span>
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600" />
+                <span className="text-xs text-slate-600">Comparto</span>
                 <button
                   type="button"
                   aria-label="Mostra linea comparto azionario"
@@ -698,6 +717,90 @@ export function CashFlow() {
                   <span
                     className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
                       showAzionarioTrend ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-400" />
+                <span className="text-xs text-slate-600">BBVA</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea BBVA"
+                  aria-pressed={showBbvaTrend}
+                  onClick={() => setShowBbvaTrend((prev) => !prev)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    showBbvaTrend ? 'bg-sky-400' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showBbvaTrend ? 'translate-x-4' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs text-slate-600">TRADE</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea TRADE REP."
+                  aria-pressed={showTradeRepTrend}
+                  onClick={() => setShowTradeRepTrend((prev) => !prev)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    showTradeRepTrend ? 'bg-amber-500' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showTradeRepTrend ? 'translate-x-4' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-800" />
+                <span className="text-xs text-slate-600">WeBank</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea WeBank c/c"
+                  aria-pressed={showWebankTrend}
+                  onClick={() => setShowWebankTrend((prev) => !prev)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    showWebankTrend ? 'bg-amber-800' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showWebankTrend ? 'translate-x-4' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-600" />
+                <span className="text-xs text-slate-600">BPER</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea BPER c/c"
+                  aria-pressed={showBperTrend}
+                  onClick={() => setShowBperTrend((prev) => !prev)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    showBperTrend ? 'bg-red-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showBperTrend ? 'translate-x-4' : 'translate-x-1'
                     }`}
                   />
                 </button>
@@ -787,12 +890,25 @@ export function CashFlow() {
                         content={({ active, payload }) => {
                           if (!active || !payload || payload.length === 0) return null;
                           const point = payload[0]?.payload as
-                            | { checkLabel: string; dateLabel: string; total: number; stockComparto: number }
+                            | {
+                              checkLabel: string;
+                              dateLabel: string;
+                              total: number;
+                              stockComparto: number;
+                              bbva: number;
+                              tradeRepublic: number;
+                              webankCc: number;
+                              bper: number;
+                            }
                             | undefined;
                           if (!point) return null;
 
                           const totalPoint = payload.find((entry) => entry.dataKey === 'total');
                           const stockPoint = payload.find((entry) => entry.dataKey === 'stockComparto');
+                          const bbvaPoint = payload.find((entry) => entry.dataKey === 'bbva');
+                          const tradePoint = payload.find((entry) => entry.dataKey === 'tradeRepublic');
+                          const webankPoint = payload.find((entry) => entry.dataKey === 'webankCc');
+                          const bperPoint = payload.find((entry) => entry.dataKey === 'bper');
 
                           return (
                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
@@ -805,6 +921,26 @@ export function CashFlow() {
                                 <p className="text-sm font-semibold text-emerald-600">
                                   Comparto azionario:{' '}
                                   {formatCurrency(Number(stockPoint?.value ?? point.stockComparto))}
+                                </p>
+                              )}
+                              {showBbvaTrend && (
+                                <p className="text-sm font-semibold text-sky-500">
+                                  BBVA: {formatCurrency(Number(bbvaPoint?.value ?? point.bbva))}
+                                </p>
+                              )}
+                              {showTradeRepTrend && (
+                                <p className="text-sm font-semibold text-amber-500">
+                                  TRADE REP.: {formatCurrency(Number(tradePoint?.value ?? point.tradeRepublic))}
+                                </p>
+                              )}
+                              {showWebankTrend && (
+                                <p className="text-sm font-semibold text-amber-800">
+                                  WeBank c/c: {formatCurrency(Number(webankPoint?.value ?? point.webankCc))}
+                                </p>
+                              )}
+                              {showBperTrend && (
+                                <p className="text-sm font-semibold text-red-600">
+                                  BPER c/c: {formatCurrency(Number(bperPoint?.value ?? point.bper))}
                                 </p>
                               )}
                             </div>
@@ -827,6 +963,46 @@ export function CashFlow() {
                           strokeWidth={1.8}
                           dot={false}
                           activeDot={{ r: 4, fill: '#15803d', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
+                      {showBbvaTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="bbva"
+                          stroke="#38bdf8"
+                          strokeWidth={1.7}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#0ea5e9', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
+                      {showTradeRepTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="tradeRepublic"
+                          stroke="#f59e0b"
+                          strokeWidth={1.7}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#d97706', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
+                      {showWebankTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="webankCc"
+                          stroke="#92400e"
+                          strokeWidth={1.7}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#78350f', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
+                      {showBperTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="bper"
+                          stroke="#dc2626"
+                          strokeWidth={1.7}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#b91c1c', stroke: '#ffffff', strokeWidth: 2 }}
                         />
                       )}
                     </LineChart>
