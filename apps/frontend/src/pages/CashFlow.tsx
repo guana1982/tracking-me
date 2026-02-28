@@ -685,9 +685,8 @@ export function CashFlow() {
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
   const inlineCellInputClass =
     'w-full min-w-[105px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-300';
-  const totalColumnStickyRight = 'right-[456px]';
-  const totalHeaderClass = `sticky ${totalColumnStickyRight} z-20 bg-emerald-50 border-l border-emerald-200 shadow-[-8px_0_14px_-12px_rgba(15,23,42,0.35)]`;
-  const totalCellClass = `sticky ${totalColumnStickyRight} z-10 bg-emerald-50/80 border-l border-emerald-100 shadow-[-8px_0_14px_-12px_rgba(15,23,42,0.25)]`;
+  const totalHeaderClass = 'bg-emerald-200/80 border-l border-emerald-300';
+  const totalCellClass = 'bg-emerald-100/90 border-l border-emerald-200';
   const diffTotColumnClass = 'w-[120px] min-w-[120px]';
   const noteColumnClass = 'w-[260px] min-w-[260px] max-w-[260px]';
   const actionsColumnClass = 'w-[76px] min-w-[76px]';
