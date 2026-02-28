@@ -685,6 +685,12 @@ export function CashFlow() {
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
   const inlineCellInputClass =
     'w-full min-w-[105px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-300';
+  const totalColumnStickyRight = 'right-[456px]';
+  const totalHeaderClass = `sticky ${totalColumnStickyRight} z-20 bg-emerald-50 border-l border-emerald-200 shadow-[-8px_0_14px_-12px_rgba(15,23,42,0.35)]`;
+  const totalCellClass = `sticky ${totalColumnStickyRight} z-10 bg-emerald-50/80 border-l border-emerald-100 shadow-[-8px_0_14px_-12px_rgba(15,23,42,0.25)]`;
+  const diffTotColumnClass = 'w-[120px] min-w-[120px]';
+  const noteColumnClass = 'w-[260px] min-w-[260px] max-w-[260px]';
+  const actionsColumnClass = 'w-[76px] min-w-[76px]';
 
   return (
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
@@ -1116,10 +1122,10 @@ export function CashFlow() {
                   <th className="text-right py-2 px-2 bg-emerald-50/70">TRIC DEB/CRED</th>
                   <th className="text-right py-2 px-2 bg-emerald-50/70">CartaWeBank</th>
                   <th className="text-right py-2 px-2 bg-emerald-50/70">EDENRED</th>
-                  <th className="text-right py-2 px-2">Tot Attuale</th>
-                  <th className="text-right py-2 px-2">Diff Tot</th>
-                  <th className="text-left py-2 px-2">Note</th>
-                  <th className="text-right py-2 pl-3">Azioni</th>
+                  <th className={`text-right py-2 px-2 ${totalHeaderClass}`}>Tot Attuale</th>
+                  <th className={`text-right py-2 px-2 ${diffTotColumnClass}`}>Diff Tot</th>
+                  <th className={`text-left py-2 px-2 ${noteColumnClass}`}>Note</th>
+                  <th className={`text-right py-2 pl-3 ${actionsColumnClass}`}>Azioni</th>
                 </tr>
               </thead>
               <tbody>
@@ -1183,18 +1189,18 @@ export function CashFlow() {
                     <td className="py-2 px-2 bg-emerald-50/40">
                       <input type="number" step="0.01" className={inlineCellInputClass} value={newInlineDraft.edenred} onChange={(e) => handleNewInlineChange('edenred', e.target.value)} onKeyDown={handleNewInlineKeyDown} />
                     </td>
-                    <td className="py-2 px-2 text-right tabular-nums font-semibold text-emerald-700">{formatCurrency(newInlinePreview?.total ?? 0)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(newInlinePreview?.diffTotal ?? null)}`}>{diffDisplay(newInlinePreview?.diffTotal ?? null)}</td>
-                    <td className="py-2 px-2">
+                    <td className={`py-2 px-2 text-right tabular-nums font-semibold text-emerald-700 ${totalCellClass}`}>{formatCurrency(newInlinePreview?.total ?? 0)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${diffTotColumnClass} ${diffClass(newInlinePreview?.diffTotal ?? null)}`}>{diffDisplay(newInlinePreview?.diffTotal ?? null)}</td>
+                    <td className={`py-2 px-2 ${noteColumnClass}`}>
                       <input
                         type="text"
-                        className="w-full min-w-[220px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
                         value={newInlineDraft.notes}
                         onChange={(e) => handleNewInlineChange('notes', e.target.value)}
                         onKeyDown={handleNewInlineKeyDown}
                       />
                     </td>
-                    <td className="py-2 pl-3 text-right">
+                    <td className={`py-2 pl-3 text-right ${actionsColumnClass}`}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
@@ -1312,28 +1318,30 @@ export function CashFlow() {
                       {renderNumericCell('tricount', row.tricount, 'bg-emerald-50/40')}
                       {renderNumericCell('cartaWebank', row.cartaWebank, 'bg-emerald-50/40')}
                       {renderNumericCell('edenred', row.edenred, 'bg-emerald-50/40')}
-                      <td className="py-2 px-2 text-right tabular-nums font-semibold text-emerald-700">
+                      <td className={`py-2 px-2 text-right tabular-nums font-semibold text-emerald-700 ${totalCellClass}`}>
                         {formatCurrency(row.total)}
                       </td>
-                      <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTotal)}`}>
+                      <td className={`py-2 px-2 text-right tabular-nums ${diffTotColumnClass} ${diffClass(row.diffTotal)}`}>
                         {diffDisplay(row.diffTotal)}
                       </td>
 
-                      <td className="py-2 px-2 text-slate-600">
+                      <td className={`py-2 px-2 text-slate-600 ${noteColumnClass}`}>
                         {isEditing ? (
                           <input
                             type="text"
-                            className="w-full min-w-[220px] rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
+                            className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-left focus:outline-none focus:ring-2 focus:ring-sky-300"
                             value={editingDraft.notes}
                             onChange={(e) => handleInlineChange('notes', e.target.value)}
                             onKeyDown={handleInlineKeyDown}
                           />
                         ) : (
-                          row.notes || '-'
+                          <span className="block truncate" title={row.notes || '-'}>
+                            {row.notes || '-'}
+                          </span>
                         )}
                       </td>
 
-                      <td className="py-2 pl-3 text-right">
+                      <td className={`py-2 pl-3 text-right ${actionsColumnClass}`}>
                         <div className="flex items-center justify-end gap-1.5">
                           {isEditing ? (
                             <>
