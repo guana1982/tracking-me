@@ -252,7 +252,9 @@ export function CashFlow() {
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const tableDragActiveRef = useRef(false);
   const tableDragStartXRef = useRef(0);
+  const tableDragStartYRef = useRef(0);
   const tableDragStartScrollLeftRef = useRef(0);
+  const tableDragStartScrollTopRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -657,7 +659,9 @@ export function CashFlow() {
 
     tableDragActiveRef.current = true;
     tableDragStartXRef.current = event.clientX;
+    tableDragStartYRef.current = event.clientY;
     tableDragStartScrollLeftRef.current = container.scrollLeft;
+    tableDragStartScrollTopRef.current = container.scrollTop;
     setIsTableDragScrolling(true);
   };
 
@@ -667,7 +671,9 @@ export function CashFlow() {
     if (!container) return;
 
     const deltaX = event.clientX - tableDragStartXRef.current;
+    const deltaY = event.clientY - tableDragStartYRef.current;
     container.scrollLeft = tableDragStartScrollLeftRef.current - deltaX;
+    container.scrollTop = tableDragStartScrollTopRef.current - deltaY;
     event.preventDefault();
   };
 
