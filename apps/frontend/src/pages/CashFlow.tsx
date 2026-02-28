@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { Plus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
 import {
@@ -248,6 +248,11 @@ export function CashFlow() {
   const [newInlineDraft, setNewInlineDraft] = useState<CashFlowFormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CashFlowFormState | null>(null);
+  const [isTableDragScrolling, setIsTableDragScrolling] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableDragActiveRef = useRef(false);
+  const tableDragStartXRef = useRef(0);
+  const tableDragStartScrollLeftRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -631,6 +636,51 @@ export function CashFlow() {
       cancelInlineNewRow();
     }
   };
+
+  const stopTableDragScroll = () => {
+    tableDragActiveRef.current = false;
+    setIsTableDragScrolling(false);
+  };
+
+  const canStartTableDrag = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, textarea, button, select, a, [role="button"]')) return false;
+    if (target.closest('[data-row-editing="true"]')) return false;
+    return true;
+  };
+
+  const handleTableMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const container = tableScrollRef.current;
+    if (!container) return;
+    if (!canStartTableDrag(event.target)) return;
+
+    tableDragActiveRef.current = true;
+    tableDragStartXRef.current = event.clientX;
+    tableDragStartScrollLeftRef.current = container.scrollLeft;
+    setIsTableDragScrolling(true);
+  };
+
+  const handleTableMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!tableDragActiveRef.current) return;
+    const container = tableScrollRef.current;
+    if (!container) return;
+
+    const deltaX = event.clientX - tableDragStartXRef.current;
+    container.scrollLeft = tableDragStartScrollLeftRef.current - deltaX;
+    event.preventDefault();
+  };
+
+  useEffect(() => {
+    if (!isTableDragScrolling) return;
+
+    const handleWindowMouseUp = () => stopTableDragScroll();
+    window.addEventListener('mouseup', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isTableDragScrolling]);
 
   const commissionTotal = settings.commissionPerEtf * settings.etfCount;
   const inlineCellInputClass =
@@ -1032,7 +1082,16 @@ export function CashFlow() {
         {rowsWithComputed.length === 0 && !newInlineDraft ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
         ) : (
-          <div className="overflow-auto md:flex-1 md:min-h-0">
+          <div
+            ref={tableScrollRef}
+            className={`overflow-auto md:flex-1 md:min-h-0 ${
+              isTableDragScrolling ? 'cursor-grabbing select-none' : 'cursor-grab'
+            }`}
+            onMouseDown={handleTableMouseDown}
+            onMouseMove={handleTableMouseMove}
+            onMouseUp={stopTableDragScroll}
+            onMouseLeave={stopTableDragScroll}
+          >
             <table className="min-w-[2300px] w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr className="border-b border-slate-200">
@@ -1065,7 +1124,7 @@ export function CashFlow() {
               </thead>
               <tbody>
                 {newInlineDraft && (
-                  <tr className="bg-sky-50/70 border-b border-sky-200">
+                  <tr className="bg-sky-50/70 border-b border-sky-200" data-row-editing="true">
                     <td className="py-2 pr-3 font-medium text-slate-800">
                       <input
                         type="text"
@@ -1185,6 +1244,7 @@ export function CashFlow() {
                   return (
                     <tr
                       key={row.id}
+                      data-row-editing={isEditing ? 'true' : 'false'}
                       className={
                         index % 2 === 0
                           ? 'bg-slate-50/50 border-b border-slate-100'
