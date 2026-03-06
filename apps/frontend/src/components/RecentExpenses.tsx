@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
-import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search } from 'lucide-react';
+import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 import { FixedExpensesModal } from './FixedExpensesModal';
@@ -271,9 +271,9 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                 colors.text,
                 'hover:scale-105 active:scale-95'
               )}
-              title="Gestisci spese fisse"
+              title="Gestisci spese fisse ricorrenti"
             >
-              <Calendar className="w-4 h-4" />
+              <Repeat className="w-4 h-4" />
             </button>
           )}
           <button
