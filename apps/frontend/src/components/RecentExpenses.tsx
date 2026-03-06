@@ -4,6 +4,7 @@ import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
 import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
+import { FixedExpensesModal } from './FixedExpensesModal';
 
 const EXPENSE_ID_DRAG_MIME = 'application/x-budget-expense-id';
 const EXPENSE_CATEGORY_DRAG_MIME = 'application/x-budget-expense-category';
@@ -29,6 +30,7 @@ type EditingField = {
 export function ExpensesList({ expenses, periodKey, title, category, emptyMessage = 'Nessuna spesa registrata', reallocations = [], isClosed = false }: ExpensesListProps) {
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isFixedModalOpen, setIsFixedModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggingExpenseId, setDraggingExpenseId] = useState<string | null>(null);
@@ -213,6 +215,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   };
 
   const colors = getCategoryColor(category);
+  const supportsFixedTemplates = category === 'NEEDS' || category === 'WANTS';
 
   // Filter reallocations that go TO this category (for SAVINGS)
   const savingsReallocations = reallocations.filter(r => r.toCategory === category);
@@ -258,18 +261,34 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
         )}
       </div>
       {!isClosed && (
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className={cn(
-            'p-1.5 rounded-lg transition-all',
-            'bg-white/80 shadow-sm hover:shadow',
-            colors.text,
-            'hover:scale-105 active:scale-95'
+        <div className="flex items-center gap-1.5">
+          {supportsFixedTemplates && (
+            <button
+              onClick={() => setIsFixedModalOpen(true)}
+              className={cn(
+                'p-1.5 rounded-lg transition-all',
+                'bg-white/80 shadow-sm hover:shadow',
+                colors.text,
+                'hover:scale-105 active:scale-95'
+              )}
+              title="Gestisci spese fisse"
+            >
+              <Calendar className="w-4 h-4" />
+            </button>
           )}
-          title="Aggiungi spesa"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className={cn(
+              'p-1.5 rounded-lg transition-all',
+              'bg-white/80 shadow-sm hover:shadow',
+              colors.text,
+              'hover:scale-105 active:scale-95'
+            )}
+            title="Aggiungi spesa"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -332,6 +351,14 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           periodKey={periodKey}
           defaultCategory={category}
         />
+        {(category === 'NEEDS' || category === 'WANTS') && (
+          <FixedExpensesModal
+            isOpen={isFixedModalOpen}
+            onClose={() => setIsFixedModalOpen(false)}
+            periodKey={periodKey}
+            category={category}
+          />
+        )}
       </div>
     );
   }
@@ -620,6 +647,14 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
         periodKey={periodKey}
         defaultCategory={category}
       />
+      {(category === 'NEEDS' || category === 'WANTS') && (
+        <FixedExpensesModal
+          isOpen={isFixedModalOpen}
+          onClose={() => setIsFixedModalOpen(false)}
+          periodKey={periodKey}
+          category={category}
+        />
+      )}
     </div>
   );
 }

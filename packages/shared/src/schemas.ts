@@ -3,6 +3,7 @@ import { CATEGORIES } from './constants';
 
 // Category enum schema
 export const categorySchema = z.enum(CATEGORIES);
+export const fixedExpenseCategorySchema = z.enum(['NEEDS', 'WANTS']);
 
 // Tricount type schema for shared expenses
 export const tricountTypeSchema = z.enum(['IO', 'FRA']);
@@ -70,6 +71,31 @@ export const updateExpenseSchema = z.object({
   notes: z.string().max(500).trim().optional().nullable(),
   isFixed: z.boolean().optional(),
   tricountType: tricountTypeSchema.nullable().optional(),
+});
+
+// Fixed expense template schemas
+export const createFixedExpenseTemplateSchema = z.object({
+  category: fixedExpenseCategorySchema,
+  label: z.string().min(1).max(200).trim(),
+  amount: z.number().positive().multipleOf(0.01),
+});
+
+export const updateFixedExpenseTemplateSchema = z
+  .object({
+    category: fixedExpenseCategorySchema.optional(),
+    label: z.string().min(1).max(200).trim().optional(),
+    amount: z.number().positive().multipleOf(0.01).optional(),
+  })
+  .refine(
+    (data) => data.category !== undefined || data.label !== undefined || data.amount !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
+
+export const applyFixedExpenseTemplatesSchema = z.object({
+  category: fixedExpenseCategorySchema,
+  templateIds: z.array(z.string().min(1)).optional(),
 });
 
 // Reallocation schemas
@@ -143,6 +169,9 @@ export type CreateIncomeInput = z.infer<typeof createIncomeSchema>;
 export type UpdateIncomeInput = z.infer<typeof updateIncomeSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+export type CreateFixedExpenseTemplateInput = z.infer<typeof createFixedExpenseTemplateSchema>;
+export type UpdateFixedExpenseTemplateInput = z.infer<typeof updateFixedExpenseTemplateSchema>;
+export type ApplyFixedExpenseTemplatesInput = z.infer<typeof applyFixedExpenseTemplatesSchema>;
 export type CreateReallocationInput = z.infer<typeof createReallocationSchema>;
 export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;
 export type CreateCashFlowCheckInput = z.infer<typeof createCashFlowCheckSchema>;

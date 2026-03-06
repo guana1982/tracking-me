@@ -21,6 +21,7 @@ model User {
   monthPeriods     MonthPeriod[]
   cashFlowChecks   CashFlowCheck[]
   cashFlowSettings CashFlowSettings?
+  fixedExpenseTemplates FixedExpenseTemplate[]
 
   @@index([googleId])
   @@index([email])
@@ -121,6 +122,23 @@ model Expense {
   @@index([category])
   @@index([date])
   @@map("expenses")
+}
+
+// Fixed Expense Template - recurring monthly defaults
+model FixedExpenseTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  category  Category
+  label     String
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@map("fixed_expense_templates")
 }
 
 // Reallocation - transfer between categories at end of month

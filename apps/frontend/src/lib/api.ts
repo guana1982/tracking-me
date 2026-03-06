@@ -21,6 +21,12 @@ import type {
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
   CashFlowSettingsDTO,
+  FixedExpenseTemplateDTO,
+  CreateFixedExpenseTemplateDTO,
+  UpdateFixedExpenseTemplateDTO,
+  ApplyFixedExpenseTemplatesDTO,
+  ApplyFixedExpenseTemplatesResultDTO,
+  FixedExpenseCategory,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
 
@@ -241,6 +247,42 @@ export const cashFlowApi = {
   updateSettings: (data: CashFlowSettingsDTO) =>
     fetchApi<CashFlowSettingsDTO>('/cashflow/settings', {
       method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// Fixed expense templates
+export const fixedExpensesApi = {
+  getAll: (category?: FixedExpenseCategory) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    const query = params.toString();
+
+    return fetchApi<FixedExpenseTemplateDTO[]>(
+      `/fixed-expenses${query ? `?${query}` : ''}`
+    );
+  },
+
+  create: (data: CreateFixedExpenseTemplateDTO) =>
+    fetchApi<FixedExpenseTemplateDTO>('/fixed-expenses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: UpdateFixedExpenseTemplateDTO) =>
+    fetchApi<FixedExpenseTemplateDTO>(`/fixed-expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/fixed-expenses/${id}`, {
+      method: 'DELETE',
+    }),
+
+  applyToPeriod: (periodKey: string, data: ApplyFixedExpenseTemplatesDTO) =>
+    fetchApi<ApplyFixedExpenseTemplatesResultDTO>(`/fixed-expenses/apply/${periodKey}`, {
+      method: 'POST',
       body: JSON.stringify(data),
     }),
 };

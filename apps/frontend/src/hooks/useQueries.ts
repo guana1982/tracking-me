@@ -7,6 +7,7 @@ import {
   expensesApi,
   reallocationsApi,
   cashFlowApi,
+  fixedExpensesApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -19,6 +20,10 @@ import type {
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
   CashFlowSettingsDTO,
+  CreateFixedExpenseTemplateDTO,
+  UpdateFixedExpenseTemplateDTO,
+  ApplyFixedExpenseTemplatesDTO,
+  FixedExpenseCategory,
 } from '@budget/shared';
 
 // Query keys
@@ -34,6 +39,8 @@ export const queryKeys = {
   reallocations: (periodKey: string) => ['reallocations', periodKey] as const,
   reallocationPreview: (periodKey: string) =>
     ['reallocationPreview', periodKey] as const,
+  fixedExpenses: (category?: FixedExpenseCategory) =>
+    ['fixedExpenses', category ?? 'all'] as const,
   cashFlowChecks: ['cashFlowChecks'] as const,
   cashFlowSettings: ['cashFlowSettings'] as const,
 };
@@ -183,6 +190,65 @@ export function useDeleteExpense(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+    },
+  });
+}
+
+// Fixed expense templates
+export function useFixedExpenseTemplates(category?: FixedExpenseCategory) {
+  return useQuery({
+    queryKey: queryKeys.fixedExpenses(category),
+    queryFn: () => fixedExpensesApi.getAll(category),
+  });
+}
+
+export function useCreateFixedExpenseTemplate(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateFixedExpenseTemplateDTO) => fixedExpensesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fixedExpenses'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+    },
+  });
+}
+
+export function useUpdateFixedExpenseTemplate(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateFixedExpenseTemplateDTO }) =>
+      fixedExpensesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fixedExpenses'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+    },
+  });
+}
+
+export function useDeleteFixedExpenseTemplate(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => fixedExpensesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fixedExpenses'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+    },
+  });
+}
+
+export function useApplyFixedExpenseTemplates(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ApplyFixedExpenseTemplatesDTO) =>
+      fixedExpensesApi.applyToPeriod(periodKey, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.fixedExpenses() });
     },
   });
 }

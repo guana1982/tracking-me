@@ -45,6 +45,7 @@ export interface Expense extends BaseEntity {
 
 // Tricount type for shared expenses
 export type TricountType = 'IO' | 'FRA';
+export type FixedExpenseCategory = Extract<Category, 'NEEDS' | 'WANTS'>;
 
 // Reallocation - transfer between categories at end of month
 export interface Reallocation extends BaseEntity {
@@ -144,6 +145,39 @@ export interface UpdateExpenseDTO {
   notes?: string | null;
   isFixed?: boolean;
   tricountType?: TricountType | null;
+}
+
+// Fixed Expense Template DTOs
+export interface FixedExpenseTemplateDTO {
+  id: string;
+  category: FixedExpenseCategory;
+  label: string;
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFixedExpenseTemplateDTO {
+  category: FixedExpenseCategory;
+  label: string;
+  amount: number;
+}
+
+export interface UpdateFixedExpenseTemplateDTO {
+  category?: FixedExpenseCategory;
+  label?: string;
+  amount?: number;
+}
+
+export interface ApplyFixedExpenseTemplatesDTO {
+  category: FixedExpenseCategory;
+  templateIds?: string[];
+}
+
+export interface ApplyFixedExpenseTemplatesResultDTO {
+  createdCount: number;
+  skippedCount: number;
+  created: ExpenseDTO[];
 }
 
 // Reallocation DTOs
