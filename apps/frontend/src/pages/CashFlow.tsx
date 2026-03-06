@@ -114,10 +114,14 @@ function computeStockValues(
   row: Pick<CashFlowRow, 'etfLordo' | 'rendimentoLordo'>,
   settings: CashFlowSettings
 ) {
-  const commissionTotal = settings.commissionPerEtf * settings.etfCount;
-  const tasseComm = (row.rendimentoLordo * 26) / 100 + commissionTotal;
-  const rendimentoNetto = row.rendimentoLordo - tasseComm;
-  const azionarioNetto = row.etfLordo - tasseComm;
+  const commPerEtf = Number(settings.commissionPerEtf) || 0;
+  const numEtf = Number(settings.etfCount) || 0;
+  const commissionTotal = commPerEtf * numEtf;
+  const rendLordo = Number(row.rendimentoLordo) || 0;
+  const etfL = Number(row.etfLordo) || 0;
+  const tasseComm = (rendLordo * 26) / 100 + commissionTotal;
+  const rendimentoNetto = rendLordo - tasseComm;
+  const azionarioNetto = etfL - tasseComm;
 
   return { tasseComm, rendimentoNetto, azionarioNetto };
 }
@@ -126,15 +130,15 @@ function computeTotal(row: CashFlowRow, settings: CashFlowSettings): number {
   const { azionarioNetto } = computeStockValues(row, settings);
 
   return (
-    row.bbva +
-    row.tradeRepublic +
-    row.webankCc +
-    row.webankObbl +
+    (Number(row.bbva) || 0) +
+    (Number(row.tradeRepublic) || 0) +
+    (Number(row.webankCc) || 0) +
+    (Number(row.webankObbl) || 0) +
     azionarioNetto +
-    row.bper +
-    row.tricount +
-    row.cartaWebank +
-    row.edenred
+    (Number(row.bper) || 0) +
+    (Number(row.tricount) || 0) +
+    (Number(row.cartaWebank) || 0) +
+    (Number(row.edenred) || 0)
   );
 }
 
@@ -198,7 +202,10 @@ export function CashFlow() {
 
   useEffect(() => {
     if (settingsData) {
-      setSettings(settingsData);
+      setSettings({
+        commissionPerEtf: Number(settingsData.commissionPerEtf) || INITIAL_SETTINGS.commissionPerEtf,
+        etfCount: Number(settingsData.etfCount) || INITIAL_SETTINGS.etfCount,
+      });
     }
   }, [settingsData]);
 
