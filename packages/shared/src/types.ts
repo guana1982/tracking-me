@@ -222,6 +222,52 @@ export interface MonthListItemDTO {
   totalSpent: number;
 }
 
+// ============= CashFlow DTOs =============
+
+// CashFlow Check - net worth snapshot
+export interface CashFlowCheckDTO {
+  id: string;
+  checkLabel: string;
+  date: string;
+  bbva: number;
+  tradeRepublic: number;
+  webankCc: number;
+  webankObbl: number;
+  etfLordo: number;
+  rendimentoLordo: number;
+  bper: number;
+  tricount: number;
+  cartaWebank: number;
+  edenred: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCashFlowCheckDTO {
+  checkLabel: string;
+  date: string;
+  bbva: number;
+  tradeRepublic: number;
+  webankCc: number;
+  webankObbl: number;
+  etfLordo: number;
+  rendimentoLordo: number;
+  bper: number;
+  tricount: number;
+  cartaWebank: number;
+  edenred: number;
+  notes?: string;
+}
+
+export type UpdateCashFlowCheckDTO = Partial<CreateCashFlowCheckDTO>;
+
+// CashFlow Settings - per-user commission/ETF config
+export interface CashFlowSettingsDTO {
+  commissionPerEtf: number;
+  etfCount: number;
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;

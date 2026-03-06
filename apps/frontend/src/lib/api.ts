@@ -17,6 +17,10 @@ import type {
   ReallocationDTO,
   CreateReallocationDTO,
   ReallocationPreviewDTO,
+  CashFlowCheckDTO,
+  CreateCashFlowCheckDTO,
+  UpdateCashFlowCheckDTO,
+  CashFlowSettingsDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
 
@@ -206,5 +210,37 @@ export const reallocationsApi = {
   delete: (id: string) =>
     fetchApi<void>(`/reallocations/${id}`, {
       method: 'DELETE',
+    }),
+};
+
+// CashFlow
+export const cashFlowApi = {
+  getChecks: () =>
+    fetchApi<CashFlowCheckDTO[]>('/cashflow/checks'),
+
+  createCheck: (data: CreateCashFlowCheckDTO) =>
+    fetchApi<CashFlowCheckDTO>('/cashflow/checks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateCheck: (id: string, data: UpdateCashFlowCheckDTO) =>
+    fetchApi<CashFlowCheckDTO>(`/cashflow/checks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteCheck: (id: string) =>
+    fetchApi<void>(`/cashflow/checks/${id}`, {
+      method: 'DELETE',
+    }),
+
+  getSettings: () =>
+    fetchApi<CashFlowSettingsDTO>('/cashflow/settings'),
+
+  updateSettings: (data: CashFlowSettingsDTO) =>
+    fetchApi<CashFlowSettingsDTO>('/cashflow/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     }),
 };

@@ -95,6 +95,47 @@ export const periodKeySchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, {
   message: 'Period key must be in YYYY-MM format',
 });
 
+// CashFlow Check schemas
+const cashFlowNumericField = z.number().multipleOf(0.01);
+
+export const createCashFlowCheckSchema = z.object({
+  checkLabel: z.string().min(1).max(100).trim(),
+  date: z.string().date(),
+  bbva: cashFlowNumericField,
+  tradeRepublic: cashFlowNumericField,
+  webankCc: cashFlowNumericField,
+  webankObbl: cashFlowNumericField,
+  etfLordo: cashFlowNumericField,
+  rendimentoLordo: cashFlowNumericField,
+  bper: cashFlowNumericField,
+  tricount: cashFlowNumericField,
+  cartaWebank: cashFlowNumericField,
+  edenred: cashFlowNumericField,
+  notes: z.string().max(500).trim().optional(),
+});
+
+export const updateCashFlowCheckSchema = z.object({
+  checkLabel: z.string().min(1).max(100).trim().optional(),
+  date: z.string().date().optional(),
+  bbva: cashFlowNumericField.optional(),
+  tradeRepublic: cashFlowNumericField.optional(),
+  webankCc: cashFlowNumericField.optional(),
+  webankObbl: cashFlowNumericField.optional(),
+  etfLordo: cashFlowNumericField.optional(),
+  rendimentoLordo: cashFlowNumericField.optional(),
+  bper: cashFlowNumericField.optional(),
+  tricount: cashFlowNumericField.optional(),
+  cartaWebank: cashFlowNumericField.optional(),
+  edenred: cashFlowNumericField.optional(),
+  notes: z.string().max(500).trim().optional(),
+});
+
+// CashFlow Settings schema
+export const cashFlowSettingsSchema = z.object({
+  commissionPerEtf: z.number().min(0).multipleOf(0.01),
+  etfCount: z.number().int().min(0),
+});
+
 // Type exports from schemas
 export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
 export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
@@ -104,3 +145,6 @@ export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type CreateReallocationInput = z.infer<typeof createReallocationSchema>;
 export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;
+export type CreateCashFlowCheckInput = z.infer<typeof createCashFlowCheckSchema>;
+export type UpdateCashFlowCheckInput = z.infer<typeof updateCashFlowCheckSchema>;
+export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;

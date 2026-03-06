@@ -6,6 +6,7 @@ import {
   incomesApi,
   expensesApi,
   reallocationsApi,
+  cashFlowApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -15,6 +16,9 @@ import type {
   UpdateBudgetRuleDTO,
   ExpenseFilters,
   CreateReallocationDTO,
+  CreateCashFlowCheckDTO,
+  UpdateCashFlowCheckDTO,
+  CashFlowSettingsDTO,
 } from '@budget/shared';
 
 // Query keys
@@ -30,6 +34,8 @@ export const queryKeys = {
   reallocations: (periodKey: string) => ['reallocations', periodKey] as const,
   reallocationPreview: (periodKey: string) =>
     ['reallocationPreview', periodKey] as const,
+  cashFlowChecks: ['cashFlowChecks'] as const,
+  cashFlowSettings: ['cashFlowSettings'] as const,
 };
 
 // Dashboard
@@ -250,6 +256,68 @@ export function useDeleteReallocation(periodKey: string) {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsHistory(periodKey) });
+    },
+  });
+}
+
+// CashFlow Checks
+export function useCashFlowChecks() {
+  return useQuery({
+    queryKey: queryKeys.cashFlowChecks,
+    queryFn: cashFlowApi.getChecks,
+  });
+}
+
+export function useCreateCashFlowCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateCashFlowCheckDTO) => cashFlowApi.createCheck(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+export function useUpdateCashFlowCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateCashFlowCheckDTO }) =>
+      cashFlowApi.updateCheck(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+export function useDeleteCashFlowCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => cashFlowApi.deleteCheck(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+// CashFlow Settings
+export function useCashFlowSettings() {
+  return useQuery({
+    queryKey: queryKeys.cashFlowSettings,
+    queryFn: cashFlowApi.getSettings,
+  });
+}
+
+export function useUpdateCashFlowSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CashFlowSettingsDTO) => cashFlowApi.updateSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowSettings });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
     },
   });
 }

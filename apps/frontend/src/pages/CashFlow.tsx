@@ -1,6 +1,6 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, ChevronDown, Loader2 } from 'lucide-react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -13,28 +13,18 @@ import {
   YAxis,
   Tooltip,
 } from 'recharts';
-
-const STORAGE_KEY = 'budget-cashflow-checks-v2';
-const LEGACY_STORAGE_KEY = 'budget-cashflow-checks-v1';
-const SETTINGS_STORAGE_KEY = 'budget-cashflow-settings-v1';
+import {
+  useCashFlowChecks,
+  useCashFlowSettings,
+  useCreateCashFlowCheck,
+  useUpdateCashFlowCheck,
+  useDeleteCashFlowCheck,
+  useUpdateCashFlowSettings,
+} from '../hooks/useQueries';
+import type { CashFlowCheckDTO } from '@budget/shared';
 const ALLOCATION_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#14b8a6', '#2563eb'];
 
-type CashFlowRow = {
-  id: string;
-  checkLabel: string;
-  date: string;
-  bbva: number;
-  tradeRepublic: number;
-  webankCc: number;
-  webankObbl: number;
-  etfLordo: number;
-  rendimentoLordo: number;
-  bper: number;
-  tricount: number;
-  cartaWebank: number;
-  edenred: number;
-  notes: string;
-};
+type CashFlowRow = CashFlowCheckDTO;
 
 type CashFlowSettings = {
   commissionPerEtf: number;
@@ -113,19 +103,6 @@ function parseAmount(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function normalizeNumber(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    return parseAmount(value);
-  }
-  return 0;
-}
-
-function normalizeString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
 
 function buildCheckLabel(input: string, index: number): string {
   const trimmed = input.trim();
@@ -170,33 +147,6 @@ function sortRowsByDateDesc(input: CashFlowRow[]): CashFlowRow[] {
   return [...input].sort((a, b) => getRowDateTimestamp(b) - getRowDateTimestamp(a));
 }
 
-function normalizeStoredRows(raw: unknown): CashFlowRow[] {
-  if (!Array.isArray(raw)) return [];
-
-  return raw
-    .map((item, index) => {
-      if (!item || typeof item !== 'object') return null;
-      const row = item as Record<string, unknown>;
-
-      return {
-        id: typeof row.id === 'string' ? row.id : `${Date.now()}-${index}`,
-        checkLabel: normalizeString(row.checkLabel) || `CHECK ${index + 1}`,
-        date: normalizeString(row.date) || today,
-        bbva: normalizeNumber(row.bbva),
-        tradeRepublic: normalizeNumber(row.tradeRepublic),
-        webankCc: normalizeNumber(row.webankCc),
-        webankObbl: normalizeNumber(row.webankObbl),
-        etfLordo: normalizeNumber(row.etfLordo ?? row.etfNetto),
-        rendimentoLordo: normalizeNumber(row.rendimentoLordo),
-        bper: normalizeNumber(row.bper),
-        tricount: normalizeNumber(row.tricount),
-        cartaWebank: normalizeNumber(row.cartaWebank),
-        edenred: normalizeNumber(row.edenred),
-        notes: normalizeString(row.notes),
-      } satisfies CashFlowRow;
-    })
-    .filter((row): row is CashFlowRow => row !== null);
-}
 
 function rowToFormState(row: CashFlowRow): CashFlowFormState {
   return {
@@ -235,9 +185,35 @@ function formatCompactAmount(value: number): string {
 }
 
 export function CashFlow() {
-  const [rows, setRows] = useState<CashFlowRow[]>([]);
-  const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
+  const { data: checksData, isLoading: isLoadingChecks, isError: isErrorChecks } = useCashFlowChecks();
+  const { data: settingsData, isLoading: isLoadingSettings } = useCashFlowSettings();
+  const createCheckMutation = useCreateCashFlowCheck();
+  const updateCheckMutation = useUpdateCashFlowCheck();
+  const deleteCheckMutation = useDeleteCashFlowCheck();
+  const updateSettingsMutation = useUpdateCashFlowSettings();
+
+  const rows: CashFlowRow[] = checksData ?? [];
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
+  const settingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (settingsData) {
+      setSettings(settingsData);
+    }
+  }, [settingsData]);
+
+  const updateSettingsWithDebounce = useCallback(
+    (next: CashFlowSettings) => {
+      setSettings(next);
+      if (settingsDebounceRef.current) clearTimeout(settingsDebounceRef.current);
+      settingsDebounceRef.current = setTimeout(() => {
+        updateSettingsMutation.mutate(next);
+      }, 800);
+    },
+    [updateSettingsMutation]
+  );
+
+  const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [isNewCheckModalOpen, setIsNewCheckModalOpen] = useState(false);
   const [isTrendOpen, setIsTrendOpen] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
@@ -255,56 +231,6 @@ export function CashFlow() {
   const tableDragStartYRef = useRef(0);
   const tableDragStartScrollLeftRef = useRef(0);
   const tableDragStartScrollTopRef = useRef(0);
-
-  useEffect(() => {
-    try {
-      const rowsRaw = localStorage.getItem(STORAGE_KEY);
-      const legacyRowsRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
-      const source = rowsRaw ?? legacyRowsRaw;
-
-      if (source) {
-        const normalized = normalizeStoredRows(JSON.parse(source));
-        setRows(sortRowsByDateDesc(normalized));
-      }
-    } catch (error) {
-      console.error('Failed to read cash flow rows from localStorage:', error);
-    }
-
-    try {
-      const settingsRaw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (settingsRaw) {
-        const parsed = JSON.parse(settingsRaw) as Partial<CashFlowSettings>;
-        setSettings({
-          commissionPerEtf:
-            typeof parsed.commissionPerEtf === 'number' && Number.isFinite(parsed.commissionPerEtf)
-              ? parsed.commissionPerEtf
-              : INITIAL_SETTINGS.commissionPerEtf,
-          etfCount:
-            typeof parsed.etfCount === 'number' && Number.isFinite(parsed.etfCount)
-              ? parsed.etfCount
-              : INITIAL_SETTINGS.etfCount,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to read cash flow settings from localStorage:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-    } catch (error) {
-      console.error('Failed to save cash flow rows to localStorage:', error);
-    }
-  }, [rows]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-    } catch (error) {
-      console.error('Failed to save cash flow settings to localStorage:', error);
-    }
-  }, [settings]);
 
   const sortedRows = useMemo(() => sortRowsByDateDesc(rows), [rows]);
 
@@ -452,6 +378,8 @@ export function CashFlow() {
       cartaWebank: parseAmount(newInlineDraft.cartaWebank),
       edenred: parseAmount(newInlineDraft.edenred),
       notes: newInlineDraft.notes.trim(),
+      createdAt: '',
+      updatedAt: '',
     };
 
     const sortedWithDraft = sortRowsByDateDesc([...rows, draftRow]);
@@ -493,33 +421,36 @@ export function CashFlow() {
     event.preventDefault();
 
     const nextIndex = rows.length;
-    const newRow: CashFlowRow = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      checkLabel: buildCheckLabel(form.checkLabel, nextIndex),
-      date: form.date || today,
-      bbva: parseAmount(form.bbva),
-      tradeRepublic: parseAmount(form.tradeRepublic),
-      webankCc: parseAmount(form.webankCc),
-      webankObbl: parseAmount(form.webankObbl),
-      etfLordo: parseAmount(form.etfLordo),
-      rendimentoLordo: parseAmount(form.rendimentoLordo),
-      bper: parseAmount(form.bper),
-      tricount: parseAmount(form.tricount),
-      cartaWebank: parseAmount(form.cartaWebank),
-      edenred: parseAmount(form.edenred),
-      notes: form.notes.trim(),
-    };
-
-    setRows((prev) => sortRowsByDateDesc([...prev, newRow]));
-    setForm((prev) => ({
-      ...INITIAL_FORM,
-      date: prev.date || today,
-    }));
-    setIsNewCheckModalOpen(false);
+    createCheckMutation.mutate(
+      {
+        checkLabel: buildCheckLabel(form.checkLabel, nextIndex),
+        date: form.date || today,
+        bbva: parseAmount(form.bbva),
+        tradeRepublic: parseAmount(form.tradeRepublic),
+        webankCc: parseAmount(form.webankCc),
+        webankObbl: parseAmount(form.webankObbl),
+        etfLordo: parseAmount(form.etfLordo),
+        rendimentoLordo: parseAmount(form.rendimentoLordo),
+        bper: parseAmount(form.bper),
+        tricount: parseAmount(form.tricount),
+        cartaWebank: parseAmount(form.cartaWebank),
+        edenred: parseAmount(form.edenred),
+        notes: form.notes.trim(),
+      },
+      {
+        onSuccess: () => {
+          setForm((prev) => ({
+            ...INITIAL_FORM,
+            date: prev.date || today,
+          }));
+          setIsNewCheckModalOpen(false);
+        },
+      }
+    );
   };
 
   const handleDelete = (id: string) => {
-    setRows((prev) => prev.filter((row) => row.id !== id));
+    deleteCheckMutation.mutate(id);
     if (editingId === id) {
       setEditingId(null);
       setEditingDraft(null);
@@ -544,15 +475,16 @@ export function CashFlow() {
   const saveInlineEdit = () => {
     if (!editingId || !editingDraft) return;
 
-    setRows((prev) =>
-      sortRowsByDateDesc(prev.map((row, index) => {
-        if (row.id !== editingId) return row;
+    const existingRow = rows.find((r) => r.id === editingId);
+    const fallbackLabel = existingRow?.checkLabel || `CHECK ${rows.indexOf(existingRow!) + 1}`;
+    const nextLabel = editingDraft.checkLabel.trim() || fallbackLabel;
 
-        const nextLabel = editingDraft.checkLabel.trim() || row.checkLabel || `CHECK ${index + 1}`;
-        return {
-          ...row,
+    updateCheckMutation.mutate(
+      {
+        id: editingId,
+        data: {
           checkLabel: nextLabel,
-          date: editingDraft.date || row.date,
+          date: editingDraft.date || existingRow?.date || today,
           bbva: parseAmount(editingDraft.bbva),
           tradeRepublic: parseAmount(editingDraft.tradeRepublic),
           webankCc: parseAmount(editingDraft.webankCc),
@@ -564,12 +496,15 @@ export function CashFlow() {
           cartaWebank: parseAmount(editingDraft.cartaWebank),
           edenred: parseAmount(editingDraft.edenred),
           notes: editingDraft.notes.trim(),
-        };
-      }))
+        },
+      },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          setEditingDraft(null);
+        },
+      }
     );
-
-    setEditingId(null);
-    setEditingDraft(null);
   };
 
   const handleInlineKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -606,25 +541,28 @@ export function CashFlow() {
     if (!newInlineDraft) return;
 
     const nextIndex = rows.length;
-    const newRow: CashFlowRow = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      checkLabel: buildCheckLabel(newInlineDraft.checkLabel, nextIndex),
-      date: newInlineDraft.date || today,
-      bbva: parseAmount(newInlineDraft.bbva),
-      tradeRepublic: parseAmount(newInlineDraft.tradeRepublic),
-      webankCc: parseAmount(newInlineDraft.webankCc),
-      webankObbl: parseAmount(newInlineDraft.webankObbl),
-      etfLordo: parseAmount(newInlineDraft.etfLordo),
-      rendimentoLordo: parseAmount(newInlineDraft.rendimentoLordo),
-      bper: parseAmount(newInlineDraft.bper),
-      tricount: parseAmount(newInlineDraft.tricount),
-      cartaWebank: parseAmount(newInlineDraft.cartaWebank),
-      edenred: parseAmount(newInlineDraft.edenred),
-      notes: newInlineDraft.notes.trim(),
-    };
-
-    setRows((prev) => sortRowsByDateDesc([...prev, newRow]));
-    setNewInlineDraft(null);
+    createCheckMutation.mutate(
+      {
+        checkLabel: buildCheckLabel(newInlineDraft.checkLabel, nextIndex),
+        date: newInlineDraft.date || today,
+        bbva: parseAmount(newInlineDraft.bbva),
+        tradeRepublic: parseAmount(newInlineDraft.tradeRepublic),
+        webankCc: parseAmount(newInlineDraft.webankCc),
+        webankObbl: parseAmount(newInlineDraft.webankObbl),
+        etfLordo: parseAmount(newInlineDraft.etfLordo),
+        rendimentoLordo: parseAmount(newInlineDraft.rendimentoLordo),
+        bper: parseAmount(newInlineDraft.bper),
+        tricount: parseAmount(newInlineDraft.tricount),
+        cartaWebank: parseAmount(newInlineDraft.cartaWebank),
+        edenred: parseAmount(newInlineDraft.edenred),
+        notes: newInlineDraft.notes.trim(),
+      },
+      {
+        onSuccess: () => {
+          setNewInlineDraft(null);
+        },
+      }
+    );
   };
 
   const handleNewInlineKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -699,6 +637,22 @@ export function CashFlow() {
   const stickyHeaderBaseClass = 'sticky top-0 z-20 border-b border-slate-200';
   const stickyHeaderPlainClass = `${stickyHeaderBaseClass} bg-white/95 backdrop-blur`;
   const stickyHeaderInputClass = `${stickyHeaderBaseClass} bg-emerald-50/95`;
+
+  if (isLoadingChecks || isLoadingSettings) {
+    return (
+      <div className="sm:ml-16 flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+      </div>
+    );
+  }
+
+  if (isErrorChecks) {
+    return (
+      <div className="sm:ml-16 flex items-center justify-center h-64">
+        <p className="text-red-600">Errore nel caricamento dei dati CashFlow.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
@@ -1490,10 +1444,10 @@ export function CashFlow() {
                       className="input"
                       value={settings.commissionPerEtf}
                       onChange={(e) =>
-                        setSettings((prev) => ({
-                          ...prev,
+                        updateSettingsWithDebounce({
+                          ...settings,
                           commissionPerEtf: parseAmount(e.target.value),
-                        }))
+                        })
                       }
                     />
                   </div>
@@ -1506,10 +1460,10 @@ export function CashFlow() {
                       className="input"
                       value={settings.etfCount}
                       onChange={(e) =>
-                        setSettings((prev) => ({
-                          ...prev,
+                        updateSettingsWithDebounce({
+                          ...settings,
                           etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))),
-                        }))
+                        })
                       }
                     />
                   </div>

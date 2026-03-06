@@ -18,7 +18,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations - user owns all their data
-  monthPeriods MonthPeriod[]
+  monthPeriods     MonthPeriod[]
+  cashFlowChecks   CashFlowCheck[]
+  cashFlowSettings CashFlowSettings?
 
   @@index([googleId])
   @@index([email])
@@ -138,4 +140,44 @@ model Reallocation {
 
   @@index([monthPeriodId])
   @@map("reallocations")
+}
+
+// CashFlow Check - net worth snapshot at a point in time
+model CashFlowCheck {
+  id              String   @id @default(cuid())
+  userId          String
+  checkLabel      String
+  date            DateTime @db.Date
+  bbva            Float    @default(0)
+  tradeRepublic   Float    @default(0)
+  webankCc        Float    @default(0)
+  webankObbl      Float    @default(0)
+  etfLordo        Float    @default(0)
+  rendimentoLordo Float    @default(0)
+  bper            Float    @default(0)
+  tricount        Float    @default(0)
+  cartaWebank     Float    @default(0)
+  edenred         Float    @default(0)
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
+  @@map("cashflow_checks")
+}
+
+// CashFlow Settings - per-user commission/ETF configuration
+model CashFlowSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  commissionPerEtf Float    @default(12)
+  etfCount         Int      @default(12)
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("cashflow_settings")
 }
