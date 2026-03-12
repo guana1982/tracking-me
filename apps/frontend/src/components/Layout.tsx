@@ -1,5 +1,15 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Receipt, LineChart, Settings, Plus, ChevronDown, LogOut, User } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Receipt,
+  LineChart,
+  Briefcase,
+  Settings,
+  Plus,
+  ChevronDown,
+  LogOut,
+  User,
+} from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
 import { usePeriods, useDashboard } from '../hooks/useQueries';
@@ -17,6 +27,9 @@ export function Layout() {
   const { data: dashboard } = useDashboard(periodKey);
   const { user, logout } = useAuthStore();
   const isCashFlowPage = location.pathname.startsWith('/cash-flow');
+  const isPortfolioPage = location.pathname.startsWith('/portfolio');
+  const showBudgetContext = !isCashFlowPage && !isPortfolioPage;
+  const appTitle = isCashFlowPage ? 'Net Worth' : isPortfolioPage ? 'Portafoglio' : 'Budget';
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
 
@@ -24,6 +37,7 @@ export function Layout() {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/expenses', icon: Receipt, label: 'Spese' },
     { to: '/cash-flow', icon: LineChart, label: 'Cash Flow' },
+    { to: '/portfolio', icon: Briefcase, label: 'Portafoglio' },
     { to: '/settings', icon: Settings, label: 'Impostazioni' },
   ];
 
@@ -36,16 +50,16 @@ export function Layout() {
             {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">
-                {isCashFlowPage ? 'Net Worth' : 'Budget'}
+                {appTitle}
               </h1>
-              {!isCashFlowPage && (
+              {showBudgetContext && (
                 <span className="text-xl font-bold text-slate-900">
                   {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
                 </span>
               )}
 
               {/* Period Selector */}
-              {!isCashFlowPage && (
+              {showBudgetContext && (
                 <div className="relative">
                   <button
                     onClick={() => setIsPeriodSelectorOpen(!isPeriodSelectorOpen)}
@@ -110,7 +124,7 @@ export function Layout() {
 
             <div className="flex items-center gap-3">
               {/* Quick Add Button (Desktop) */}
-              {!isCashFlowPage && (
+              {showBudgetContext && (
                 <button
                   onClick={() => setIsQuickAddOpen(true)}
                   className="hidden sm:flex items-center gap-2 btn btn-primary"
@@ -219,7 +233,7 @@ export function Layout() {
       </nav>
 
       {/* Floating Action Button (Mobile) */}
-      {!isCashFlowPage && (
+      {showBudgetContext && (
         <button
           onClick={() => setIsQuickAddOpen(true)}
           className="sm:hidden fixed bottom-20 right-4 z-50 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"

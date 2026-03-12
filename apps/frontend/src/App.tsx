@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
 import { CashFlow } from './pages/CashFlow';
+import { Portfolio } from './pages/Portfolio';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { AuthCallback } from './pages/AuthCallback';
@@ -28,6 +29,7 @@ function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="cash-flow" element={<CashFlow />} />
+        <Route path="portfolio" element={<Portfolio />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

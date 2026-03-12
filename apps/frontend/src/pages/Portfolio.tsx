@@ -1,0 +1,727 @@
+import { useEffect, useMemo, useState } from 'react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { formatCurrency } from '../lib/utils';
+
+type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
+type Horizon = '1Y' | '3Y' | '5Y';
+
+type InstrumentDefinition = {
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+  monthlyDrift: number;
+  monthlyVolatility: number;
+};
+
+type InvestedPosition = {
+  symbol: string;
+  amount: number;
+};
+
+type StudyConfig = {
+  symbol: string;
+  enabled: boolean;
+  weight: number;
+};
+
+type HistoricalPoint = {
+  date: string;
+  close: number;
+};
+
+type SeriesBySymbol = Record<string, HistoricalPoint[]>;
+
+type PortfolioPoint = {
+  date: string;
+  value: number;
+};
+
+type PerformanceMetrics = {
+  cumulativeReturn: number;
+  annualizedReturn: number;
+  annualizedVolatility: number;
+  maxDrawdown: number;
+};
+
+const HORIZON_MONTHS: Record<Horizon, number> = {
+  '1Y': 12,
+  '3Y': 36,
+  '5Y': 60,
+};
+
+const INSTRUMENTS: InstrumentDefinition[] = [
+  {
+    symbol: 'VWCE',
+    name: 'Vanguard FTSE All-World',
+    assetClass: 'AZIONARIO',
+    monthlyDrift: 0.0072,
+    monthlyVolatility: 0.036,
+  },
+  {
+    symbol: 'EIMI',
+    name: 'iShares Core MSCI EM',
+    assetClass: 'AZIONARIO',
+    monthlyDrift: 0.008,
+    monthlyVolatility: 0.046,
+  },
+  {
+    symbol: 'IUSN',
+    name: 'iShares MSCI World Small Cap',
+    assetClass: 'AZIONARIO',
+    monthlyDrift: 0.0085,
+    monthlyVolatility: 0.05,
+  },
+  {
+    symbol: 'AGGH',
+    name: 'iShares Core Global Aggregate Bond',
+    assetClass: 'OBBLIGAZIONARIO',
+    monthlyDrift: 0.0018,
+    monthlyVolatility: 0.012,
+  },
+  {
+    symbol: 'IEAC',
+    name: 'iShares Core Euro Corp Bond',
+    assetClass: 'OBBLIGAZIONARIO',
+    monthlyDrift: 0.0016,
+    monthlyVolatility: 0.01,
+  },
+  {
+    symbol: 'EMB',
+    name: 'iShares J.P. Morgan EM Bond',
+    assetClass: 'OBBLIGAZIONARIO',
+    monthlyDrift: 0.0023,
+    monthlyVolatility: 0.018,
+  },
+];
+
+const DEFAULT_INVESTED_POSITIONS: InvestedPosition[] = [
+  { symbol: 'VWCE', amount: 18500 },
+  { symbol: 'AGGH', amount: 9500 },
+  { symbol: 'IEAC', amount: 6000 },
+];
+
+function getInstrument(symbol: string): InstrumentDefinition | undefined {
+  return INSTRUMENTS.find((item) => item.symbol === symbol);
+}
+
+function createSeededRandom(seed: number) {
+  let t = seed;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function symbolSeed(symbol: string): number {
+  return symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0) * 17, 11);
+}
+
+function formatMonthLabel(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString('it-IT', {
+    month: 'short',
+    year: '2-digit',
+  });
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function normalizeWeights(input: { symbol: string; weight: number }[]): Record<string, number> {
+  const sanitized = input
+    .map((item) => ({ symbol: item.symbol, weight: Math.max(0, item.weight) }))
+    .filter((item) => item.weight > 0);
+
+  if (sanitized.length === 0) return {};
+
+  const total = sanitized.reduce((sum, item) => sum + item.weight, 0);
+  if (total <= 0) {
+    const equal = 1 / sanitized.length;
+    return sanitized.reduce<Record<string, number>>((acc, item) => {
+      acc[item.symbol] = equal;
+      return acc;
+    }, {});
+  }
+
+  return sanitized.reduce<Record<string, number>>((acc, item) => {
+    acc[item.symbol] = item.weight / total;
+    return acc;
+  }, {});
+}
+
+function computePortfolioSeries(seriesBySymbol: SeriesBySymbol, weights: Record<string, number>): PortfolioPoint[] {
+  const symbols = Object.keys(weights).filter((symbol) => seriesBySymbol[symbol]?.length > 0);
+  if (symbols.length === 0) return [];
+
+  const pointsCount = Math.min(...symbols.map((symbol) => seriesBySymbol[symbol].length));
+  if (pointsCount < 2) return [];
+
+  const basePrices = symbols.reduce<Record<string, number>>((acc, symbol) => {
+    acc[symbol] = seriesBySymbol[symbol][0].close;
+    return acc;
+  }, {});
+
+  const referenceSymbol = symbols[0];
+  const result: PortfolioPoint[] = [];
+
+  for (let index = 0; index < pointsCount; index += 1) {
+    const date = seriesBySymbol[referenceSymbol][index].date;
+    const value = symbols.reduce((sum, symbol) => {
+      const normalized = (seriesBySymbol[symbol][index].close / basePrices[symbol]) * 100;
+      return sum + normalized * weights[symbol];
+    }, 0);
+
+    result.push({ date, value });
+  }
+
+  return result;
+}
+
+function computePerformanceMetrics(series: PortfolioPoint[]): PerformanceMetrics | null {
+  if (series.length < 2) return null;
+
+  const values = series.map((point) => point.value);
+  const start = values[0];
+  const end = values[values.length - 1];
+  if (start <= 0 || end <= 0) return null;
+
+  const periods = values.length - 1;
+  const monthlyReturns = values.slice(1).map((value, index) => value / values[index] - 1);
+  const avgReturn = monthlyReturns.reduce((sum, value) => sum + value, 0) / monthlyReturns.length;
+  const variance =
+    monthlyReturns.reduce((sum, value) => sum + (value - avgReturn) ** 2, 0) /
+    Math.max(1, monthlyReturns.length - 1);
+
+  let peak = values[0];
+  let maxDrawdown = 0;
+  values.forEach((value) => {
+    peak = Math.max(peak, value);
+    const drawdown = value / peak - 1;
+    maxDrawdown = Math.min(maxDrawdown, drawdown);
+  });
+
+  return {
+    cumulativeReturn: end / start - 1,
+    annualizedReturn: Math.pow(end / start, 12 / periods) - 1,
+    annualizedVolatility: Math.sqrt(variance) * Math.sqrt(12),
+    maxDrawdown,
+  };
+}
+
+async function loadHistoricalSeries(symbols: string[], horizon: Horizon): Promise<SeriesBySymbol> {
+  // TODO: sostituire questo adapter con endpoint reale backend, es:
+  // GET /api/portfolio/history?symbols=VWCE,AGGH&horizon=3Y
+  await new Promise((resolve) => setTimeout(resolve, 350));
+
+  const now = new Date();
+  const months = HORIZON_MONTHS[horizon];
+  const points = months + 1;
+  const result: SeriesBySymbol = {};
+
+  symbols.forEach((symbol) => {
+    const instrument = getInstrument(symbol);
+    if (!instrument) return;
+
+    const rng = createSeededRandom(symbolSeed(symbol));
+    let price = 100 + (symbolSeed(symbol) % 35);
+
+    const history: HistoricalPoint[] = [];
+    for (let i = 0; i < points; i += 1) {
+      const date = new Date(now.getFullYear(), now.getMonth() - (points - 1 - i), 1)
+        .toISOString()
+        .slice(0, 10);
+
+      if (i > 0) {
+        const shock = (rng() - 0.5) * instrument.monthlyVolatility;
+        const seasonal = Math.sin(i / 5) * instrument.monthlyVolatility * 0.2;
+        const monthlyReturn = instrument.monthlyDrift + shock + seasonal;
+        price = Math.max(25, price * (1 + monthlyReturn));
+      }
+
+      history.push({
+        date,
+        close: Number(price.toFixed(2)),
+      });
+    }
+
+    result[symbol] = history;
+  });
+
+  return result;
+}
+
+function buildInitialStudyConfig(positions: InvestedPosition[]): StudyConfig[] {
+  const investedMap = normalizeWeights(
+    positions.map((position) => ({
+      symbol: position.symbol,
+      weight: position.amount,
+    }))
+  );
+
+  return INSTRUMENTS.map((instrument) => {
+    const investedWeight = investedMap[instrument.symbol] ?? 0;
+    return {
+      symbol: instrument.symbol,
+      enabled: investedWeight > 0,
+      weight: Number((investedWeight * 100).toFixed(2)),
+    };
+  });
+}
+
+export function Portfolio() {
+  const [investedPositions, setInvestedPositions] = useState<InvestedPosition[]>(
+    DEFAULT_INVESTED_POSITIONS
+  );
+  const [horizon, setHorizon] = useState<Horizon>('3Y');
+  const [studyConfig, setStudyConfig] = useState<StudyConfig[]>(
+    buildInitialStudyConfig(DEFAULT_INVESTED_POSITIONS)
+  );
+  const [seriesBySymbol, setSeriesBySymbol] = useState<SeriesBySymbol>({});
+  const [isSeriesLoading, setIsSeriesLoading] = useState(false);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+
+  const investedTotal = useMemo(
+    () => investedPositions.reduce((sum, position) => sum + Math.max(0, position.amount), 0),
+    [investedPositions]
+  );
+
+  const investedWeightMap = useMemo(
+    () =>
+      normalizeWeights(
+        investedPositions.map((position) => ({
+          symbol: position.symbol,
+          weight: Math.max(0, position.amount),
+        }))
+      ),
+    [investedPositions]
+  );
+
+  const scenarioWeightMap = useMemo(
+    () =>
+      normalizeWeights(
+        studyConfig
+          .filter((item) => item.enabled)
+          .map((item) => ({ symbol: item.symbol, weight: item.weight }))
+      ),
+    [studyConfig]
+  );
+
+  const symbolsForSeries = useMemo(() => {
+    return Array.from(new Set([...Object.keys(investedWeightMap), ...Object.keys(scenarioWeightMap)]));
+  }, [investedWeightMap, scenarioWeightMap]);
+
+  const symbolSignature = useMemo(() => symbolsForSeries.slice().sort().join('|'), [symbolsForSeries]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (symbolsForSeries.length === 0) {
+      setSeriesBySymbol({});
+      setIsSeriesLoading(false);
+      setSeriesError(null);
+      return;
+    }
+
+    setIsSeriesLoading(true);
+    setSeriesError(null);
+
+    loadHistoricalSeries(symbolsForSeries, horizon)
+      .then((nextSeries) => {
+        if (cancelled) return;
+        setSeriesBySymbol(nextSeries);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSeriesError('Impossibile caricare le serie storiche.');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsSeriesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [horizon, symbolSignature, symbolsForSeries]);
+
+  const currentPortfolioSeries = useMemo(
+    () => computePortfolioSeries(seriesBySymbol, investedWeightMap),
+    [seriesBySymbol, investedWeightMap]
+  );
+
+  const simulatedPortfolioSeries = useMemo(
+    () => computePortfolioSeries(seriesBySymbol, scenarioWeightMap),
+    [seriesBySymbol, scenarioWeightMap]
+  );
+
+  const chartData = useMemo(() => {
+    const currentLength = currentPortfolioSeries.length;
+    const simulatedLength = simulatedPortfolioSeries.length;
+    if (currentLength < 2 || simulatedLength < 2) return [];
+    const points = Math.min(currentLength, simulatedLength);
+
+    const output: Array<{ dateLabel: string; current: number; simulated: number }> = [];
+    for (let i = 0; i < points; i += 1) {
+      output.push({
+        dateLabel: formatMonthLabel(simulatedPortfolioSeries[i].date),
+        current: currentPortfolioSeries[i].value,
+        simulated: simulatedPortfolioSeries[i].value,
+      });
+    }
+
+    return output;
+  }, [currentPortfolioSeries, simulatedPortfolioSeries]);
+
+  const currentMetrics = useMemo(
+    () => computePerformanceMetrics(currentPortfolioSeries),
+    [currentPortfolioSeries]
+  );
+  const simulatedMetrics = useMemo(
+    () => computePerformanceMetrics(simulatedPortfolioSeries),
+    [simulatedPortfolioSeries]
+  );
+
+  const investedAssetMix = useMemo(() => {
+    const equity = investedPositions.reduce((sum, position) => {
+      const instrument = getInstrument(position.symbol);
+      if (!instrument || instrument.assetClass !== 'AZIONARIO') return sum;
+      return sum + Math.max(0, position.amount);
+    }, 0);
+    const bond = investedPositions.reduce((sum, position) => {
+      const instrument = getInstrument(position.symbol);
+      if (!instrument || instrument.assetClass !== 'OBBLIGAZIONARIO') return sum;
+      return sum + Math.max(0, position.amount);
+    }, 0);
+    return { equity, bond };
+  }, [investedPositions]);
+
+  const updateInvestedAmount = (symbol: string, nextValue: string) => {
+    const parsed = Number(nextValue);
+    const amount = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    setInvestedPositions((prev) =>
+      prev.map((position) => (position.symbol === symbol ? { ...position, amount } : position))
+    );
+  };
+
+  const toggleScenarioInstrument = (symbol: string) => {
+    setStudyConfig((prev) =>
+      prev.map((item) =>
+        item.symbol === symbol
+          ? { ...item, enabled: !item.enabled, weight: item.enabled ? item.weight : Math.max(item.weight, 5) }
+          : item
+      )
+    );
+  };
+
+  const updateScenarioWeight = (symbol: string, nextValue: string) => {
+    const parsed = Number(nextValue);
+    const weight = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
+    setStudyConfig((prev) =>
+      prev.map((item) => (item.symbol === symbol ? { ...item, weight } : item))
+    );
+  };
+
+  const resetScenarioToInvested = () => {
+    setStudyConfig(buildInitialStudyConfig(investedPositions));
+  };
+
+  const activeScenarioCount = Object.keys(scenarioWeightMap).length;
+
+  return (
+    <div className="sm:ml-16 space-y-4">
+      <div className="card flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Portafoglio</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Studio portafoglio azionario/obbligazionario con confronto tra allocazione attuale e
+            simulata.
+          </p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Modalita prototipo: serie storiche simulate, endpoint API pronto da collegare.
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <section className="card xl:col-span-2 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Portafoglio Investito</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Inserisci i capitali gia investiti per costruire il benchmark attuale.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Totale investito</p>
+              <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(investedTotal)}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Azionario</p>
+              <p className="text-base font-semibold text-slate-900 mt-1">
+                {investedTotal > 0 ? `${((investedAssetMix.equity / investedTotal) * 100).toFixed(1)}%` : '0.0%'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Obbligazionario</p>
+              <p className="text-base font-semibold text-slate-900 mt-1">
+                {investedTotal > 0 ? `${((investedAssetMix.bond / investedTotal) * 100).toFixed(1)}%` : '0.0%'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {investedPositions.map((position) => {
+              const instrument = getInstrument(position.symbol);
+              if (!instrument) return null;
+
+              const effectiveWeight = (investedWeightMap[position.symbol] ?? 0) * 100;
+
+              return (
+                <div
+                  key={position.symbol}
+                  className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{instrument.symbol}</p>
+                      <p className="text-xs text-slate-500">{instrument.name}</p>
+                    </div>
+                    <span
+                      className={`text-[10px] px-2 py-1 rounded-full font-medium ${
+                        instrument.assetClass === 'AZIONARIO'
+                          ? 'bg-sky-100 text-sky-700'
+                          : 'bg-violet-100 text-violet-700'
+                      }`}
+                    >
+                      {instrument.assetClass}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr,96px] gap-2 items-center">
+                    <label className="text-xs text-slate-500">Capitale investito</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-right tabular-nums"
+                      value={Number.isFinite(position.amount) ? position.amount : 0}
+                      onChange={(event) => updateInvestedAmount(position.symbol, event.target.value)}
+                    />
+                  </div>
+
+                  <p className="text-xs text-slate-500">
+                    Peso corrente: <span className="font-semibold text-slate-700">{effectiveWeight.toFixed(2)}%</span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="card xl:col-span-3 space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Laboratorio Portafoglio</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Attiva strumenti, imposta pesi e confronta scenario simulato vs portafoglio attuale.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={horizon}
+                onChange={(event) => setHorizon(event.target.value as Horizon)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="1Y">Orizzonte 1 anno</option>
+                <option value="3Y">Orizzonte 3 anni</option>
+                <option value="5Y">Orizzonte 5 anni</option>
+              </select>
+              <button type="button" className="btn btn-secondary text-sm" onClick={resetScenarioToInvested}>
+                <RefreshCw className="w-4 h-4 mr-1.5" />
+                Reset scenario
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[340px,1fr] gap-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2 max-h-[480px] overflow-auto">
+              {studyConfig.map((item) => {
+                const instrument = getInstrument(item.symbol);
+                if (!instrument) return null;
+                const normalizedWeight = (scenarioWeightMap[item.symbol] ?? 0) * 100;
+
+                return (
+                  <div key={item.symbol} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{instrument.symbol}</p>
+                        <p className="text-xs text-slate-500 truncate">{instrument.name}</p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-pressed={item.enabled}
+                        onClick={() => toggleScenarioInstrument(item.symbol)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          item.enabled ? 'bg-slate-900' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            item.enabled ? 'translate-x-4' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-[1fr,68px] items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        disabled={!item.enabled}
+                        value={item.weight}
+                        onChange={(event) => updateScenarioWeight(item.symbol, event.target.value)}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        disabled={!item.enabled}
+                        className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums"
+                        value={item.weight}
+                        onChange={(event) => updateScenarioWeight(item.symbol, event.target.value)}
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      Peso effettivo: <span className="font-semibold text-slate-700">{normalizedWeight.toFixed(2)}%</span>
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Strumenti attivi</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">{activeScenarioCount}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Rend. annuo</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">
+                    {simulatedMetrics ? formatPercent(simulatedMetrics.annualizedReturn) : 'N/A'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Volatilita annua</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">
+                    {simulatedMetrics ? formatPercent(simulatedMetrics.annualizedVolatility) : 'N/A'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Max drawdown</p>
+                  <p className="text-base font-semibold text-red-600 mt-1">
+                    {simulatedMetrics ? formatPercent(simulatedMetrics.maxDrawdown) : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              {isSeriesLoading ? (
+                <div className="h-72 flex items-center justify-center text-slate-500">
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Caricamento serie storiche...
+                </div>
+              ) : seriesError ? (
+                <div className="h-72 flex items-center justify-center text-red-600 text-sm">
+                  {seriesError}
+                </div>
+              ) : chartData.length < 2 ? (
+                <div className="h-72 flex items-center justify-center text-slate-500 text-sm">
+                  Attiva strumenti e pesi per visualizzare il confronto.
+                </div>
+              ) : (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 8, right: 12, left: 8, bottom: 6 }}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="dateLabel"
+                        tick={{ fill: '#64748b', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={20}
+                      />
+                      <YAxis
+                        tick={{ fill: '#64748b', fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        domain={['auto', 'auto']}
+                        tickFormatter={(value: number) => value.toFixed(0)}
+                        width={44}
+                      />
+                      <Tooltip
+                        cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const current = payload.find((entry) => entry.dataKey === 'current');
+                          const simulated = payload.find((entry) => entry.dataKey === 'simulated');
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-xs text-slate-500">{label}</p>
+                              <p className="text-sm font-semibold text-slate-700">
+                                Attuale: {Number(current?.value ?? 0).toFixed(2)}
+                              </p>
+                              <p className="text-sm font-semibold text-sky-600">
+                                Simulato: {Number(simulated?.value ?? 0).toFixed(2)}
+                              </p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="current"
+                        stroke="#64748b"
+                        strokeWidth={1.8}
+                        dot={false}
+                        name="Attuale"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="simulated"
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Simulato"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Confronto scenario: cumulato{' '}
+                <span className="font-semibold text-slate-800">
+                  {simulatedMetrics ? formatPercent(simulatedMetrics.cumulativeReturn) : 'N/A'}
+                </span>{' '}
+                vs attuale{' '}
+                <span className="font-semibold text-slate-800">
+                  {currentMetrics ? formatPercent(currentMetrics.cumulativeReturn) : 'N/A'}
+                </span>
+                .
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
