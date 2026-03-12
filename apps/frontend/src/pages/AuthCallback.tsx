@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Loader2, AlertCircle } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+const AUTH_BASE = API_BASE.replace(/\/api\/?$/, '');
+
 export function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -14,7 +17,11 @@ export function AuthCallback() {
     const errorParam = searchParams.get('error');
 
     if (errorParam) {
-      setError(decodeURIComponent(errorParam));
+      setError(
+        errorParam === 'auth_failed'
+          ? 'Accesso con Google non riuscito. Riprova.'
+          : errorParam
+      );
       return;
     }
 
@@ -23,26 +30,33 @@ export function AuthCallback() {
       return;
     }
 
-    // Decode JWT to get user info (basic decode, not validation)
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+    const completeAuth = async () => {
+      try {
+        const response = await fetch(`${AUTH_BASE}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: 'include',
+        });
 
-      setAuth(
-        {
-          id: payload.sub || payload.id,
-          email: payload.email,
-          name: payload.name,
-          picture: payload.picture,
-        },
-        token
-      );
+        if (!response.ok) {
+          throw new Error(`Auth check failed: ${response.status}`);
+        }
 
-      // Redirect to dashboard
-      navigate('/dashboard', { replace: true });
-    } catch (e) {
-      console.error('Failed to decode token:', e);
-      setError('Token non valido');
-    }
+        const data = await response.json();
+        if (!data.success || !data.data) {
+          throw new Error('Missing user payload');
+        }
+
+        setAuth(data.data, token);
+        navigate('/dashboard', { replace: true });
+      } catch (e) {
+        console.error('Failed to complete auth callback:', e);
+        setError('Autenticazione non riuscita. Riprova.');
+      }
+    };
+
+    completeAuth();
   }, [searchParams, setAuth, navigate]);
 
   if (error) {

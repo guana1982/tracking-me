@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Wallet } from 'lucide-react';
 
@@ -14,7 +14,13 @@ const BACKEND_URL = getBackendBaseUrl();
 
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, isLoading } = useAuthStore();
+  const errorParam = searchParams.get('error');
+  const authError =
+    errorParam === 'auth_failed'
+      ? 'Accesso con Google non riuscito. Riprova.'
+      : errorParam;
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -52,6 +58,12 @@ export function Login() {
           <h2 className="text-lg font-semibold text-slate-900 text-center mb-6">
             Accedi al tuo account
           </h2>
+
+          {authError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {authError}
+            </div>
+          )}
 
           <button
             onClick={handleGoogleLogin}

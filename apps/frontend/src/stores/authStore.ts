@@ -70,18 +70,28 @@ export const useAuthStore = create<AuthState>()(
             credentials: 'include',
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              set({ user: data.data, isAuthenticated: true, isLoading: false });
-              return;
-            }
+          if (response.status === 401) {
+            set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+            return;
           }
 
-          // Token invalid, clear auth
-          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+          if (!response.ok) {
+            // Keep session on transient backend/network issues.
+            set({ isAuthenticated: true, isLoading: false });
+            return;
+          }
+
+          const data = await response.json();
+          if (data.success && data.data) {
+            set({ user: data.data, isAuthenticated: true, isLoading: false });
+            return;
+          }
+
+          // Unexpected payload: keep token and avoid forcing a new login.
+          set({ isAuthenticated: true, isLoading: false });
         } catch {
-          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+          // Network error: keep session and retry later.
+          set({ isAuthenticated: true, isLoading: false });
         }
       },
     }),
