@@ -2,17 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Loader2, RefreshCw, Plus, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
+import { usePortfolioHistory } from '../hooks/useQueries';
+import type {
+  PortfolioHistoryHorizonDTO,
+  PortfolioHistoryPointDTO,
+  PortfolioSymbolHistoryDTO,
+} from '@budget/shared';
 
 type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
-type Horizon = '1Y' | '3Y' | '5Y';
+type Horizon = PortfolioHistoryHorizonDTO;
 type InstrumentInsertType = 'ETF' | 'OBBLIGAZIONE';
 
 type InstrumentDefinition = {
   symbol: string;
   name: string;
   assetClass: AssetClass;
-  monthlyDrift: number;
-  monthlyVolatility: number;
 };
 
 type InvestedPosition = {
@@ -25,13 +29,7 @@ type StudyConfig = {
   enabled: boolean;
   weight: number;
 };
-
-type HistoricalPoint = {
-  date: string;
-  close: number;
-};
-
-type SeriesBySymbol = Record<string, HistoricalPoint[]>;
+type SeriesBySymbol = Record<string, PortfolioHistoryPointDTO[]>;
 
 type PortfolioPoint = {
   date: string;
@@ -45,61 +43,43 @@ type PerformanceMetrics = {
   maxDrawdown: number;
 };
 
-const HORIZON_MONTHS: Record<Horizon, number> = {
-  '1Y': 12,
-  '3Y': 36,
-  '5Y': 60,
-};
-
 const INSTRUMENTS: InstrumentDefinition[] = [
   {
-    symbol: 'VWCE',
-    name: 'Vanguard FTSE All-World',
+    symbol: 'VTI',
+    name: 'Vanguard Total Stock Market ETF',
     assetClass: 'AZIONARIO',
-    monthlyDrift: 0.0072,
-    monthlyVolatility: 0.036,
   },
   {
-    symbol: 'EIMI',
-    name: 'iShares Core MSCI EM',
+    symbol: 'VXUS',
+    name: 'Vanguard Total International Stock ETF',
     assetClass: 'AZIONARIO',
-    monthlyDrift: 0.008,
-    monthlyVolatility: 0.046,
   },
   {
-    symbol: 'IUSN',
-    name: 'iShares MSCI World Small Cap',
+    symbol: 'IEMG',
+    name: 'iShares Core MSCI Emerging Markets ETF',
     assetClass: 'AZIONARIO',
-    monthlyDrift: 0.0085,
-    monthlyVolatility: 0.05,
   },
   {
-    symbol: 'AGGH',
-    name: 'iShares Core Global Aggregate Bond',
+    symbol: 'BND',
+    name: 'Vanguard Total Bond Market ETF',
     assetClass: 'OBBLIGAZIONARIO',
-    monthlyDrift: 0.0018,
-    monthlyVolatility: 0.012,
   },
   {
-    symbol: 'IEAC',
-    name: 'iShares Core Euro Corp Bond',
+    symbol: 'AGG',
+    name: 'iShares Core U.S. Aggregate Bond ETF',
     assetClass: 'OBBLIGAZIONARIO',
-    monthlyDrift: 0.0016,
-    monthlyVolatility: 0.01,
   },
   {
     symbol: 'EMB',
     name: 'iShares J.P. Morgan EM Bond',
     assetClass: 'OBBLIGAZIONARIO',
-    monthlyDrift: 0.0023,
-    monthlyVolatility: 0.018,
   },
 ];
 
 const DEFAULT_INVESTED_POSITIONS: InvestedPosition[] = [
-  { symbol: 'VWCE', amount: 18500 },
-  { symbol: 'AGGH', amount: 9500 },
-  { symbol: 'IEAC', amount: 6000 },
+  { symbol: 'VTI', amount: 18500 },
+  { symbol: 'BND', amount: 9500 },
+  { symbol: 'AGG', amount: 6000 },
 ];
 
 function getInstrument(symbol: string): InstrumentDefinition | undefined {
@@ -108,20 +88,6 @@ function getInstrument(symbol: string): InstrumentDefinition | undefined {
 
 function mapInsertTypeToAssetClass(type: InstrumentInsertType): AssetClass {
   return type === 'ETF' ? 'AZIONARIO' : 'OBBLIGAZIONARIO';
-}
-
-function createSeededRandom(seed: number) {
-  let t = seed;
-  return () => {
-    t += 0x6D2B79F5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function symbolSeed(symbol: string): number {
-  return symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0) * 17, 11);
 }
 
 function formatMonthLabel(isoDate: string): string {
@@ -216,48 +182,6 @@ function computePerformanceMetrics(series: PortfolioPoint[]): PerformanceMetrics
   };
 }
 
-async function loadHistoricalSeries(symbols: string[], horizon: Horizon): Promise<SeriesBySymbol> {
-  // TODO: sostituire questo adapter con endpoint reale backend, es:
-  // GET /api/portfolio/history?symbols=VWCE,AGGH&horizon=3Y
-  await new Promise((resolve) => setTimeout(resolve, 350));
-
-  const now = new Date();
-  const months = HORIZON_MONTHS[horizon];
-  const points = months + 1;
-  const result: SeriesBySymbol = {};
-
-  symbols.forEach((symbol) => {
-    const instrument = getInstrument(symbol);
-    if (!instrument) return;
-
-    const rng = createSeededRandom(symbolSeed(symbol));
-    let price = 100 + (symbolSeed(symbol) % 35);
-
-    const history: HistoricalPoint[] = [];
-    for (let i = 0; i < points; i += 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - (points - 1 - i), 1)
-        .toISOString()
-        .slice(0, 10);
-
-      if (i > 0) {
-        const shock = (rng() - 0.5) * instrument.monthlyVolatility;
-        const seasonal = Math.sin(i / 5) * instrument.monthlyVolatility * 0.2;
-        const monthlyReturn = instrument.monthlyDrift + shock + seasonal;
-        price = Math.max(25, price * (1 + monthlyReturn));
-      }
-
-      history.push({
-        date,
-        close: Number(price.toFixed(2)),
-      });
-    }
-
-    result[symbol] = history;
-  });
-
-  return result;
-}
-
 function buildInitialStudyConfig(positions: InvestedPosition[]): StudyConfig[] {
   const investedMap = normalizeWeights(
     positions.map((position) => ({
@@ -284,9 +208,6 @@ export function Portfolio() {
   const [studyConfig, setStudyConfig] = useState<StudyConfig[]>(
     buildInitialStudyConfig(DEFAULT_INVESTED_POSITIONS)
   );
-  const [seriesBySymbol, setSeriesBySymbol] = useState<SeriesBySymbol>({});
-  const [isSeriesLoading, setIsSeriesLoading] = useState(false);
-  const [seriesError, setSeriesError] = useState<string | null>(null);
   const [isAddInstrumentModalOpen, setIsAddInstrumentModalOpen] = useState(false);
   const [insertType, setInsertType] = useState<InstrumentInsertType>('ETF');
   const [insertSymbol, setInsertSymbol] = useState('');
@@ -337,40 +258,27 @@ export function Portfolio() {
   const symbolsForSeries = useMemo(() => {
     return Array.from(new Set([...Object.keys(investedWeightMap), ...Object.keys(scenarioWeightMap)]));
   }, [investedWeightMap, scenarioWeightMap]);
+  const {
+    data: portfolioHistory,
+    isLoading: isSeriesLoading,
+    isError: isSeriesError,
+    error: portfolioHistoryError,
+  } = usePortfolioHistory(symbolsForSeries, horizon, symbolsForSeries.length > 0);
 
-  const symbolSignature = useMemo(() => symbolsForSeries.slice().sort().join('|'), [symbolsForSeries]);
+  const seriesBySymbol = useMemo<SeriesBySymbol>(() => {
+    if (!portfolioHistory?.series) return {};
 
-  useEffect(() => {
-    let cancelled = false;
+    return portfolioHistory.series.reduce<SeriesBySymbol>((acc, item: PortfolioSymbolHistoryDTO) => {
+      acc[item.symbol] = item.points;
+      return acc;
+    }, {});
+  }, [portfolioHistory]);
 
-    if (symbolsForSeries.length === 0) {
-      setSeriesBySymbol({});
-      setIsSeriesLoading(false);
-      setSeriesError(null);
-      return;
-    }
-
-    setIsSeriesLoading(true);
-    setSeriesError(null);
-
-    loadHistoricalSeries(symbolsForSeries, horizon)
-      .then((nextSeries) => {
-        if (cancelled) return;
-        setSeriesBySymbol(nextSeries);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSeriesError('Impossibile caricare le serie storiche.');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsSeriesLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [horizon, symbolSignature, symbolsForSeries]);
+  const seriesError = isSeriesError
+    ? portfolioHistoryError instanceof Error
+      ? portfolioHistoryError.message
+      : 'Impossibile caricare le serie storiche.'
+    : null;
 
   useEffect(() => {
     if (!isAddInstrumentModalOpen) return;
@@ -534,8 +442,8 @@ export function Portfolio() {
             simulata.
           </p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Modalita prototipo: serie storiche simulate, endpoint API pronto da collegare.
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          Serie storiche mensili via Twelve Data (cache backend attiva per ridurre il consumo API).
         </div>
       </div>
 

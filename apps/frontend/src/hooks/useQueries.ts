@@ -8,6 +8,7 @@ import {
   reallocationsApi,
   cashFlowApi,
   fixedExpensesApi,
+  portfolioApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -24,6 +25,7 @@ import type {
   UpdateFixedExpenseTemplateDTO,
   ApplyFixedExpenseTemplatesDTO,
   FixedExpenseCategory,
+  PortfolioHistoryHorizonDTO,
 } from '@budget/shared';
 
 // Query keys
@@ -43,6 +45,8 @@ export const queryKeys = {
     ['fixedExpenses', category ?? 'all'] as const,
   cashFlowChecks: ['cashFlowChecks'] as const,
   cashFlowSettings: ['cashFlowSettings'] as const,
+  portfolioHistory: (symbolsSignature: string, horizon: PortfolioHistoryHorizonDTO) =>
+    ['portfolioHistory', symbolsSignature, horizon] as const,
 };
 
 // Dashboard
@@ -385,5 +389,22 @@ export function useUpdateCashFlowSettings() {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowSettings });
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
     },
+  });
+}
+
+// Portfolio history
+export function usePortfolioHistory(
+  symbols: string[],
+  horizon: PortfolioHistoryHorizonDTO,
+  enabled: boolean = true
+) {
+  const normalizedSymbols = [...symbols].sort();
+  const signature = normalizedSymbols.join('|');
+
+  return useQuery({
+    queryKey: queryKeys.portfolioHistory(signature, horizon),
+    queryFn: () => portfolioApi.getHistory(normalizedSymbols, horizon),
+    enabled: enabled && normalizedSymbols.length > 0,
+    staleTime: 1000 * 60 * 60, // 1h
   });
 }

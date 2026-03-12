@@ -162,6 +162,17 @@ export const cashFlowSettingsSchema = z.object({
   etfCount: z.number().int().min(0),
 });
 
+// Portfolio history schemas
+export const portfolioHistoryHorizonSchema = z.enum(['1Y', '3Y', '5Y']);
+
+export const portfolioHistoryQuerySchema = z.object({
+  symbols: z
+    .array(z.string().min(1).max(20).regex(/^[A-Za-z0-9._:-]+$/))
+    .min(1)
+    .max(20),
+  horizon: portfolioHistoryHorizonSchema.default('3Y'),
+});
+
 // Type exports from schemas
 export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
 export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
@@ -177,3 +188,4 @@ export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;
 export type CreateCashFlowCheckInput = z.infer<typeof createCashFlowCheckSchema>;
 export type UpdateCashFlowCheckInput = z.infer<typeof updateCashFlowCheckSchema>;
 export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;
+export type PortfolioHistoryQueryInput = z.infer<typeof portfolioHistoryQuerySchema>;

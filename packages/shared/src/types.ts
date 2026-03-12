@@ -302,6 +302,26 @@ export interface CashFlowSettingsDTO {
   etfCount: number;
 }
 
+// ============= Portfolio DTOs =============
+
+export type PortfolioHistoryHorizonDTO = '1Y' | '3Y' | '5Y';
+
+export interface PortfolioHistoryPointDTO {
+  date: string; // YYYY-MM-DD
+  close: number;
+}
+
+export interface PortfolioSymbolHistoryDTO {
+  symbol: string;
+  points: PortfolioHistoryPointDTO[];
+}
+
+export interface PortfolioHistoryResponseDTO {
+  horizon: PortfolioHistoryHorizonDTO;
+  generatedAt: string;
+  series: PortfolioSymbolHistoryDTO[];
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;

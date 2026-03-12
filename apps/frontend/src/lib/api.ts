@@ -27,6 +27,8 @@ import type {
   ApplyFixedExpenseTemplatesDTO,
   ApplyFixedExpenseTemplatesResultDTO,
   FixedExpenseCategory,
+  PortfolioHistoryHorizonDTO,
+  PortfolioHistoryResponseDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
 
@@ -285,4 +287,15 @@ export const fixedExpensesApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+};
+
+// Portfolio
+export const portfolioApi = {
+  getHistory: (symbols: string[], horizon: PortfolioHistoryHorizonDTO) => {
+    const params = new URLSearchParams({
+      symbols: symbols.join(','),
+      horizon,
+    });
+    return fetchApi<PortfolioHistoryResponseDTO>(`/portfolio/history?${params.toString()}`);
+  },
 };
