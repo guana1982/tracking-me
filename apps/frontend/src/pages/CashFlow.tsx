@@ -188,6 +188,36 @@ function formatCompactAmount(value: number): string {
   }).format(value);
 }
 
+function computeDynamicYAxisDomain(values: number[]): [number, number] {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (finiteValues.length === 0) return [0, 1];
+
+  const minValue = Math.min(...finiteValues);
+  const maxValue = Math.max(...finiteValues);
+  const range = maxValue - minValue;
+  const reference = Math.max(Math.abs(maxValue), Math.abs(minValue), 1);
+
+  const padding =
+    range === 0
+      ? Math.max(reference * 0.03, 100)
+      : Math.max(range * 0.2, reference * 0.005, 50);
+
+  const rawMin = minValue - padding;
+  const rawMax = maxValue + padding;
+  const targetStep = (rawMax - rawMin) / 6;
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(targetStep, 1)));
+  const step = Math.max(1, Math.ceil(targetStep / magnitude) * magnitude);
+
+  const domainMin = Math.floor(rawMin / step) * step;
+  const domainMax = Math.ceil(rawMax / step) * step;
+
+  if (domainMin === domainMax) {
+    return [domainMin - 1, domainMax + 1];
+  }
+
+  return [domainMin, domainMax];
+}
+
 export function CashFlow() {
   const { data: checksData, isLoading: isLoadingChecks, isError: isErrorChecks } = useCashFlowChecks();
   const { data: settingsData, isLoading: isLoadingSettings } = useCashFlowSettings();
@@ -313,6 +343,27 @@ export function CashFlow() {
     return Array.from(perDay.values()).reverse();
   }, [rowsWithComputed]);
   const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+  const trendYAxisDomain = useMemo<[number, number]>(() => {
+    const values: number[] = [];
+
+    trendData.forEach((point) => {
+      values.push(point.total);
+      if (showAzionarioTrend) values.push(point.stockComparto);
+      if (showBbvaTrend) values.push(point.bbva);
+      if (showTradeRepTrend) values.push(point.tradeRepublic);
+      if (showWebankTrend) values.push(point.webankCc);
+      if (showBperTrend) values.push(point.bper);
+    });
+
+    return computeDynamicYAxisDomain(values);
+  }, [
+    trendData,
+    showAzionarioTrend,
+    showBbvaTrend,
+    showTradeRepTrend,
+    showWebankTrend,
+    showBperTrend,
+  ]);
   const allocationData = useMemo(() => {
     if (!latestRow) return [];
 
@@ -907,6 +958,8 @@ export function CashFlow() {
                         tick={{ fill: '#64748b', fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
+                        domain={trendYAxisDomain}
+                        tickCount={6}
                         tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
                         width={58}
                       />
