@@ -181,11 +181,20 @@ function diffDisplay(value: number | null): string {
   return formatCurrency(value);
 }
 
-function formatCompactAmount(value: number): string {
-  return new Intl.NumberFormat('it-IT', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value);
+function formatYAxisAmount(value: number): string {
+  const absValue = Math.abs(value);
+
+  if (absValue >= 1_000_000) {
+    const short = (value / 1_000_000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
+    return `${short}M€`;
+  }
+
+  if (absValue >= 1_000) {
+    const short = (value / 1_000).toFixed(1).replace(/\.0$/, '').replace('.', ',');
+    return `${short}k€`;
+  }
+
+  return `${Math.round(value)}€`;
 }
 
 function computeDynamicYAxisDomain(values: number[]): [number, number] {
@@ -944,7 +953,7 @@ export function CashFlow() {
               ) : (
                 <div className="h-56 md:h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendData} margin={{ top: 8, right: 12, left: 6, bottom: 6 }}>
+                    <LineChart data={trendData} margin={{ top: 10, right: 14, left: 10, bottom: 14 }}>
                       <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                       <XAxis
                         dataKey="dateLabel"
@@ -955,13 +964,15 @@ export function CashFlow() {
                         interval="preserveStartEnd"
                       />
                       <YAxis
-                        tick={{ fill: '#64748b', fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
+                        tick={{ fill: '#334155', fontSize: 12, fontWeight: 600 }}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                        tickLine={{ stroke: '#cbd5e1' }}
+                        tickMargin={8}
+                        minTickGap={18}
                         domain={trendYAxisDomain}
-                        tickCount={6}
-                        tickFormatter={(value: number) => `${formatCompactAmount(value)} EUR`}
-                        width={58}
+                        tickCount={5}
+                        tickFormatter={formatYAxisAmount}
+                        width={70}
                       />
                       <Tooltip
                         cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
