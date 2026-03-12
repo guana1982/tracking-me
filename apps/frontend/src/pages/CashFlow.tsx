@@ -262,6 +262,7 @@ export function CashFlow() {
   const [form, setForm] = useState<CashFlowFormState>(INITIAL_FORM);
   const [isNewCheckModalOpen, setIsNewCheckModalOpen] = useState(false);
   const [isTrendOpen, setIsTrendOpen] = useState(true);
+  const [showTotalTrend, setShowTotalTrend] = useState(true);
   const [showAzionarioTrend, setShowAzionarioTrend] = useState(false);
   const [showBbvaTrend, setShowBbvaTrend] = useState(false);
   const [showTradeRepTrend, setShowTradeRepTrend] = useState(false);
@@ -352,11 +353,18 @@ export function CashFlow() {
     return Array.from(perDay.values()).reverse();
   }, [rowsWithComputed]);
   const latestTrendPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+  const hasVisibleTrendSeries =
+    showTotalTrend ||
+    showAzionarioTrend ||
+    showBbvaTrend ||
+    showTradeRepTrend ||
+    showWebankTrend ||
+    showBperTrend;
   const trendYAxisDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
 
     trendData.forEach((point) => {
-      values.push(point.total);
+      if (showTotalTrend) values.push(point.total);
       if (showAzionarioTrend) values.push(point.stockComparto);
       if (showBbvaTrend) values.push(point.bbva);
       if (showTradeRepTrend) values.push(point.tradeRepublic);
@@ -367,6 +375,7 @@ export function CashFlow() {
     return computeDynamicYAxisDomain(values);
   }, [
     trendData,
+    showTotalTrend,
     showAzionarioTrend,
     showBbvaTrend,
     showTradeRepTrend,
@@ -788,6 +797,27 @@ export function CashFlow() {
             </p>
             {isTrendOpen && (
               <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-600" />
+                <span className="text-xs text-slate-600">Totale</span>
+                <button
+                  type="button"
+                  aria-label="Mostra linea totale"
+                  aria-pressed={showTotalTrend}
+                  onClick={() => setShowTotalTrend((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    showTotalTrend ? 'bg-blue-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                      showTotalTrend ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+            {isTrendOpen && (
+              <label className="inline-flex items-center gap-2 select-none rounded-full border border-slate-200 bg-white px-2 py-1">
                 <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600" />
                 <span className="text-xs text-slate-600">Comparto</span>
                 <button
@@ -950,6 +980,10 @@ export function CashFlow() {
                 <p className="text-sm text-slate-500">
                   Aggiungi almeno 2 check per visualizzare il trend.
                 </p>
+              ) : !hasVisibleTrendSeries ? (
+                <p className="text-sm text-slate-500">
+                  Attiva almeno una linea per visualizzare il trend.
+                </p>
               ) : (
                 <div className="h-56 md:h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1003,9 +1037,11 @@ export function CashFlow() {
                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                               <p className="text-xs text-slate-500">{point.dateLabel}</p>
                               <p className="text-sm font-semibold text-slate-900">{point.checkLabel}</p>
-                              <p className="text-sm font-bold text-blue-600">
-                                Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
-                              </p>
+                              {showTotalTrend && (
+                                <p className="text-sm font-bold text-blue-600">
+                                  Totale: {formatCurrency(Number(totalPoint?.value ?? point.total))}
+                                </p>
+                              )}
                               {showAzionarioTrend && (
                                 <p className="text-sm font-semibold text-emerald-600">
                                   Comparto azionario:{' '}
@@ -1036,14 +1072,16 @@ export function CashFlow() {
                           );
                         }}
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="total"
-                        stroke="#2563eb"
-                        strokeWidth={1.8}
-                        dot={false}
-                        activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
-                      />
+                      {showTotalTrend && (
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          stroke="#2563eb"
+                          strokeWidth={1.8}
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                      )}
                       {showAzionarioTrend && (
                         <Line
                           type="monotone"
