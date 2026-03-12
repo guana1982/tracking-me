@@ -301,23 +301,38 @@ export function Portfolio() {
     () => computePortfolioSeries(seriesBySymbol, scenarioWeightMap),
     [seriesBySymbol, scenarioWeightMap]
   );
+  const hasCurrentSeries = currentPortfolioSeries.length >= 2;
+  const hasSimulatedSeries = simulatedPortfolioSeries.length >= 2;
 
   const chartData = useMemo(() => {
     const currentLength = currentPortfolioSeries.length;
     const simulatedLength = simulatedPortfolioSeries.length;
-    if (currentLength < 2 || simulatedLength < 2) return [];
-    const points = Math.min(currentLength, simulatedLength);
+    if (currentLength < 2 && simulatedLength < 2) return [];
 
-    const output: Array<{ dateLabel: string; current: number; simulated: number }> = [];
-    for (let i = 0; i < points; i += 1) {
-      output.push({
-        dateLabel: formatMonthLabel(simulatedPortfolioSeries[i].date),
-        current: currentPortfolioSeries[i].value,
-        simulated: simulatedPortfolioSeries[i].value,
-      });
+    if (currentLength >= 2 && simulatedLength >= 2) {
+      const points = Math.min(currentLength, simulatedLength);
+      const output: Array<{ dateLabel: string; current?: number; simulated?: number }> = [];
+      for (let i = 0; i < points; i += 1) {
+        output.push({
+          dateLabel: formatMonthLabel(simulatedPortfolioSeries[i].date),
+          current: currentPortfolioSeries[i].value,
+          simulated: simulatedPortfolioSeries[i].value,
+        });
+      }
+      return output;
     }
 
-    return output;
+    if (simulatedLength >= 2) {
+      return simulatedPortfolioSeries.map((point) => ({
+        dateLabel: formatMonthLabel(point.date),
+        simulated: point.value,
+      }));
+    }
+
+    return currentPortfolioSeries.map((point) => ({
+      dateLabel: formatMonthLabel(point.date),
+      current: point.value,
+    }));
   }, [currentPortfolioSeries, simulatedPortfolioSeries]);
 
   const currentMetrics = useMemo(
@@ -668,7 +683,7 @@ export function Portfolio() {
                 </div>
               ) : chartData.length < 2 ? (
                 <div className="h-72 flex items-center justify-center text-slate-500 text-sm">
-                  Attiva strumenti e pesi per visualizzare il confronto.
+                  Inserisci almeno 2 punti validi (portafoglio attuale o simulato) per visualizzare il grafico.
                 </div>
               ) : (
                 <div className="h-72">
@@ -700,32 +715,40 @@ export function Portfolio() {
                           return (
                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                               <p className="text-xs text-slate-500">{label}</p>
-                              <p className="text-sm font-semibold text-slate-700">
-                                Attuale: {Number(current?.value ?? 0).toFixed(2)}
-                              </p>
-                              <p className="text-sm font-semibold text-sky-600">
-                                Simulato: {Number(simulated?.value ?? 0).toFixed(2)}
-                              </p>
+                              {hasCurrentSeries && (
+                                <p className="text-sm font-semibold text-slate-700">
+                                  Attuale: {Number(current?.value ?? 0).toFixed(2)}
+                                </p>
+                              )}
+                              {hasSimulatedSeries && (
+                                <p className="text-sm font-semibold text-sky-600">
+                                  Simulato: {Number(simulated?.value ?? 0).toFixed(2)}
+                                </p>
+                              )}
                             </div>
                           );
                         }}
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="current"
-                        stroke="#64748b"
-                        strokeWidth={1.8}
-                        dot={false}
-                        name="Attuale"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="simulated"
-                        stroke="#0ea5e9"
-                        strokeWidth={2}
-                        dot={false}
-                        name="Simulato"
-                      />
+                      {hasCurrentSeries && (
+                        <Line
+                          type="monotone"
+                          dataKey="current"
+                          stroke="#64748b"
+                          strokeWidth={1.8}
+                          dot={false}
+                          name="Attuale"
+                        />
+                      )}
+                      {hasSimulatedSeries && (
+                        <Line
+                          type="monotone"
+                          dataKey="simulated"
+                          stroke="#0ea5e9"
+                          strokeWidth={2}
+                          dot={false}
+                          name="Simulato"
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
