@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Plus, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 
 type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
 type Horizon = '1Y' | '3Y' | '5Y';
+type InstrumentInsertType = 'ETF' | 'OBBLIGAZIONE';
 
 type InstrumentDefinition = {
   symbol: string;
@@ -103,6 +104,10 @@ const DEFAULT_INVESTED_POSITIONS: InvestedPosition[] = [
 
 function getInstrument(symbol: string): InstrumentDefinition | undefined {
   return INSTRUMENTS.find((item) => item.symbol === symbol);
+}
+
+function mapInsertTypeToAssetClass(type: InstrumentInsertType): AssetClass {
+  return type === 'ETF' ? 'AZIONARIO' : 'OBBLIGAZIONARIO';
 }
 
 function createSeededRandom(seed: number) {
@@ -282,10 +287,30 @@ export function Portfolio() {
   const [seriesBySymbol, setSeriesBySymbol] = useState<SeriesBySymbol>({});
   const [isSeriesLoading, setIsSeriesLoading] = useState(false);
   const [seriesError, setSeriesError] = useState<string | null>(null);
+  const [isAddInstrumentModalOpen, setIsAddInstrumentModalOpen] = useState(false);
+  const [insertType, setInsertType] = useState<InstrumentInsertType>('ETF');
+  const [insertSymbol, setInsertSymbol] = useState('');
+  const [insertAmount, setInsertAmount] = useState('');
+  const [insertError, setInsertError] = useState<string | null>(null);
 
   const investedTotal = useMemo(
     () => investedPositions.reduce((sum, position) => sum + Math.max(0, position.amount), 0),
     [investedPositions]
+  );
+  const investedSymbols = useMemo(
+    () => new Set(investedPositions.map((position) => position.symbol)),
+    [investedPositions]
+  );
+  const availableInstruments = useMemo(
+    () => INSTRUMENTS.filter((instrument) => !investedSymbols.has(instrument.symbol)),
+    [investedSymbols]
+  );
+  const availableInsertInstruments = useMemo(
+    () =>
+      availableInstruments.filter(
+        (instrument) => instrument.assetClass === mapInsertTypeToAssetClass(insertType)
+      ),
+    [availableInstruments, insertType]
   );
 
   const investedWeightMap = useMemo(
@@ -347,6 +372,18 @@ export function Portfolio() {
     };
   }, [horizon, symbolSignature, symbolsForSeries]);
 
+  useEffect(() => {
+    if (!isAddInstrumentModalOpen) return;
+    if (availableInsertInstruments.length === 0) {
+      setInsertSymbol('');
+      return;
+    }
+
+    if (!availableInsertInstruments.some((instrument) => instrument.symbol === insertSymbol)) {
+      setInsertSymbol(availableInsertInstruments[0].symbol);
+    }
+  }, [isAddInstrumentModalOpen, availableInsertInstruments, insertSymbol]);
+
   const currentPortfolioSeries = useMemo(
     () => computePortfolioSeries(seriesBySymbol, investedWeightMap),
     [seriesBySymbol, investedWeightMap]
@@ -398,12 +435,65 @@ export function Portfolio() {
     return { equity, bond };
   }, [investedPositions]);
 
+  const openAddInstrumentModal = () => {
+    setInsertError(null);
+    setInsertAmount('');
+
+    if (availableInstruments.length === 0) {
+      setInsertType('ETF');
+      setInsertSymbol('');
+      setIsAddInstrumentModalOpen(true);
+      return;
+    }
+
+    const hasEtf = availableInstruments.some((instrument) => instrument.assetClass === 'AZIONARIO');
+    const nextType: InstrumentInsertType = hasEtf ? 'ETF' : 'OBBLIGAZIONE';
+    setInsertType(nextType);
+    const firstForType = availableInstruments.find(
+      (instrument) => instrument.assetClass === mapInsertTypeToAssetClass(nextType)
+    );
+    setInsertSymbol(firstForType?.symbol ?? '');
+    setIsAddInstrumentModalOpen(true);
+  };
+
+  const closeAddInstrumentModal = () => {
+    setIsAddInstrumentModalOpen(false);
+    setInsertError(null);
+  };
+
+  const removeInvestedPosition = (symbol: string) => {
+    setInvestedPositions((prev) => prev.filter((position) => position.symbol !== symbol));
+  };
+
   const updateInvestedAmount = (symbol: string, nextValue: string) => {
     const parsed = Number(nextValue);
     const amount = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     setInvestedPositions((prev) =>
       prev.map((position) => (position.symbol === symbol ? { ...position, amount } : position))
     );
+  };
+
+  const addInvestedInstrument = () => {
+    if (!insertSymbol) {
+      setInsertError('Seleziona uno strumento da aggiungere.');
+      return;
+    }
+
+    if (investedSymbols.has(insertSymbol)) {
+      setInsertError('Questo strumento e gia presente in portafoglio.');
+      return;
+    }
+
+    const parsed = Number(insertAmount.replace(',', '.'));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setInsertError('Inserisci un importo valido maggiore di zero.');
+      return;
+    }
+
+    setInvestedPositions((prev) => [...prev, { symbol: insertSymbol, amount: Math.round(parsed * 100) / 100 }]);
+    setInsertAmount('');
+    setInsertError(null);
+    setIsAddInstrumentModalOpen(false);
   };
 
   const toggleScenarioInstrument = (symbol: string) => {
@@ -429,6 +519,10 @@ export function Portfolio() {
   };
 
   const activeScenarioCount = Object.keys(scenarioWeightMap).length;
+  const selectedInsertInstrument = useMemo(
+    () => availableInsertInstruments.find((instrument) => instrument.symbol === insertSymbol) ?? null,
+    [availableInsertInstruments, insertSymbol]
+  );
 
   return (
     <div className="sm:ml-16 space-y-4">
@@ -447,11 +541,17 @@ export function Portfolio() {
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
         <section className="card xl:col-span-2 space-y-4">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">Portafoglio Investito</h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Inserisci i capitali gia investiti per costruire il benchmark attuale.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Portafoglio Investito</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Inserisci i capitali gia investiti per costruire il benchmark attuale.
+              </p>
+            </div>
+            <button type="button" className="btn btn-secondary text-sm" onClick={openAddInstrumentModal}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Aggiungi strumento
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -474,6 +574,11 @@ export function Portfolio() {
           </div>
 
           <div className="space-y-2">
+            {investedPositions.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500 text-center">
+                Nessuno strumento presente. Usa "Aggiungi strumento" per registrare ETF o obbligazioni.
+              </div>
+            )}
             {investedPositions.map((position) => {
               const instrument = getInstrument(position.symbol);
               if (!instrument) return null;
@@ -486,19 +591,30 @@ export function Portfolio() {
                   className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-900">{instrument.symbol}</p>
-                      <p className="text-xs text-slate-500">{instrument.name}</p>
+                      <p className="text-xs text-slate-500 truncate">{instrument.name}</p>
                     </div>
-                    <span
-                      className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                        instrument.assetClass === 'AZIONARIO'
-                          ? 'bg-sky-100 text-sky-700'
-                          : 'bg-violet-100 text-violet-700'
-                      }`}
-                    >
-                      {instrument.assetClass}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[10px] px-2 py-1 rounded-full font-medium ${
+                          instrument.assetClass === 'AZIONARIO'
+                            ? 'bg-sky-100 text-sky-700'
+                            : 'bg-violet-100 text-violet-700'
+                        }`}
+                      >
+                        {instrument.assetClass}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeInvestedPosition(position.symbol)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Rimuovi strumento"
+                        aria-label={`Rimuovi ${instrument.symbol}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-[1fr,96px] gap-2 items-center">
@@ -722,6 +838,125 @@ export function Portfolio() {
           </div>
         </section>
       </div>
+
+      {isAddInstrumentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeAddInstrumentModal} />
+
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Nuovo strumento in portafoglio</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Registra ETF o obbligazioni e imposta il capitale investito.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAddInstrumentModal}
+                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                aria-label="Chiudi modale aggiungi strumento"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-2">Tipo strumento</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['ETF', 'OBBLIGAZIONE'] as InstrumentInsertType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setInsertType(type);
+                        setInsertError(null);
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                        insertType === type
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {availableInsertInstruments.length === 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  Nessun {insertType.toLowerCase()} disponibile da aggiungere.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Strumento</label>
+                    <select
+                      value={insertSymbol}
+                      onChange={(event) => {
+                        setInsertSymbol(event.target.value);
+                        setInsertError(null);
+                      }}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                    >
+                      {availableInsertInstruments.map((instrument) => (
+                        <option key={instrument.symbol} value={instrument.symbol}>
+                          {instrument.symbol} - {instrument.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Capitale investito</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={insertAmount}
+                      onChange={(event) => {
+                        setInsertAmount(event.target.value);
+                        setInsertError(null);
+                      }}
+                      placeholder="Es. 5000"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums"
+                    />
+                  </div>
+
+                  {selectedInsertInstrument && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-sm font-semibold text-slate-900">{selectedInsertInstrument.symbol}</p>
+                      <p className="text-xs text-slate-500">{selectedInsertInstrument.name}</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {insertError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {insertError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button type="button" className="btn btn-secondary text-sm" onClick={closeAddInstrumentModal}>
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary text-sm"
+                onClick={addInvestedInstrument}
+                disabled={availableInsertInstruments.length === 0}
+              >
+                Conferma strumento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
