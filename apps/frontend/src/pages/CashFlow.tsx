@@ -585,7 +585,7 @@ export function CashFlow() {
               )}
         </div>
         <div className="card !p-3 flex flex-col">
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 mb-2">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
