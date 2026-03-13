@@ -78,6 +78,7 @@ type AllocationGroupDraft = {
 
 const CLASSIFICATION_COLORS = ['#0f766e', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#ea580c'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
+const MAX_LEGEND_ITEMS = 8;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -489,35 +490,30 @@ export function CashFlow() {
     return { groups, columns: columnsData, total };
   }, [activeColumns, classifications, latestRow]);
 
-  const renderColumnPieLabel = (props: {
-    cx: number;
-    cy: number;
-    midAngle: number;
-    outerRadius: number;
-    index: number;
-  }) => {
-    const { cx, cy, midAngle, outerRadius, index } = props;
-    const point = allocationChart.columns[index];
-    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 4;
-    if (!point || !showLabel) return null;
+  const legendGroups = useMemo(() => {
+    if (allocationChart.groups.length <= MAX_LEGEND_ITEMS) return allocationChart.groups;
 
-    const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 16;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    const anchor = x > cx ? 'start' : 'end';
+    const visible = allocationChart.groups.slice(0, MAX_LEGEND_ITEMS - 1);
+    const hidden = allocationChart.groups.slice(MAX_LEGEND_ITEMS - 1);
 
-    return (
-      <text x={x} y={y} textAnchor={anchor} fill="#334155">
-        <tspan x={x} dy="0" fontSize={10} fontWeight={600}>
-          {point.shortLabel}
-        </tspan>
-        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
-          {point.percentage.toFixed(1)}%
-        </tspan>
-      </text>
-    );
-  };
+    const hiddenValue = hidden.reduce((sum, group) => sum + group.value, 0);
+    const hiddenPercentage = hidden.reduce((sum, group) => sum + group.percentage, 0);
+    const hiddenColumns = hidden.reduce((sum, group) => sum + group.columnCount, 0);
+
+    return [
+      ...visible,
+      {
+        key: '__legend_other',
+        label: `Altre ${hidden.length}`,
+        shortLabel: 'Altre',
+        value: hiddenValue,
+        percentage: hiddenPercentage,
+        color: '#64748b',
+        columnCount: hiddenColumns,
+        level: 'classification' as const,
+      },
+    ];
+  }, [allocationChart.groups]);
 
   const handleSettingsChange = (next: CashFlowSettings) => {
     setSettings(next);
@@ -708,7 +704,7 @@ export function CashFlow() {
           Andamento e Suddivisione
         </button>
         {isChartsOpen && (
-          <div className="grid grid-cols-1 xl:grid-cols-[460px,1fr] mt-2">
+          <div className="grid grid-cols-1 xl:grid-cols-[500px,1fr] mt-2">
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
@@ -716,8 +712,8 @@ export function CashFlow() {
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="grid h-60 grid-cols-[190px,minmax(0,1fr)] items-center gap-4">
-              <div className="min-w-0">
+            <div className="grid h-60 grid-cols-[220px,minmax(0,1fr)] items-center gap-4">
+              <div className="min-w-0 h-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -726,8 +722,8 @@ export function CashFlow() {
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={26}
-                      outerRadius={47}
+                      innerRadius={32}
+                      outerRadius={56}
                       paddingAngle={3}
                       stroke="#ffffff"
                       strokeWidth={2}
@@ -742,13 +738,11 @@ export function CashFlow() {
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={54}
-                      outerRadius={83}
+                      innerRadius={62}
+                      outerRadius={95}
                       paddingAngle={1}
                       stroke="#ffffff"
                       strokeWidth={2}
-                      labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                      label={renderColumnPieLabel}
                     >
                       {allocationChart.columns.map((item) => (
                         <Cell key={item.key} fill={item.color} />
@@ -782,25 +776,22 @@ export function CashFlow() {
                 </ResponsiveContainer>
               </div>
               <div className="min-w-0">
-                <div className="grid h-full auto-rows-min content-center gap-2">
-                  {allocationChart.groups.map((group) => (
-                    <div key={group.key} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm shadow-slate-200/50">
+                <div className="grid h-full grid-cols-2 content-center gap-x-2.5 gap-y-2">
+                  {legendGroups.map((group) => (
+                    <div key={group.key} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="truncate text-xs font-semibold text-slate-800">{group.label}</span>
+                            <span className="truncate text-[11px] font-semibold text-slate-800">{group.label}</span>
                           </div>
-                          <p className="pl-[18px] text-[10px] text-slate-500">
+                          <p className="pl-[18px] text-[9px] text-slate-500">
                             {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
                           </p>
                         </div>
-                        <span className="shrink-0 text-[10px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
+                        <span className="shrink-0 text-[9px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
                       </div>
-                      <div className="mt-1 flex items-baseline justify-between gap-3 pl-[18px]">
-                        <p className="truncate text-xs font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
-                        <div className="h-px flex-1 bg-slate-200" />
-                      </div>
+                      <p className="mt-1 pl-[18px] truncate text-[11px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
                     </div>
                   ))}
                 </div>
