@@ -540,8 +540,8 @@ export function CashFlow() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis domain={computeYAxis(trendData.map((point) => point.total))} />
+                  <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11, dy: 8 }} />
+                  <YAxis domain={computeYAxis(trendData.map((point) => point.total))} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={48} />
                   <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                   <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} dot={false} />
                 </LineChart>
