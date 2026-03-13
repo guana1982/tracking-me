@@ -38,6 +38,19 @@ type RowWithMetrics = CashFlowRow & {
 };
 
 const ALLOCATION_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#14b8a6', '#2563eb'];
+const TREND_LINE_COLORS: Record<string, string> = {
+  bbva: '#38bdf8',
+  tradeRepublic: '#f59e0b',
+  webankCc: '#92400e',
+  webankObbl: '#8b5cf6',
+  etfLordo: '#16a34a',
+  rendimentoLordo: '#14b8a6',
+  bper: '#dc2626',
+  tricount: '#6366f1',
+  cartaWebank: '#ec4899',
+  edenred: '#84cc16',
+};
+const FALLBACK_TREND_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#14b8a6', '#dc2626', '#ec4899', '#84cc16'];
 const LEGACY_COLUMN_KEYS = new Set([
   'bbva',
   'tradeRepublic',
@@ -172,6 +185,9 @@ export function CashFlow() {
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
   const [isTableDragScrolling, setIsTableDragScrolling] = useState(false);
 
+  const [showTotalTrend, setShowTotalTrend] = useState(true);
+  const [visibleTrendKeys, setVisibleTrendKeys] = useState<Set<string>>(new Set());
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ checkLabel: '', date: today, notes: '', values: {} });
@@ -258,9 +274,45 @@ export function CashFlow() {
       rowsWithMetrics
         .slice()
         .reverse()
-        .map((row) => ({ dateLabel: formatDate(row.date), checkLabel: row.checkLabel, total: row.total })),
-    [rowsWithMetrics]
+        .map((row) => {
+          const point: Record<string, string | number> = {
+            dateLabel: formatDate(row.date),
+            checkLabel: row.checkLabel,
+            total: row.total,
+          };
+          activeColumns.forEach((col) => {
+            point[col.key] = getRowValue(row, col.key);
+          });
+          return point;
+        }),
+    [rowsWithMetrics, activeColumns]
   );
+
+  const toggleTrendKey = (key: string) => {
+    setVisibleTrendKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const getTrendColor = (key: string, index: number): string =>
+    TREND_LINE_COLORS[key] ?? FALLBACK_TREND_COLORS[index % FALLBACK_TREND_COLORS.length];
+
+  const hasVisibleTrendSeries = showTotalTrend || visibleTrendKeys.size > 0;
+
+  const trendYDomain = useMemo<[number, number]>(() => {
+    const values: number[] = [];
+    trendData.forEach((point) => {
+      if (showTotalTrend) values.push(Number(point.total));
+      visibleTrendKeys.forEach((key) => {
+        const v = Number(point[key]);
+        if (Number.isFinite(v)) values.push(v);
+      });
+    });
+    return computeYAxis(values);
+  }, [trendData, showTotalTrend, visibleTrendKeys]);
 
   const pieData = useMemo(() => {
     if (!latestRow) return [];
@@ -532,18 +584,84 @@ export function CashFlow() {
                 </div>
               )}
         </div>
-        <div className="card !p-3">
+        <div className="card !p-3 flex flex-col">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
+              <span className="text-[10px] text-slate-600">Totale</span>
+              <button
+                type="button"
+                aria-pressed={showTotalTrend}
+                onClick={() => setShowTotalTrend((prev) => !prev)}
+                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${showTotalTrend ? 'bg-blue-600' : 'bg-slate-300'}`}
+              >
+                <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showTotalTrend ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              </button>
+            </label>
+            {activeColumns.map((col, idx) => {
+              const color = getTrendColor(col.key, idx);
+              const isOn = visibleTrendKeys.has(col.key);
+              return (
+                <label key={col.key} className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] text-slate-600">{getPieShortLabel(col)}</span>
+                  <button
+                    type="button"
+                    aria-pressed={isOn}
+                    onClick={() => toggleTrendKey(col.key)}
+                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors`}
+                    style={{ backgroundColor: isOn ? color : '#cbd5e1' }}
+                  >
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${isOn ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              );
+            })}
+          </div>
           {trendData.length < 2 ? (
             <p className="text-xs text-slate-500">Aggiungi almeno 2 check per visualizzare il trend.</p>
+          ) : !hasVisibleTrendSeries ? (
+            <p className="text-xs text-slate-500">Attiva almeno una linea per visualizzare il trend.</p>
           ) : (
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData}>
+                <LineChart data={trendData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11, dy: 8 }} />
-                  <YAxis domain={computeYAxis(trendData.map((point) => point.total))} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={48} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11, dy: 8 }} axisLine={false} tickLine={false} minTickGap={20} />
+                  <YAxis domain={trendYDomain} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={48} tickCount={5} />
+                  <Tooltip
+                    cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const point = payload[0]?.payload as Record<string, string | number> | undefined;
+                      if (!point) return null;
+                      return (
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                          <p className="text-[10px] text-slate-500">{point.dateLabel}</p>
+                          <p className="text-xs font-semibold text-slate-900">{point.checkLabel}</p>
+                          {showTotalTrend && <p className="text-xs font-bold text-blue-600">Totale: {formatCurrency(Number(point.total))}</p>}
+                          {activeColumns.map((col, idx) => {
+                            if (!visibleTrendKeys.has(col.key)) return null;
+                            return (
+                              <p key={col.key} className="text-xs font-semibold" style={{ color: getTrendColor(col.key, idx) }}>
+                                {col.label}: {formatCurrency(Number(point[col.key] ?? 0))}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      );
+                    }}
+                  />
+                  {showTotalTrend && (
+                    <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: '#1d4ed8', stroke: '#fff', strokeWidth: 2 }} />
+                  )}
+                  {activeColumns.map((col, idx) => {
+                    if (!visibleTrendKeys.has(col.key)) return null;
+                    const color = getTrendColor(col.key, idx);
+                    return (
+                      <Line key={col.key} type="monotone" dataKey={col.key} stroke={color} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: color, stroke: '#fff', strokeWidth: 2 }} />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             </div>
