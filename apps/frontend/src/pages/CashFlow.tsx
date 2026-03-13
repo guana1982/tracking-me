@@ -547,8 +547,8 @@ export function CashFlow() {
           Andamento e Suddivisione
         </button>
         {isChartsOpen && (
-          <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] gap-2 mt-2">
-        <div>
+          <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] mt-2">
+        <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500 mb-1">Totale allocato: {formatCurrency(pieTotal)}</p>
           {pieData.length === 0 ? (
@@ -595,7 +595,7 @@ export function CashFlow() {
                 </div>
               )}
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col pl-4">
           <div className="flex flex-wrap items-center justify-end gap-1.5 mb-2">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
