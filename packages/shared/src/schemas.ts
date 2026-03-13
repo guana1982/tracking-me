@@ -123,38 +123,57 @@ export const periodKeySchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, {
 
 // CashFlow Check schemas
 const cashFlowNumericField = z.number().multipleOf(0.01);
+const cashFlowColumnKeySchema = z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/);
+const cashFlowValueMapSchema = z.record(cashFlowColumnKeySchema, cashFlowNumericField);
+
+export const cashFlowColumnSchema = z.object({
+  key: cashFlowColumnKeySchema,
+  label: z.string().min(1).max(100).trim(),
+  position: z.number().int().min(0),
+  isActive: z.boolean(),
+});
 
 export const createCashFlowCheckSchema = z.object({
   checkLabel: z.string().min(1).max(100).trim(),
   date: z.string().date(),
-  bbva: cashFlowNumericField,
-  tradeRepublic: cashFlowNumericField,
-  webankCc: cashFlowNumericField,
-  webankObbl: cashFlowNumericField,
-  etfLordo: cashFlowNumericField,
-  rendimentoLordo: cashFlowNumericField,
-  bper: cashFlowNumericField,
-  tricount: cashFlowNumericField,
-  cartaWebank: cashFlowNumericField,
-  edenred: cashFlowNumericField,
+  values: cashFlowValueMapSchema,
   notes: z.string().max(500).trim().optional(),
 });
 
-export const updateCashFlowCheckSchema = z.object({
-  checkLabel: z.string().min(1).max(100).trim().optional(),
-  date: z.string().date().optional(),
-  bbva: cashFlowNumericField.optional(),
-  tradeRepublic: cashFlowNumericField.optional(),
-  webankCc: cashFlowNumericField.optional(),
-  webankObbl: cashFlowNumericField.optional(),
-  etfLordo: cashFlowNumericField.optional(),
-  rendimentoLordo: cashFlowNumericField.optional(),
-  bper: cashFlowNumericField.optional(),
-  tricount: cashFlowNumericField.optional(),
-  cartaWebank: cashFlowNumericField.optional(),
-  edenred: cashFlowNumericField.optional(),
-  notes: z.string().max(500).trim().optional(),
+export const updateCashFlowCheckSchema = z
+  .object({
+    checkLabel: z.string().min(1).max(100).trim().optional(),
+    date: z.string().date().optional(),
+    values: cashFlowValueMapSchema.optional(),
+    notes: z.string().max(500).trim().optional(),
+  })
+  .refine(
+    (data) =>
+      data.checkLabel !== undefined ||
+      data.date !== undefined ||
+      data.values !== undefined ||
+      data.notes !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
+
+export const createCashFlowColumnSchema = z.object({
+  label: z.string().min(1).max(100).trim(),
 });
+
+export const updateCashFlowColumnSchema = z
+  .object({
+    label: z.string().min(1).max(100).trim().optional(),
+    position: z.number().int().min(0).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) => data.label !== undefined || data.position !== undefined || data.isActive !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
 
 // CashFlow Settings schema
 export const cashFlowSettingsSchema = z.object({
@@ -187,5 +206,7 @@ export type CreateReallocationInput = z.infer<typeof createReallocationSchema>;
 export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;
 export type CreateCashFlowCheckInput = z.infer<typeof createCashFlowCheckSchema>;
 export type UpdateCashFlowCheckInput = z.infer<typeof updateCashFlowCheckSchema>;
+export type CreateCashFlowColumnInput = z.infer<typeof createCashFlowColumnSchema>;
+export type UpdateCashFlowColumnInput = z.infer<typeof updateCashFlowColumnSchema>;
 export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;
 export type PortfolioHistoryQueryInput = z.infer<typeof portfolioHistoryQuerySchema>;

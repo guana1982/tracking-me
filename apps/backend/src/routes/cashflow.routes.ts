@@ -1,7 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { cashFlowService } from '../services/cashflow.service.js';
-import { createCashFlowCheckSchema, updateCashFlowCheckSchema, cashFlowSettingsSchema } from '@budget/shared';
-import type { CreateCashFlowCheckDTO, UpdateCashFlowCheckDTO, CashFlowSettingsDTO } from '@budget/shared';
+import {
+  createCashFlowCheckSchema,
+  updateCashFlowCheckSchema,
+  cashFlowSettingsSchema,
+  createCashFlowColumnSchema,
+  updateCashFlowColumnSchema,
+} from '@budget/shared';
+import type {
+  CreateCashFlowCheckDTO,
+  UpdateCashFlowCheckDTO,
+  CashFlowSettingsDTO,
+  CreateCashFlowColumnDTO,
+  UpdateCashFlowColumnDTO,
+} from '@budget/shared';
 
 export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
   // Get all checks for current user
@@ -9,15 +21,6 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
     schema: {
       tags: ['CashFlow'],
       summary: 'Get all cashflow checks',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'array' },
-          },
-        },
-      },
     },
     handler: async (request) => {
       const checks = await cashFlowService.getAllByUser(request.authUser!.id);
@@ -36,22 +39,6 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
           id: { type: 'string' },
         },
         required: ['id'],
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-          },
-        },
-        404: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'object' },
-          },
-        },
       },
     },
     handler: async (request, reply) => {
@@ -77,28 +64,13 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           checkLabel: { type: 'string', minLength: 1, maxLength: 100 },
           date: { type: 'string', format: 'date' },
-          bbva: { type: 'number' },
-          tradeRepublic: { type: 'number' },
-          webankCc: { type: 'number' },
-          webankObbl: { type: 'number' },
-          etfLordo: { type: 'number' },
-          rendimentoLordo: { type: 'number' },
-          bper: { type: 'number' },
-          tricount: { type: 'number' },
-          cartaWebank: { type: 'number' },
-          edenred: { type: 'number' },
+          values: {
+            type: 'object',
+            additionalProperties: { type: 'number' },
+          },
           notes: { type: 'string' },
         },
-        required: ['checkLabel', 'date', 'bbva', 'tradeRepublic', 'webankCc', 'webankObbl', 'etfLordo', 'rendimentoLordo', 'bper', 'tricount', 'cartaWebank', 'edenred'],
-      },
-      response: {
-        201: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-          },
-        },
+        required: ['checkLabel', 'date', 'values'],
       },
     },
     handler: async (request, reply) => {
@@ -127,30 +99,15 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           checkLabel: { type: 'string', minLength: 1, maxLength: 100 },
           date: { type: 'string', format: 'date' },
-          bbva: { type: 'number' },
-          tradeRepublic: { type: 'number' },
-          webankCc: { type: 'number' },
-          webankObbl: { type: 'number' },
-          etfLordo: { type: 'number' },
-          rendimentoLordo: { type: 'number' },
-          bper: { type: 'number' },
-          tricount: { type: 'number' },
-          cartaWebank: { type: 'number' },
-          edenred: { type: 'number' },
+          values: {
+            type: 'object',
+            additionalProperties: { type: 'number' },
+          },
           notes: { type: 'string' },
         },
       },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-          },
-        },
-      },
     },
-    handler: async (request, reply) => {
+    handler: async (request) => {
       const { id } = request.params;
       const data = updateCashFlowCheckSchema.parse(request.body);
       const check = await cashFlowService.update(id, request.authUser!.id, data);
@@ -171,18 +128,92 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
         },
         required: ['id'],
       },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-          },
-        },
-      },
     },
     handler: async (request) => {
       const { id } = request.params;
       await cashFlowService.delete(id, request.authUser!.id);
+      return { success: true };
+    },
+  });
+
+  // Get columns
+  fastify.get('/columns', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Get cashflow dynamic columns',
+    },
+    handler: async (request) => {
+      const columns = await cashFlowService.getColumns(request.authUser!.id);
+      return { success: true, data: columns };
+    },
+  });
+
+  // Create column
+  fastify.post<{ Body: CreateCashFlowColumnDTO }>('/columns', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Create cashflow dynamic column',
+      body: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', minLength: 1, maxLength: 100 },
+        },
+        required: ['label'],
+      },
+    },
+    handler: async (request, reply) => {
+      const data = createCashFlowColumnSchema.parse(request.body);
+      const column = await cashFlowService.createColumn(request.authUser!.id, data);
+      reply.status(201);
+      return { success: true, data: column };
+    },
+  });
+
+  // Update column
+  fastify.put<{ Params: { key: string }; Body: UpdateCashFlowColumnDTO }>('/columns/:key', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Update cashflow dynamic column',
+      params: {
+        type: 'object',
+        properties: {
+          key: { type: 'string' },
+        },
+        required: ['key'],
+      },
+      body: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', minLength: 1, maxLength: 100 },
+          position: { type: 'number', minimum: 0 },
+          isActive: { type: 'boolean' },
+        },
+      },
+    },
+    handler: async (request) => {
+      const { key } = request.params;
+      const data = updateCashFlowColumnSchema.parse(request.body);
+      const column = await cashFlowService.updateColumn(request.authUser!.id, key, data);
+      return { success: true, data: column };
+    },
+  });
+
+  // Delete column
+  fastify.delete<{ Params: { key: string } }>('/columns/:key', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Delete cashflow dynamic column',
+      params: {
+        type: 'object',
+        properties: {
+          key: { type: 'string' },
+        },
+        required: ['key'],
+      },
+    },
+    handler: async (request) => {
+      const { key } = request.params;
+      await cashFlowService.deleteColumn(request.authUser!.id, key);
       return { success: true };
     },
   });
@@ -192,15 +223,6 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
     schema: {
       tags: ['CashFlow'],
       summary: 'Get cashflow settings',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-          },
-        },
-      },
     },
     handler: async (request) => {
       const settings = await cashFlowService.getSettings(request.authUser!.id);
@@ -220,15 +242,6 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
           etfCount: { type: 'number', minimum: 0 },
         },
         required: ['commissionPerEtf', 'etfCount'],
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-          },
-        },
       },
     },
     handler: async (request) => {

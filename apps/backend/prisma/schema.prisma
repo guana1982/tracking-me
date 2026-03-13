@@ -176,6 +176,7 @@ model CashFlowCheck {
   tricount        Float    @default(0)
   cartaWebank     Float    @default(0)
   edenred         Float    @default(0)
+  valuesJson      Json     @default("{}")
   notes           String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -193,6 +194,7 @@ model CashFlowSettings {
   userId           String   @unique
   commissionPerEtf Float    @default(12)
   etfCount         Int      @default(12)
+  columnsJson      Json     @default("[]")
   updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

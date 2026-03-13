@@ -258,21 +258,21 @@ export interface MonthListItemDTO {
 
 // ============= CashFlow DTOs =============
 
+export type CashFlowValueMap = Record<string, number>;
+
+export interface CashFlowColumnDTO {
+  key: string;
+  label: string;
+  position: number;
+  isActive: boolean;
+}
+
 // CashFlow Check - net worth snapshot
 export interface CashFlowCheckDTO {
   id: string;
   checkLabel: string;
   date: string;
-  bbva: number;
-  tradeRepublic: number;
-  webankCc: number;
-  webankObbl: number;
-  etfLordo: number;
-  rendimentoLordo: number;
-  bper: number;
-  tricount: number;
-  cartaWebank: number;
-  edenred: number;
+  values: CashFlowValueMap;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -281,20 +281,21 @@ export interface CashFlowCheckDTO {
 export interface CreateCashFlowCheckDTO {
   checkLabel: string;
   date: string;
-  bbva: number;
-  tradeRepublic: number;
-  webankCc: number;
-  webankObbl: number;
-  etfLordo: number;
-  rendimentoLordo: number;
-  bper: number;
-  tricount: number;
-  cartaWebank: number;
-  edenred: number;
+  values: CashFlowValueMap;
   notes?: string;
 }
 
 export type UpdateCashFlowCheckDTO = Partial<CreateCashFlowCheckDTO>;
+
+export interface CreateCashFlowColumnDTO {
+  label: string;
+}
+
+export interface UpdateCashFlowColumnDTO {
+  label?: string;
+  position?: number;
+  isActive?: boolean;
+}
 
 // CashFlow Settings - per-user commission/ETF config
 export interface CashFlowSettingsDTO {

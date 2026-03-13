@@ -21,6 +21,8 @@ import type {
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
   CashFlowSettingsDTO,
+  CreateCashFlowColumnDTO,
+  UpdateCashFlowColumnDTO,
   CreateFixedExpenseTemplateDTO,
   UpdateFixedExpenseTemplateDTO,
   ApplyFixedExpenseTemplatesDTO,
@@ -45,6 +47,7 @@ export const queryKeys = {
     ['fixedExpenses', category ?? 'all'] as const,
   cashFlowChecks: ['cashFlowChecks'] as const,
   cashFlowSettings: ['cashFlowSettings'] as const,
+  cashFlowColumns: ['cashFlowColumns'] as const,
   portfolioHistory: (symbolsSignature: string, horizon: PortfolioHistoryHorizonDTO) =>
     ['portfolioHistory', symbolsSignature, horizon] as const,
 };
@@ -367,6 +370,50 @@ export function useDeleteCashFlowCheck() {
   return useMutation({
     mutationFn: (id: string) => cashFlowApi.deleteCheck(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+export function useCashFlowColumns() {
+  return useQuery({
+    queryKey: queryKeys.cashFlowColumns,
+    queryFn: cashFlowApi.getColumns,
+  });
+}
+
+export function useCreateCashFlowColumn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateCashFlowColumnDTO) => cashFlowApi.createColumn(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowColumns });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+export function useUpdateCashFlowColumn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ key, data }: { key: string; data: UpdateCashFlowColumnDTO }) =>
+      cashFlowApi.updateColumn(key, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowColumns });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+    },
+  });
+}
+
+export function useDeleteCashFlowColumn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (key: string) => cashFlowApi.deleteColumn(key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowColumns });
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
     },
   });
