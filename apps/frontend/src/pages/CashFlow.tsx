@@ -708,7 +708,7 @@ export function CashFlow() {
           Andamento e Suddivisione
         </button>
         {isChartsOpen && (
-          <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] mt-2">
+          <div className="grid grid-cols-1 xl:grid-cols-[460px,1fr] mt-2">
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
@@ -716,7 +716,7 @@ export function CashFlow() {
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="grid h-60 grid-cols-[150px,minmax(0,1fr)] gap-3">
+            <div className="grid h-60 grid-cols-[190px,minmax(0,1fr)] items-center gap-4">
               <div className="min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -781,15 +781,15 @@ export function CashFlow() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="min-w-0 overflow-y-auto pr-1">
-                <div className="space-y-1.5">
+              <div className="min-w-0">
+                <div className="grid h-full auto-rows-min content-center gap-2">
                   {allocationChart.groups.map((group) => (
-                    <div key={group.key} className="rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2">
-                      <div className="flex items-start justify-between gap-2">
+                    <div key={group.key} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm shadow-slate-200/50">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="mt-0.5 h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="truncate text-[11px] font-semibold text-slate-800">{group.label}</span>
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                            <span className="truncate text-xs font-semibold text-slate-800">{group.label}</span>
                           </div>
                           <p className="pl-[18px] text-[10px] text-slate-500">
                             {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
@@ -797,9 +797,10 @@ export function CashFlow() {
                         </div>
                         <span className="shrink-0 text-[10px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
                       </div>
-                      <p className="mt-1 pl-[18px] text-[11px] font-semibold text-slate-900 tabular-nums">
-                        {formatCurrency(group.value)}
-                      </p>
+                      <div className="mt-1 flex items-baseline justify-between gap-3 pl-[18px]">
+                        <p className="truncate text-xs font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
+                        <div className="h-px flex-1 bg-slate-200" />
+                      </div>
                     </div>
                   ))}
                 </div>
