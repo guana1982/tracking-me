@@ -516,6 +516,36 @@ export function CashFlow() {
     ];
   }, [allocationChart.groups]);
 
+  const renderColumnPieLabel = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    outerRadius: number;
+    index: number;
+  }) => {
+    const { cx, cy, midAngle, outerRadius, index } = props;
+    const point = allocationChart.columns[index];
+    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 4;
+    if (!point || !showLabel) return null;
+
+    const angle = (-midAngle * Math.PI) / 180;
+    const radius = outerRadius + 14;
+    const x = cx + radius * Math.cos(angle);
+    const y = cy + radius * Math.sin(angle);
+    const anchor = x > cx ? 'start' : 'end';
+
+    return (
+      <text x={x} y={y} textAnchor={anchor} fill="#334155">
+        <tspan x={x} dy="0" fontSize={10} fontWeight={600}>
+          {point.shortLabel}
+        </tspan>
+        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
+          {point.percentage.toFixed(1)}%
+        </tspan>
+      </text>
+    );
+  };
+
   const handleSettingsChange = (next: CashFlowSettings) => {
     setSettings(next);
     if (settingsDebounceRef.current) clearTimeout(settingsDebounceRef.current);
@@ -744,6 +774,8 @@ export function CashFlow() {
                       paddingAngle={1}
                       stroke="#ffffff"
                       strokeWidth={2}
+                      labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                      label={renderColumnPieLabel}
                     >
                       {allocationChart.columns.map((item) => (
                         <Cell key={item.key} fill={item.color} />
@@ -784,7 +816,7 @@ export function CashFlow() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="truncate text-[11px] font-semibold text-slate-800">{group.label}</span>
+                            <span className="text-[11px] font-semibold text-slate-800 whitespace-normal break-words">{group.label}</span>
                           </div>
                           <p className="pl-[18px] text-[9px] text-slate-500">
                             {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
