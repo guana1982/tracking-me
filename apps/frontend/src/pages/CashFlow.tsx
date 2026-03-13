@@ -25,6 +25,7 @@ type CashFlowRow = CashFlowCheckDTO;
 type CashFlowColumn = CashFlowColumnDTO;
 
 
+
 type CashFlowSettings = {
   commissionPerEtf: number;
   etfCount: number;
