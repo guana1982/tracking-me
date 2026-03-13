@@ -80,7 +80,7 @@ type AllocationGroupDraft = {
 
 const CLASSIFICATION_COLORS = ['#0f766e', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#ea580c'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
-const MAX_LEGEND_ITEMS = 8;
+const MAX_HISTOGRAM_BARS = 5;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -492,12 +492,12 @@ export function CashFlow() {
     return { groups, columns: columnsData, total };
   }, [activeColumns, classifications, latestRow]);
 
-  const legendGroups = useMemo(() => {
-    if (allocationChart.groups.length <= MAX_LEGEND_ITEMS) return allocationChart.groups;
+  const histogramGroups = useMemo(() => {
+    const ordered = [...allocationChart.groups].sort((a, b) => b.value - a.value);
+    if (ordered.length <= MAX_HISTOGRAM_BARS) return ordered;
 
-    const visible = allocationChart.groups.slice(0, MAX_LEGEND_ITEMS - 1);
-    const hidden = allocationChart.groups.slice(MAX_LEGEND_ITEMS - 1);
-
+    const visible = ordered.slice(0, MAX_HISTOGRAM_BARS - 1);
+    const hidden = ordered.slice(MAX_HISTOGRAM_BARS - 1);
     const hiddenValue = hidden.reduce((sum, group) => sum + group.value, 0);
     const hiddenPercentage = hidden.reduce((sum, group) => sum + group.percentage, 0);
     const hiddenColumns = hidden.reduce((sum, group) => sum + group.columnCount, 0);
@@ -505,7 +505,7 @@ export function CashFlow() {
     return [
       ...visible,
       {
-        key: '__legend_other',
+        key: '__histogram_other',
         label: `Altre ${hidden.length}`,
         shortLabel: 'Altre',
         value: hiddenValue,
@@ -810,24 +810,32 @@ export function CashFlow() {
                 </ResponsiveContainer>
               </div>
               <div className="min-w-0">
-                <div className="grid h-full grid-cols-2 content-center gap-x-2.5 gap-y-2">
-                  {legendGroups.map((group) => (
-                    <div key={group.key} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                      <div className="grid grid-cols-[minmax(0,1fr),42px] items-start gap-x-1">
-                        <div className="min-w-0">
-                          <div className="flex items-start gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="text-[11px] leading-tight font-semibold text-slate-800 whitespace-normal break-words">{group.label}</span>
-                          </div>
-                          <p className="pl-[18px] mt-0.5 text-[9px] leading-tight text-slate-500">
-                            {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
-                          </p>
+                <div className="h-full rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-3 py-2">
+                  <div className="flex h-[150px] items-end gap-2 border-b border-slate-200 pb-2">
+                    {histogramGroups.map((group) => (
+                      <div key={group.key} className="flex min-w-0 flex-1 flex-col items-center">
+                        <span className="mb-1 text-[9px] font-semibold text-slate-600">{group.percentage.toFixed(1)}%</span>
+                        <div className="relative h-28 w-full max-w-[58px] overflow-hidden rounded-t-md border border-slate-200 bg-white/80">
+                          <div
+                            className="absolute inset-x-0 bottom-0 rounded-t-sm"
+                            style={{
+                              height: `${Math.max(8, group.percentage)}%`,
+                              backgroundColor: group.color,
+                            }}
+                          />
                         </div>
-                        <span className="shrink-0 text-right text-[9px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
                       </div>
-                      <p className="mt-1 pl-[18px] text-[11px] leading-tight font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1.5">
+                    {histogramGroups.map((group) => (
+                      <div key={`${group.key}-meta`} className="min-w-0 rounded-md bg-white/80 px-2 py-1">
+                        <p className="text-[10px] leading-tight font-semibold text-slate-800 whitespace-normal break-words">{group.label}</p>
+                        <p className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
+                        <p className="text-[9px] text-slate-500">{group.percentage.toFixed(1)}%</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
