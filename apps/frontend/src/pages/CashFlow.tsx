@@ -639,7 +639,7 @@ export function CashFlow() {
                 <LineChart data={trendData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11, dy: 8 }} axisLine={false} tickLine={false} minTickGap={20} />
-                  <YAxis domain={trendYDomain} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={48} tickCount={5} />
+                  <YAxis domain={trendYDomain} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => { if (v >= 1000 || v <= -1000) { const k = v / 1000; return k % 1 === 0 ? `${k}k` : `${k.toFixed(1)}k`; } return String(v); }} width={52} tickCount={5} />
                   <Tooltip
                     cursor={{ stroke: '#93c5fd', strokeWidth: 1 }}
                     content={({ active, payload }) => {
