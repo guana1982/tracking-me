@@ -517,40 +517,6 @@ export function CashFlow() {
     ];
   }, [allocationChart.groups]);
 
-  const topClassification = useMemo(() => {
-    if (allocationChart.groups.length === 0) return null;
-    return allocationChart.groups.reduce((top, current) => (current.value > top.value ? current : top));
-  }, [allocationChart.groups]);
-
-  const renderGroupPieLabel = (props: {
-    cx: number;
-    cy: number;
-    midAngle: number;
-    outerRadius: number;
-    index: number;
-  }) => {
-    const { cx, cy, midAngle, outerRadius, index } = props;
-    const point = allocationChart.groups[index];
-    if (!point || point.percentage < 6) return null;
-
-    const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 20;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    const anchor = x > cx ? 'start' : 'end';
-
-    return (
-      <text x={x} y={y} textAnchor={anchor} fill="#1e293b">
-        <tspan x={x} dy="0" fontSize={11} fontWeight={700}>
-          {point.shortLabel}
-        </tspan>
-        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
-          {point.percentage.toFixed(1)}%
-        </tspan>
-      </text>
-    );
-  };
-
   const renderColumnPieLabel = (props: {
     cx: number;
     cy: number;
@@ -560,21 +526,21 @@ export function CashFlow() {
   }) => {
     const { cx, cy, midAngle, outerRadius, index } = props;
     const point = allocationChart.columns[index];
-    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 6 : point?.percentage >= 10;
+    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 5;
     if (!point || !showLabel) return null;
 
     const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 8;
+    const radius = outerRadius + 10;
     const x = cx + radius * Math.cos(angle);
     const y = cy + radius * Math.sin(angle);
     const anchor = x > cx ? 'start' : 'end';
 
     return (
       <text x={x} y={y} textAnchor={anchor} fill="#334155">
-        <tspan x={x} dy="0" fontSize={9} fontWeight={600}>
+        <tspan x={x} dy="0" fontSize={10} fontWeight={600}>
           {point.shortLabel}
         </tspan>
-        <tspan x={x} dy="11" fontSize={9} fill="#64748b">
+        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
           {point.percentage.toFixed(1)}%
         </tspan>
       </text>
@@ -793,8 +759,6 @@ export function CashFlow() {
                       paddingAngle={3}
                       stroke="#ffffff"
                       strokeWidth={2}
-                      labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                      label={renderGroupPieLabel}
                     >
                       {allocationChart.groups.map((item) => (
                         <Cell key={item.key} fill={item.color} />
@@ -818,19 +782,6 @@ export function CashFlow() {
                         <Cell key={item.key} fill={item.color} />
                       ))}
                     </Pie>
-                    {topClassification && (
-                      <g>
-                        <text x="50%" y="49%" textAnchor="middle" fill="#64748b" fontSize={9} fontWeight={600}>
-                          TOP
-                        </text>
-                        <text x="50%" y="57%" textAnchor="middle" fill={topClassification.color} fontSize={10} fontWeight={700}>
-                          {topClassification.shortLabel}
-                        </text>
-                        <text x="50%" y="65%" textAnchor="middle" fill="#0f172a" fontSize={11} fontWeight={700}>
-                          {topClassification.percentage.toFixed(1)}%
-                        </text>
-                      </g>
-                    )}
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null;
