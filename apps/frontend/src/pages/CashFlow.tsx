@@ -414,11 +414,11 @@ export function CashFlow() {
   }
 
   return (
-    <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
-      <div className="card flex-shrink-0 flex items-start justify-between gap-3">
+    <div className="sm:ml-16 space-y-2 md:h-full md:flex md:flex-col md:space-y-2">
+      <div className="card !p-3 flex-shrink-0 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Cash Flow Patrimonio</h2>
-          <p className="text-sm text-slate-500 mt-1">Colonne dinamiche con storico su DB.</p>
+          <h2 className="text-base font-semibold text-slate-900">Cash Flow Patrimonio</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Colonne dinamiche con storico su DB.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -435,41 +435,41 @@ export function CashFlow() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
-        <div className="card">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Check totali</p>
-          <p className="text-2xl font-bold text-slate-900 tabular-nums mt-1">{rowsWithMetrics.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-shrink-0">
+        <div className="card !p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Check totali</p>
+          <p className="text-lg font-bold text-slate-900 tabular-nums">{rowsWithMetrics.length}</p>
         </div>
-        <div className="card">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Ultimo Tot Attuale</p>
-          <p className="text-2xl font-bold text-slate-900 tabular-nums mt-1">
+        <div className="card !p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Ultimo Tot Attuale</p>
+          <p className="text-lg font-bold text-slate-900 tabular-nums">
             {latestRow ? formatCurrency(latestRow.total) : formatCurrency(0)}
           </p>
         </div>
-        <div className="card">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Check in crescita</p>
-          <p className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">{positiveDiffCount}</p>
+        <div className="card !p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Check in crescita</p>
+          <p className="text-lg font-bold text-emerald-600 tabular-nums">{positiveDiffCount}</p>
         </div>
       </div>
 
-      <div className="card flex-shrink-0 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="card !p-3 flex-shrink-0 grid grid-cols-1 md:grid-cols-3 gap-2">
         <div>
-          <label className="label">Commissione per ETF</label>
+          <label className="label text-xs">Commissione per ETF</label>
           <input
             type="number"
             step="0.01"
-            className="input"
+            className="input h-8 text-sm"
             value={settings.commissionPerEtf}
             onChange={(e) => handleSettingsChange({ ...settings, commissionPerEtf: parseAmount(e.target.value) })}
           />
         </div>
         <div>
-          <label className="label">Numero ETF</label>
+          <label className="label text-xs">Numero ETF</label>
           <input
             type="number"
             step="1"
             min="0"
-            className="input"
+            className="input h-8 text-sm"
             value={settings.etfCount}
             onChange={(e) =>
               handleSettingsChange({ ...settings, etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))) })
@@ -477,21 +477,21 @@ export function CashFlow() {
           />
         </div>
         <div className="flex flex-col justify-end">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Commissioni Teoriche Totali</p>
-          <p className="text-2xl font-bold text-slate-900 tabular-nums">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Commissioni Teoriche Totali</p>
+          <p className="text-lg font-bold text-slate-900 tabular-nums">
             {formatCurrency(settings.commissionPerEtf * settings.etfCount)}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[420px,1fr] gap-4 flex-shrink-0">
-        <div className="card">
-          <p className="text-sm font-semibold text-slate-800 mb-3">Suddivisione Ultimo Check</p>
-          <p className="text-xs text-slate-500 mb-2">Totale allocato: {formatCurrency(pieTotal)}</p>
+      <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] gap-2 flex-shrink-0">
+        <div className="card !p-3">
+          <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
+          <p className="text-[10px] text-slate-500 mb-1">Totale allocato: {formatCurrency(pieTotal)}</p>
           {pieData.length === 0 ? (
-            <p className="text-sm text-slate-500">Nessun dato disponibile.</p>
+            <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="h-72">
+            <div className="h-52">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -500,8 +500,8 @@ export function CashFlow() {
                         nameKey="label"
                         cx="50%"
                         cy="50%"
-                        innerRadius={56}
-                        outerRadius={88}
+                        innerRadius={44}
+                        outerRadius={70}
                         paddingAngle={2}
                         labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
                         label={renderPieLabel}
@@ -532,11 +532,11 @@ export function CashFlow() {
                 </div>
               )}
         </div>
-        <div className="card">
+        <div className="card !p-3">
           {trendData.length < 2 ? (
-            <p className="text-sm text-slate-500">Aggiungi almeno 2 check per visualizzare il trend.</p>
+            <p className="text-xs text-slate-500">Aggiungi almeno 2 check per visualizzare il trend.</p>
           ) : (
-            <div className="h-72">
+            <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
@@ -551,9 +551,9 @@ export function CashFlow() {
         </div>
       </div>
 
-      <div className="card md:flex-1 md:min-h-0 md:flex md:flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">Storico Check</h3>
+      <div className="card !p-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Storico Check</h3>
         </div>
         {rowsWithMetrics.length === 0 ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
