@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -186,6 +186,8 @@ export function CashFlow() {
   const [editingColumnLabel, setEditingColumnLabel] = useState('');
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
   const [isTableDragScrolling, setIsTableDragScrolling] = useState(false);
+  const [dragColumnKey, setDragColumnKey] = useState<string | null>(null);
+  const [dragOverColumnKey, setDragOverColumnKey] = useState<string | null>(null);
 
   const [isChartsOpen, setIsChartsOpen] = useState(true);
   const [showTotalTrend, setShowTotalTrend] = useState(true);
@@ -798,8 +800,43 @@ export function CashFlow() {
 
               <div className="space-y-2">
                 {columns.map((column) => (
-                  <div key={column.key} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                  <div
+                    key={column.key}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragColumnKey(column.key);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setDragOverColumnKey(column.key);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverColumnKey === column.key) setDragOverColumnKey(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragColumnKey && dragColumnKey !== column.key) {
+                        swapColumns.mutate({ keyA: dragColumnKey, keyB: column.key });
+                      }
+                      setDragColumnKey(null);
+                      setDragOverColumnKey(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragColumnKey(null);
+                      setDragOverColumnKey(null);
+                    }}
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                      dragColumnKey === column.key
+                        ? 'border-sky-400 bg-sky-50 opacity-50'
+                        : dragOverColumnKey === column.key
+                          ? 'border-sky-400 bg-sky-50'
+                          : 'border-slate-200'
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
+                      <GripVertical className="w-4 h-4 text-slate-400 cursor-grab shrink-0" />
                       {editingColumnKey === column.key ? (
                         <input
                           className="input h-9 w-56"
