@@ -51,6 +51,8 @@ const LEGACY_COLUMN_KEYS = new Set([
   'edenred',
 ]);
 
+const STOCK_KEYS = new Set(['etfLordo', 'rendimentoLordo']);
+
 const today = new Date().toISOString().slice(0, 10);
 const INITIAL_SETTINGS: CashFlowSettings = { commissionPerEtf: 12, etfCount: 12 };
 const LEGACY_DIFF_LABELS: Record<string, string> = {
@@ -215,12 +217,23 @@ export function CashFlow() {
   const sortedRows = useMemo(() => [...rows].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [rows]);
 
   const rowsWithMetrics = useMemo<RowWithMetrics[]>(() => {
+    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+
+    const computeTotal = (row: CashFlowRow) => {
+      const baseSum = activeColumns
+        .filter((col) => !STOCK_KEYS.has(col.key))
+        .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
+      const etfLordo = getRowValue(row, 'etfLordo');
+      const rendimentoLordo = getRowValue(row, 'rendimentoLordo');
+      const tasseComm = (rendimentoLordo * 26 / 100) + commissionTotal;
+      const azionarioNetto = etfLordo - tasseComm;
+      return baseSum + azionarioNetto;
+    };
+
     return sortedRows.map((row, index) => {
-      const total = activeColumns.reduce((sum, column) => sum + getRowValue(row, column.key), 0);
+      const total = computeTotal(row);
       const previous = index < sortedRows.length - 1 ? sortedRows[index + 1] : null;
-      const previousTotal = previous
-        ? activeColumns.reduce((sum, column) => sum + getRowValue(previous, column.key), 0)
-        : null;
+      const previousTotal = previous ? computeTotal(previous) : null;
       const diffByColumn: Record<string, number | null> = {};
 
       activeColumns.forEach((column) => {
@@ -236,7 +249,7 @@ export function CashFlow() {
         diffByColumn,
       };
     });
-  }, [sortedRows, activeColumns]);
+  }, [sortedRows, activeColumns, settings]);
 
   const latestRow = rowsWithMetrics[0] ?? null;
   const positiveDiffCount = rowsWithMetrics.filter((row) => (row.diffTotal ?? 0) > 0).length;
