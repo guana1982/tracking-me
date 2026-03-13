@@ -814,8 +814,11 @@ export function CashFlow() {
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-slate-100"
-                        onClick={() => {
+                        onClick={async () => {
                           if (column.position <= 0) return;
+                          const neighbor = columns.find((c) => c.position === column.position - 1);
+                          if (!neighbor) return;
+                          await updateColumn.mutateAsync({ key: neighbor.key, data: { position: column.position } });
                           updateColumn.mutate({ key: column.key, data: { position: column.position - 1 } });
                         }}
                       >
@@ -824,8 +827,11 @@ export function CashFlow() {
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-slate-100"
-                        onClick={() => {
+                        onClick={async () => {
                           if (column.position >= columns.length - 1) return;
+                          const neighbor = columns.find((c) => c.position === column.position + 1);
+                          if (!neighbor) return;
+                          await updateColumn.mutateAsync({ key: neighbor.key, data: { position: column.position } });
                           updateColumn.mutate({ key: column.key, data: { position: column.position + 1 } });
                         }}
                       >
