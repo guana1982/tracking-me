@@ -270,6 +270,12 @@ export const cashFlowApi = {
       body: JSON.stringify(data),
     }),
 
+  swapColumns: (keyA: string, keyB: string) =>
+    fetchApi<CashFlowColumnDTO[]>('/cashflow/columns/swap', {
+      method: 'PUT',
+      body: JSON.stringify({ keyA, keyB }),
+    }),
+
   deleteColumn: (key: string) =>
     fetchApi<void>(`/cashflow/columns/${key}`, {
       method: 'DELETE',

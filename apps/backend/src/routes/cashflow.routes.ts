@@ -169,6 +169,27 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Swap two columns
+  fastify.put<{ Body: { keyA: string; keyB: string } }>('/columns/swap', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Swap two cashflow columns positions',
+      body: {
+        type: 'object',
+        properties: {
+          keyA: { type: 'string' },
+          keyB: { type: 'string' },
+        },
+        required: ['keyA', 'keyB'],
+      },
+    },
+    handler: async (request) => {
+      const { keyA, keyB } = request.body;
+      const columns = await cashFlowService.swapColumns(request.authUser!.id, keyA, keyB);
+      return { success: true, data: columns };
+    },
+  });
+
   // Update column
   fastify.put<{ Params: { key: string }; Body: UpdateCashFlowColumnDTO }>('/columns/:key', {
     schema: {

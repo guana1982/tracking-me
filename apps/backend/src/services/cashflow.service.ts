@@ -232,6 +232,33 @@ export class CashFlowService {
     return normalized.find((column) => column.key === key)!;
   }
 
+  async swapColumns(userId: string, keyA: string, keyB: string): Promise<CashFlowColumnDTO[]> {
+    const settings = await this.getOrCreateSettingsRecord(userId);
+    const columns = this.normalizeColumns(settings.columnsJson);
+    const indexA = columns.findIndex((column) => column.key === keyA);
+    const indexB = columns.findIndex((column) => column.key === keyB);
+
+    if (indexA < 0 || indexB < 0) {
+      throw new AppError('CashFlow column not found', 404, 'NOT_FOUND');
+    }
+
+    const posA = columns[indexA].position;
+    const posB = columns[indexB].position;
+    columns[indexA] = { ...columns[indexA], position: posB };
+    columns[indexB] = { ...columns[indexB], position: posA };
+
+    const normalized = this.normalizeColumns(columns);
+
+    await prisma.cashFlowSettings.update({
+      where: { userId },
+      data: {
+        columnsJson: normalized as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    return normalized;
+  }
+
   async deleteColumn(userId: string, key: string): Promise<void> {
     const settings = await this.getOrCreateSettingsRecord(userId);
     const columns = this.normalizeColumns(settings.columnsJson);

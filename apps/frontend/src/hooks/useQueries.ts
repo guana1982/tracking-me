@@ -419,6 +419,18 @@ export function useDeleteCashFlowColumn() {
   });
 }
 
+export function useSwapCashFlowColumns() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ keyA, keyB }: { keyA: string; keyB: string }) =>
+      cashFlowApi.swapColumns(keyA, keyB),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowColumns });
+    },
+  });
+}
+
 // CashFlow Settings
 export function useCashFlowSettings() {
   return useQuery({

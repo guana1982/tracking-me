@@ -13,6 +13,7 @@ import {
   useCreateCashFlowColumn,
   useUpdateCashFlowColumn,
   useDeleteCashFlowColumn,
+  useSwapCashFlowColumns,
 } from '../hooks/useQueries';
 import type { CashFlowCheckDTO, CashFlowColumnDTO } from '@budget/shared';
 
@@ -176,6 +177,7 @@ export function CashFlow() {
   const createColumn = useCreateCashFlowColumn();
   const updateColumn = useUpdateCashFlowColumn();
   const deleteColumn = useDeleteCashFlowColumn();
+  const swapColumns = useSwapCashFlowColumns();
 
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
   const settingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -814,12 +816,11 @@ export function CashFlow() {
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-slate-100"
-                        onClick={async () => {
+                        onClick={() => {
                           if (column.position <= 0) return;
                           const neighbor = columns.find((c) => c.position === column.position - 1);
                           if (!neighbor) return;
-                          await updateColumn.mutateAsync({ key: neighbor.key, data: { position: column.position } });
-                          updateColumn.mutate({ key: column.key, data: { position: column.position - 1 } });
+                          swapColumns.mutate({ keyA: column.key, keyB: neighbor.key });
                         }}
                       >
                         <ChevronUp className="w-4 h-4" />
@@ -827,12 +828,11 @@ export function CashFlow() {
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-slate-100"
-                        onClick={async () => {
+                        onClick={() => {
                           if (column.position >= columns.length - 1) return;
                           const neighbor = columns.find((c) => c.position === column.position + 1);
                           if (!neighbor) return;
-                          await updateColumn.mutateAsync({ key: neighbor.key, data: { position: column.position } });
-                          updateColumn.mutate({ key: column.key, data: { position: column.position + 1 } });
+                          swapColumns.mutate({ keyA: column.key, keyB: neighbor.key });
                         }}
                       >
                         <ChevronDown className="w-4 h-4" />
