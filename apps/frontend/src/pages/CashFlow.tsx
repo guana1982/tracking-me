@@ -716,91 +716,95 @@ export function CashFlow() {
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <>
-                <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={allocationChart.groups}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={26}
-                        outerRadius={47}
-                        paddingAngle={3}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                      >
-                        {allocationChart.groups.map((item) => (
-                          <Cell key={item.key} fill={item.color} />
-                        ))}
-                      </Pie>
-                      <Pie
-                        data={allocationChart.columns}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={54}
-                        outerRadius={83}
-                        paddingAngle={1}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                        labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                        label={renderColumnPieLabel}
-                      >
-                        {allocationChart.columns.map((item) => (
-                          <Cell key={item.key} fill={item.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const point = payload[0]?.payload as
-                            | AllocationGroupSlice
-                            | AllocationColumnSlice
-                            | undefined;
-                          if (!point) return null;
+            <div className="grid h-60 grid-cols-[150px,minmax(0,1fr)] gap-3">
+              <div className="min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={allocationChart.groups}
+                      dataKey="value"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={26}
+                      outerRadius={47}
+                      paddingAngle={3}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                    >
+                      {allocationChart.groups.map((item) => (
+                        <Cell key={item.key} fill={item.color} />
+                      ))}
+                    </Pie>
+                    <Pie
+                      data={allocationChart.columns}
+                      dataKey="value"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={54}
+                      outerRadius={83}
+                      paddingAngle={1}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                      label={renderColumnPieLabel}
+                    >
+                      {allocationChart.columns.map((item) => (
+                        <Cell key={item.key} fill={item.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const point = payload[0]?.payload as
+                          | AllocationGroupSlice
+                          | AllocationColumnSlice
+                          | undefined;
+                        if (!point) return null;
 
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                              {point.level === 'column' && (
-                                <p className="text-xs text-slate-500">Classificazione: {point.groupLabel}</p>
-                              )}
-                              {point.level === 'classification' && (
-                                <p className="text-xs text-slate-500">{point.columnCount} colonne</p>
-                              )}
-                              <p className="text-sm text-slate-700">{formatCurrency(point.value)}</p>
-                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 space-y-1.5">
+                        return (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                            <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                            {point.level === 'column' && (
+                              <p className="text-xs text-slate-500">Classificazione: {point.groupLabel}</p>
+                            )}
+                            {point.level === 'classification' && (
+                              <p className="text-xs text-slate-500">{point.columnCount} colonne</p>
+                            )}
+                            <p className="text-sm text-slate-700">{formatCurrency(point.value)}</p>
+                            <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                          </div>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="min-w-0 overflow-y-auto pr-1">
+                <div className="space-y-1.5">
                   {allocationChart.groups.map((group) => (
-                    <div key={group.key} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                          <span className="truncate text-xs font-semibold text-slate-800">{group.label}</span>
+                    <div key={group.key} className="rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="mt-0.5 h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                            <span className="truncate text-[11px] font-semibold text-slate-800">{group.label}</span>
+                          </div>
+                          <p className="pl-[18px] text-[10px] text-slate-500">
+                            {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
+                          </p>
                         </div>
-                        <p className="pl-[18px] text-[10px] text-slate-500">
-                          {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
-                        </p>
+                        <span className="shrink-0 text-[10px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
-                        <p className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</p>
-                      </div>
+                      <p className="mt-1 pl-[18px] text-[11px] font-semibold text-slate-900 tabular-nums">
+                        {formatCurrency(group.value)}
+                      </p>
                     </div>
                   ))}
                 </div>
-            </>
+              </div>
+            </div>
               )}
         </div>
         <div className="flex flex-col pl-4">
