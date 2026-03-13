@@ -194,8 +194,9 @@ model CashFlowSettings {
   userId           String   @unique
   commissionPerEtf Float    @default(12)
   etfCount         Int      @default(12)
-  columnsJson      Json     @default("[]")
-  updatedAt        DateTime @updatedAt
+  columnsJson           Json     @default("[]")
+  classificationsJson   Json     @default("[]")
+  updatedAt             DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

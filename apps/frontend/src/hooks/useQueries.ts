@@ -23,6 +23,8 @@ import type {
   CashFlowSettingsDTO,
   CreateCashFlowColumnDTO,
   UpdateCashFlowColumnDTO,
+  CreateCashFlowClassificationDTO,
+  UpdateCashFlowClassificationDTO,
   CreateFixedExpenseTemplateDTO,
   UpdateFixedExpenseTemplateDTO,
   ApplyFixedExpenseTemplatesDTO,
@@ -48,6 +50,7 @@ export const queryKeys = {
   cashFlowChecks: ['cashFlowChecks'] as const,
   cashFlowSettings: ['cashFlowSettings'] as const,
   cashFlowColumns: ['cashFlowColumns'] as const,
+  cashFlowClassifications: ['cashFlowClassifications'] as const,
   portfolioHistory: (symbolsSignature: string, horizon: PortfolioHistoryHorizonDTO) =>
     ['portfolioHistory', symbolsSignature, horizon] as const,
 };
@@ -427,6 +430,48 @@ export function useSwapCashFlowColumns() {
       cashFlowApi.swapColumns(keyA, keyB),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowColumns });
+    },
+  });
+}
+
+// CashFlow Classifications
+export function useCashFlowClassifications() {
+  return useQuery({
+    queryKey: queryKeys.cashFlowClassifications,
+    queryFn: cashFlowApi.getClassifications,
+  });
+}
+
+export function useCreateCashFlowClassification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateCashFlowClassificationDTO) => cashFlowApi.createClassification(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowClassifications });
+    },
+  });
+}
+
+export function useUpdateCashFlowClassification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ key, data }: { key: string; data: UpdateCashFlowClassificationDTO }) =>
+      cashFlowApi.updateClassification(key, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowClassifications });
+    },
+  });
+}
+
+export function useDeleteCashFlowClassification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (key: string) => cashFlowApi.deleteClassification(key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowClassifications });
     },
   });
 }

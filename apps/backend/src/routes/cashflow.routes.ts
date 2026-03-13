@@ -6,6 +6,8 @@ import {
   cashFlowSettingsSchema,
   createCashFlowColumnSchema,
   updateCashFlowColumnSchema,
+  createCashFlowClassificationSchema,
+  updateCashFlowClassificationSchema,
 } from '@budget/shared';
 import type {
   CreateCashFlowCheckDTO,
@@ -13,6 +15,8 @@ import type {
   CashFlowSettingsDTO,
   CreateCashFlowColumnDTO,
   UpdateCashFlowColumnDTO,
+  CreateCashFlowClassificationDTO,
+  UpdateCashFlowClassificationDTO,
 } from '@budget/shared';
 
 export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
@@ -235,6 +239,86 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const { key } = request.params;
       await cashFlowService.deleteColumn(request.authUser!.id, key);
+      return { success: true };
+    },
+  });
+
+  // ── Classifications ──────────────────────────────────────────
+
+  // Get classifications
+  fastify.get('/classifications', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Get cashflow column classifications',
+    },
+    handler: async (request) => {
+      const classifications = await cashFlowService.getClassifications(request.authUser!.id);
+      return { success: true, data: classifications };
+    },
+  });
+
+  // Create classification
+  fastify.post<{ Body: CreateCashFlowClassificationDTO }>('/classifications', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Create cashflow column classification',
+      body: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', minLength: 1, maxLength: 100 },
+        },
+        required: ['label'],
+      },
+    },
+    handler: async (request, reply) => {
+      const data = createCashFlowClassificationSchema.parse(request.body);
+      const classification = await cashFlowService.createClassification(request.authUser!.id, data);
+      reply.status(201);
+      return { success: true, data: classification };
+    },
+  });
+
+  // Update classification
+  fastify.put<{ Params: { key: string }; Body: UpdateCashFlowClassificationDTO }>('/classifications/:key', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Update cashflow column classification',
+      params: {
+        type: 'object',
+        properties: { key: { type: 'string' } },
+        required: ['key'],
+      },
+      body: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', minLength: 1, maxLength: 100 },
+          columnKeys: { type: 'array', items: { type: 'string' } },
+          position: { type: 'number', minimum: 0 },
+        },
+      },
+    },
+    handler: async (request) => {
+      const { key } = request.params;
+      const data = updateCashFlowClassificationSchema.parse(request.body);
+      const classification = await cashFlowService.updateClassification(request.authUser!.id, key, data);
+      return { success: true, data: classification };
+    },
+  });
+
+  // Delete classification
+  fastify.delete<{ Params: { key: string } }>('/classifications/:key', {
+    schema: {
+      tags: ['CashFlow'],
+      summary: 'Delete cashflow column classification',
+      params: {
+        type: 'object',
+        properties: { key: { type: 'string' } },
+        required: ['key'],
+      },
+    },
+    handler: async (request) => {
+      const { key } = request.params;
+      await cashFlowService.deleteClassification(request.authUser!.id, key);
       return { success: true };
     },
   });

@@ -303,6 +303,24 @@ export interface CashFlowSettingsDTO {
   etfCount: number;
 }
 
+// CashFlow Column Classifications
+export interface CashFlowClassificationDTO {
+  key: string;
+  label: string;
+  columnKeys: string[];
+  position: number;
+}
+
+export interface CreateCashFlowClassificationDTO {
+  label: string;
+}
+
+export interface UpdateCashFlowClassificationDTO {
+  label?: string;
+  columnKeys?: string[];
+  position?: number;
+}
+
 // ============= Portfolio DTOs =============
 
 export type PortfolioHistoryHorizonDTO = '1Y' | '3Y' | '5Y';

@@ -181,6 +181,24 @@ export const cashFlowSettingsSchema = z.object({
   etfCount: z.number().int().min(0),
 });
 
+// CashFlow Classification schemas
+export const createCashFlowClassificationSchema = z.object({
+  label: z.string().min(1).max(100).trim(),
+});
+
+export const updateCashFlowClassificationSchema = z
+  .object({
+    label: z.string().min(1).max(100).trim().optional(),
+    columnKeys: z.array(z.string().min(1).max(80)).optional(),
+    position: z.number().int().min(0).optional(),
+  })
+  .refine(
+    (data) => data.label !== undefined || data.columnKeys !== undefined || data.position !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
+
 // Portfolio history schemas
 export const portfolioHistoryHorizonSchema = z.enum(['1Y', '3Y', '5Y']);
 

@@ -14,6 +14,10 @@ import {
   useUpdateCashFlowColumn,
   useDeleteCashFlowColumn,
   useSwapCashFlowColumns,
+  useCashFlowClassifications,
+  useCreateCashFlowClassification,
+  useUpdateCashFlowClassification,
+  useDeleteCashFlowClassification,
 } from '../hooks/useQueries';
 import type { CashFlowCheckDTO, CashFlowColumnDTO } from '@budget/shared';
 
@@ -178,6 +182,10 @@ export function CashFlow() {
   const updateColumn = useUpdateCashFlowColumn();
   const deleteColumn = useDeleteCashFlowColumn();
   const swapColumns = useSwapCashFlowColumns();
+  const { data: classificationsData } = useCashFlowClassifications();
+  const createClassification = useCreateCashFlowClassification();
+  const updateClassification = useUpdateCashFlowClassification();
+  const deleteClassification = useDeleteCashFlowClassification();
 
   const [settings, setSettings] = useState<CashFlowSettings>(INITIAL_SETTINGS);
   const settingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,6 +193,9 @@ export function CashFlow() {
   const [editingColumnKey, setEditingColumnKey] = useState<string | null>(null);
   const [editingColumnLabel, setEditingColumnLabel] = useState('');
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
+  const [newClassificationLabel, setNewClassificationLabel] = useState('');
+  const [editingClassificationKey, setEditingClassificationKey] = useState<string | null>(null);
+  const [editingClassificationLabel, setEditingClassificationLabel] = useState('');
   const [isTableDragScrolling, setIsTableDragScrolling] = useState(false);
   const [dragColumnKey, setDragColumnKey] = useState<string | null>(null);
   const [dragOverColumnKey, setDragOverColumnKey] = useState<string | null>(null);
@@ -925,6 +936,138 @@ export function CashFlow() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-6 border-t border-slate-200 pt-4">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Classificazioni</h4>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    className="input sm:max-w-sm"
+                    value={newClassificationLabel}
+                    onChange={(e) => setNewClassificationLabel(e.target.value)}
+                    placeholder="Nuova classificazione"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() =>
+                      createClassification.mutate(
+                        { label: newClassificationLabel.trim() },
+                        { onSuccess: () => setNewClassificationLabel('') }
+                      )
+                    }
+                  >
+                    Aggiungi
+                  </button>
+                </div>
+
+                {(classificationsData ?? []).map((cls) => (
+                  <div key={cls.key} className="mb-3 rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="flex items-center justify-between bg-slate-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {editingClassificationKey === cls.key ? (
+                          <input
+                            className="input h-8 w-48"
+                            value={editingClassificationLabel}
+                            onChange={(e) => setEditingClassificationLabel(e.target.value)}
+                          />
+                        ) : (
+                          <span className="font-medium text-slate-800 text-sm">{cls.label}</span>
+                        )}
+                        <span className="text-xs text-slate-500">{cls.columnKeys.length} colonne</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {editingClassificationKey === cls.key ? (
+                          <>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded text-emerald-600 hover:bg-emerald-50"
+                              onClick={() =>
+                                updateClassification.mutate(
+                                  { key: cls.key, data: { label: editingClassificationLabel.trim() } },
+                                  { onSuccess: () => setEditingClassificationKey(null) }
+                                )
+                              }
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded hover:bg-slate-100"
+                              onClick={() => setEditingClassificationKey(null)}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="p-1.5 rounded text-sky-600 hover:bg-sky-50"
+                            onClick={() => {
+                              setEditingClassificationKey(cls.key);
+                              setEditingClassificationLabel(cls.label);
+                            }}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="p-1.5 rounded text-red-600 hover:bg-red-50"
+                          onClick={() => deleteClassification.mutate(cls.key)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 space-y-1">
+                      {columns.map((col) => {
+                        const isInThis = cls.columnKeys.includes(col.key);
+                        const isInOther = !isInThis && (classificationsData ?? []).some(
+                          (other) => other.key !== cls.key && other.columnKeys.includes(col.key)
+                        );
+                        return (
+                          <label
+                            key={col.key}
+                            className={`flex items-center gap-2 text-sm py-0.5 ${isInOther ? 'opacity-40' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="rounded border-slate-300"
+                              checked={isInThis}
+                              disabled={isInOther}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...cls.columnKeys, col.key]
+                                  : cls.columnKeys.filter((k) => k !== col.key);
+                                updateClassification.mutate({ key: cls.key, data: { columnKeys: next } });
+                              }}
+                            />
+                            <span className={isInThis ? 'text-slate-900' : 'text-slate-500'}>{col.label}</span>
+                            {isInOther && <span className="text-xs text-slate-400">(in altra classif.)</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {(classificationsData ?? []).length > 0 && columns.some(
+                  (col) => !(classificationsData ?? []).some((cls) => cls.columnKeys.includes(col.key))
+                ) && (
+                  <div className="rounded-lg border border-dashed border-slate-300 px-3 py-2 mt-2">
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Non classificate</span>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {columns
+                        .filter((col) => !(classificationsData ?? []).some((cls) => cls.columnKeys.includes(col.key)))
+                        .map((col) => (
+                          <span key={col.key} className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-0.5">
+                            {col.label}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

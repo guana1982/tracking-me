@@ -10,6 +10,9 @@ import type {
   CreateCashFlowColumnDTO,
   UpdateCashFlowColumnDTO,
   CashFlowValueMap,
+  CashFlowClassificationDTO,
+  CreateCashFlowClassificationDTO,
+  UpdateCashFlowClassificationDTO,
 } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 
@@ -283,6 +286,133 @@ export class CashFlowService {
         columnsJson: nextColumns as unknown as Prisma.InputJsonValue,
       },
     });
+  }
+
+  // ── Classifications ──────────────────────────────────────────
+
+  async getClassifications(userId: string): Promise<CashFlowClassificationDTO[]> {
+    const settings = await this.getOrCreateSettingsRecord(userId);
+    return this.normalizeClassifications(settings.classificationsJson);
+  }
+
+  async createClassification(userId: string, data: CreateCashFlowClassificationDTO): Promise<CashFlowClassificationDTO> {
+    const settings = await this.getOrCreateSettingsRecord(userId);
+    const classifications = this.normalizeClassifications(settings.classificationsJson);
+
+    const label = data.label.trim();
+    if (!label) {
+      throw new AppError('Classification label is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const key = `cls_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+    classifications.push({
+      key,
+      label,
+      columnKeys: [],
+      position: classifications.length,
+    });
+
+    const normalized = this.normalizeClassifications(classifications);
+
+    await prisma.cashFlowSettings.update({
+      where: { userId },
+      data: { classificationsJson: normalized as unknown as Prisma.InputJsonValue },
+    });
+
+    return normalized.find((c) => c.key === key)!;
+  }
+
+  async updateClassification(userId: string, key: string, data: UpdateCashFlowClassificationDTO): Promise<CashFlowClassificationDTO> {
+    const settings = await this.getOrCreateSettingsRecord(userId);
+    const classifications = this.normalizeClassifications(settings.classificationsJson);
+    const index = classifications.findIndex((c) => c.key === key);
+
+    if (index < 0) {
+      throw new AppError('Classification not found', 404, 'NOT_FOUND');
+    }
+
+    const current = classifications[index];
+
+    let nextColumnKeys = current.columnKeys;
+    if (data.columnKeys !== undefined) {
+      const otherKeys = new Set(
+        classifications
+          .filter((c) => c.key !== key)
+          .flatMap((c) => c.columnKeys)
+      );
+      nextColumnKeys = data.columnKeys.filter((ck) => !otherKeys.has(ck));
+    }
+
+    classifications[index] = {
+      ...current,
+      label: data.label !== undefined ? data.label.trim() : current.label,
+      columnKeys: nextColumnKeys,
+      position: data.position ?? current.position,
+    };
+
+    if (!classifications[index].label) {
+      throw new AppError('Classification label is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const normalized = this.normalizeClassifications(classifications);
+
+    await prisma.cashFlowSettings.update({
+      where: { userId },
+      data: { classificationsJson: normalized as unknown as Prisma.InputJsonValue },
+    });
+
+    return normalized.find((c) => c.key === key)!;
+  }
+
+  async deleteClassification(userId: string, key: string): Promise<void> {
+    const settings = await this.getOrCreateSettingsRecord(userId);
+    const classifications = this.normalizeClassifications(settings.classificationsJson);
+    const index = classifications.findIndex((c) => c.key === key);
+
+    if (index < 0) {
+      throw new AppError('Classification not found', 404, 'NOT_FOUND');
+    }
+
+    const normalized = this.normalizeClassifications(classifications.filter((c) => c.key !== key));
+
+    await prisma.cashFlowSettings.update({
+      where: { userId },
+      data: { classificationsJson: normalized as unknown as Prisma.InputJsonValue },
+    });
+  }
+
+  private normalizeClassifications(raw: unknown): CashFlowClassificationDTO[] {
+    if (!Array.isArray(raw)) return [];
+
+    const result: CashFlowClassificationDTO[] = [];
+    const seen = new Set<string>();
+
+    raw.forEach((entry, index) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return;
+
+      const keyValue = (entry as { key?: unknown }).key;
+      const labelValue = (entry as { label?: unknown }).label;
+      const columnKeysValue = (entry as { columnKeys?: unknown }).columnKeys;
+      const positionValue = (entry as { position?: unknown }).position;
+
+      const key = typeof keyValue === 'string' && keyValue.length > 0 ? keyValue : '';
+      const label = typeof labelValue === 'string' ? labelValue.trim() : '';
+      const position =
+        typeof positionValue === 'number' && Number.isInteger(positionValue) && positionValue >= 0
+          ? positionValue
+          : index;
+      const columnKeys = Array.isArray(columnKeysValue)
+        ? columnKeysValue.filter((k): k is string => typeof k === 'string' && k.length > 0)
+        : [];
+
+      if (!key || !label || seen.has(key)) return;
+      seen.add(key);
+      result.push({ key, label, columnKeys, position });
+    });
+
+    result.sort((a, b) => a.position - b.position || a.label.localeCompare(b.label));
+    return result.map((c, i) => ({ ...c, position: i }));
   }
 
   async getSettings(userId: string): Promise<CashFlowSettingsDTO> {

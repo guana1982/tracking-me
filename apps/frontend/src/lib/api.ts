@@ -24,6 +24,9 @@ import type {
   CashFlowColumnDTO,
   CreateCashFlowColumnDTO,
   UpdateCashFlowColumnDTO,
+  CashFlowClassificationDTO,
+  CreateCashFlowClassificationDTO,
+  UpdateCashFlowClassificationDTO,
   FixedExpenseTemplateDTO,
   CreateFixedExpenseTemplateDTO,
   UpdateFixedExpenseTemplateDTO,
@@ -278,6 +281,26 @@ export const cashFlowApi = {
 
   deleteColumn: (key: string) =>
     fetchApi<void>(`/cashflow/columns/${key}`, {
+      method: 'DELETE',
+    }),
+
+  getClassifications: () =>
+    fetchApi<CashFlowClassificationDTO[]>('/cashflow/classifications'),
+
+  createClassification: (data: CreateCashFlowClassificationDTO) =>
+    fetchApi<CashFlowClassificationDTO>('/cashflow/classifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateClassification: (key: string, data: UpdateCashFlowClassificationDTO) =>
+    fetchApi<CashFlowClassificationDTO>(`/cashflow/classifications/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteClassification: (key: string) =>
+    fetchApi<void>(`/cashflow/classifications/${key}`, {
       method: 'DELETE',
     }),
 };
