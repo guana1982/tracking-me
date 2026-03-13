@@ -525,11 +525,11 @@ export function CashFlow() {
   }) => {
     const { cx, cy, midAngle, outerRadius, index } = props;
     const point = allocationChart.columns[index];
-    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 4;
+    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 5;
     if (!point || !showLabel) return null;
 
     const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 14;
+    const radius = outerRadius + 10;
     const x = cx + radius * Math.cos(angle);
     const y = cy + radius * Math.sin(angle);
     const anchor = x > cx ? 'start' : 'end';
@@ -735,7 +735,7 @@ export function CashFlow() {
           Andamento e Suddivisione
         </button>
         {isChartsOpen && (
-          <div className="grid grid-cols-1 xl:grid-cols-[500px,1fr] mt-2">
+          <div className="grid grid-cols-1 xl:grid-cols-[620px,1fr] mt-2">
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
@@ -743,7 +743,7 @@ export function CashFlow() {
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="grid h-60 grid-cols-[220px,minmax(0,1fr)] items-center gap-4">
+            <div className="grid h-60 grid-cols-[300px,minmax(0,1fr)] items-center gap-4">
               <div className="min-w-0 h-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -812,19 +812,19 @@ export function CashFlow() {
                 <div className="grid h-full grid-cols-2 content-center gap-x-2.5 gap-y-2">
                   {legendGroups.map((group) => (
                     <div key={group.key} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="grid grid-cols-[minmax(0,1fr),42px] items-start gap-x-1">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-start gap-2">
                             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="text-[11px] font-semibold text-slate-800 whitespace-normal break-words">{group.label}</span>
+                            <span className="text-[11px] leading-tight font-semibold text-slate-800 whitespace-normal break-words">{group.label}</span>
                           </div>
-                          <p className="pl-[18px] text-[9px] text-slate-500">
+                          <p className="pl-[18px] mt-0.5 text-[9px] leading-tight text-slate-500">
                             {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
                           </p>
                         </div>
-                        <span className="shrink-0 text-[9px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
+                        <span className="shrink-0 text-right text-[9px] font-semibold text-slate-500">{group.percentage.toFixed(1)}%</span>
                       </div>
-                      <p className="mt-1 pl-[18px] truncate text-[11px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
+                      <p className="mt-1 pl-[18px] text-[11px] leading-tight font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
                     </div>
                   ))}
                 </div>
