@@ -42,7 +42,42 @@ type RowWithMetrics = CashFlowRow & {
   diffByColumn: Record<string, number | null>;
 };
 
-const ALLOCATION_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#14b8a6', '#2563eb'];
+type AllocationGroupSlice = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  value: number;
+  percentage: number;
+  color: string;
+  columnCount: number;
+  level: 'classification';
+};
+
+type AllocationColumnSlice = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  value: number;
+  percentage: number;
+  color: string;
+  groupKey: string;
+  groupLabel: string;
+  level: 'column';
+};
+
+type ValuedColumn = {
+  column: CashFlowColumn;
+  value: number;
+};
+
+type AllocationGroupDraft = {
+  key: string;
+  label: string;
+  columns: ValuedColumn[];
+};
+
+const CLASSIFICATION_COLORS = ['#0f766e', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#ea580c'];
+const UNCLASSIFIED_GROUP_KEY = '__unclassified';
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -169,6 +204,44 @@ function getPieShortLabel(column: CashFlowColumn): string {
   return LEGACY_PIE_SHORT_LABELS[column.key] ?? (column.label.length > 8 ? `${column.label.slice(0, 8)}…` : column.label);
 }
 
+function getGroupShortLabel(label: string): string {
+  return label.length > 14 ? `${label.slice(0, 14)}...` : label;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const normalized = hex.replace('#', '');
+  const expanded = normalized.length === 3 ? normalized.split('').map((char) => `${char}${char}`).join('') : normalized;
+  const value = Number.parseInt(expanded, 16);
+
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function mixHexColors(colorA: string, colorB: string, weight: number): string {
+  const a = hexToRgb(colorA);
+  const b = hexToRgb(colorB);
+  const clampedWeight = Math.max(0, Math.min(1, weight));
+
+  return rgbToHex(
+    Math.round(a.r + (b.r - a.r) * clampedWeight),
+    Math.round(a.g + (b.g - a.g) * clampedWeight),
+    Math.round(a.b + (b.b - a.b) * clampedWeight)
+  );
+}
+
+function getColumnShade(baseColor: string, index: number, total: number): string {
+  if (total <= 1) return mixHexColors(baseColor, '#ffffff', 0.12);
+  const ratio = 0.08 + (index / Math.max(1, total - 1)) * 0.32;
+  return mixHexColors(baseColor, '#ffffff', ratio);
+}
+
 export function CashFlow() {
   const { data: checksData, isLoading: isLoadingChecks, isError: isErrorChecks } = useCashFlowChecks();
   const { data: columnsData, isLoading: isLoadingColumns, isError: isErrorColumns } = useCashFlowColumns();
@@ -218,6 +291,10 @@ export function CashFlow() {
   const columns: CashFlowColumn[] = useMemo(
     () => [...(columnsData ?? [])].sort((a, b) => a.position - b.position),
     [columnsData]
+  );
+  const classifications = useMemo(
+    () => [...(classificationsData ?? [])].sort((a, b) => a.position - b.position || a.label.localeCompare(b.label)),
+    [classificationsData]
   );
   const activeColumns = useMemo(() => columns.filter((column) => column.isActive), [columns]);
 
@@ -330,21 +407,89 @@ export function CashFlow() {
     return computeYAxis(values);
   }, [trendData, showTotalTrend, visibleTrendKeys]);
 
-  const pieData = useMemo(() => {
-    if (!latestRow) return [];
-    const raw = activeColumns.map((column, index) => ({
-      key: column.key,
-      label: column.label,
-      shortLabel: getPieShortLabel(column),
-      value: Math.max(0, getRowValue(latestRow, column.key)),
-      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
-    }));
-    const total = raw.reduce((sum, item) => sum + item.value, 0);
-    return raw.map((item) => ({ ...item, percentage: total > 0 ? (item.value / total) * 100 : 0 }));
-  }, [activeColumns, latestRow]);
-  const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
+  const allocationChart = useMemo(() => {
+    if (!latestRow) {
+      return { groups: [] as AllocationGroupSlice[], columns: [] as AllocationColumnSlice[], total: 0 };
+    }
 
-  const renderPieLabel = (props: {
+    const valuedColumns: ValuedColumn[] = activeColumns
+      .map((column) => ({
+        column,
+        value: Math.max(0, getRowValue(latestRow, column.key)),
+      }))
+      .filter((entry) => entry.value > 0);
+
+    if (valuedColumns.length === 0) {
+      return { groups: [] as AllocationGroupSlice[], columns: [] as AllocationColumnSlice[], total: 0 };
+    }
+
+    const valuedColumnsByKey = new Map<string, ValuedColumn>(valuedColumns.map((entry) => [entry.column.key, entry]));
+    const groupedColumns: AllocationGroupDraft[] = classifications
+      .map((classification) => ({
+        key: classification.key,
+        label: classification.label,
+        columns: classification.columnKeys
+          .map((columnKey: string) => valuedColumnsByKey.get(columnKey))
+          .filter((entry: ValuedColumn | undefined): entry is ValuedColumn => Boolean(entry))
+          .sort((a: ValuedColumn, b: ValuedColumn) => a.column.position - b.column.position),
+      }))
+      .filter((group) => group.columns.length > 0);
+
+    const groupedKeys = new Set(groupedColumns.flatMap((group) => group.columns.map((entry) => entry.column.key)));
+    const unclassifiedColumns = valuedColumns
+      .filter((entry) => !groupedKeys.has(entry.column.key))
+      .sort((a, b) => a.column.position - b.column.position);
+
+    const orderedGroups = [
+      ...groupedColumns,
+      ...(unclassifiedColumns.length > 0
+        ? [{ key: UNCLASSIFIED_GROUP_KEY, label: 'Non classificate', columns: unclassifiedColumns }]
+        : []),
+    ];
+
+    const total = orderedGroups.reduce(
+      (sum, group) => sum + group.columns.reduce((groupSum: number, entry: ValuedColumn) => groupSum + entry.value, 0),
+      0
+    );
+
+    const groups: AllocationGroupSlice[] = orderedGroups.map((group, index) => {
+      const value = group.columns.reduce((sum: number, entry: ValuedColumn) => sum + entry.value, 0);
+      const color = group.key === UNCLASSIFIED_GROUP_KEY
+        ? '#94a3b8'
+        : CLASSIFICATION_COLORS[index % CLASSIFICATION_COLORS.length];
+
+      return {
+        key: group.key,
+        label: group.label,
+        shortLabel: getGroupShortLabel(group.label),
+        value,
+        percentage: total > 0 ? (value / total) * 100 : 0,
+        color,
+        columnCount: group.columns.length,
+        level: 'classification',
+      };
+    });
+
+    const groupColors = new Map(groups.map((group) => [group.key, group.color]));
+    const columnsData: AllocationColumnSlice[] = orderedGroups.flatMap((group) => {
+      const baseColor = groupColors.get(group.key) ?? '#94a3b8';
+      return group.columns.map((entry: ValuedColumn, index: number) => ({
+        key: entry.column.key,
+        label: entry.column.label,
+        shortLabel: getPieShortLabel(entry.column),
+        value: entry.value,
+        percentage: total > 0 ? (entry.value / total) * 100 : 0,
+        color: getColumnShade(baseColor, index, group.columns.length),
+        groupKey: group.key,
+        groupLabel: group.label,
+        level: 'column',
+      }));
+    });
+
+    return { groups, columns: columnsData, total };
+  }, [activeColumns, classifications, latestRow]);
+
+  const renderColumnPieLabel = (props: {
     cx: number;
     cy: number;
     midAngle: number;
@@ -352,11 +497,12 @@ export function CashFlow() {
     index: number;
   }) => {
     const { cx, cy, midAngle, outerRadius, index } = props;
-    const point = pieData[index];
-    if (!point || point.percentage <= 0) return null;
+    const point = allocationChart.columns[index];
+    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 4;
+    if (!point || !showLabel) return null;
 
     const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 20;
+    const radius = outerRadius + 16;
     const x = cx + radius * Math.cos(angle);
     const y = cy + radius * Math.sin(angle);
     const anchor = x > cx ? 'start' : 'end';
@@ -565,26 +711,46 @@ export function CashFlow() {
           <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] mt-2">
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
-          <p className="text-[10px] text-slate-500 mb-1">Totale allocato: {formatCurrency(pieTotal)}</p>
-          {pieData.length === 0 ? (
+          <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
+          <p className="text-[10px] text-slate-400 mb-2">Anello interno: classificazioni. Anello esterno: colonne.</p>
+          {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="h-52">
+            <>
+                <div className="h-60">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={pieData}
+                        data={allocationChart.groups}
                         dataKey="value"
                         nameKey="label"
                         cx="50%"
                         cy="50%"
-                        innerRadius={44}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                        label={renderPieLabel}
+                        innerRadius={26}
+                        outerRadius={47}
+                        paddingAngle={3}
+                        stroke="#ffffff"
+                        strokeWidth={2}
                       >
-                        {pieData.map((item) => (
+                        {allocationChart.groups.map((item) => (
+                          <Cell key={item.key} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Pie
+                        data={allocationChart.columns}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={54}
+                        outerRadius={83}
+                        paddingAngle={1}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                        label={renderColumnPieLabel}
+                      >
+                        {allocationChart.columns.map((item) => (
                           <Cell key={item.key} fill={item.color} />
                         ))}
                       </Pie>
@@ -592,13 +758,20 @@ export function CashFlow() {
                         content={({ active, payload }) => {
                           if (!active || !payload || payload.length === 0) return null;
                           const point = payload[0]?.payload as
-                            | { label: string; value: number; percentage: number }
+                            | AllocationGroupSlice
+                            | AllocationColumnSlice
                             | undefined;
                           if (!point) return null;
 
                           return (
                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                               <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                              {point.level === 'column' && (
+                                <p className="text-xs text-slate-500">Classificazione: {point.groupLabel}</p>
+                              )}
+                              {point.level === 'classification' && (
+                                <p className="text-xs text-slate-500">{point.columnCount} colonne</p>
+                              )}
                               <p className="text-sm text-slate-700">{formatCurrency(point.value)}</p>
                               <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
                             </div>
@@ -608,6 +781,26 @@ export function CashFlow() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+                <div className="mt-3 space-y-1.5">
+                  {allocationChart.groups.map((group) => (
+                    <div key={group.key} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                          <span className="truncate text-xs font-semibold text-slate-800">{group.label}</span>
+                        </div>
+                        <p className="pl-[18px] text-[10px] text-slate-500">
+                          {group.columnCount} {group.columnCount === 1 ? 'colonna' : 'colonne'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
+                        <p className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            </>
               )}
         </div>
         <div className="flex flex-col pl-4">
@@ -1039,7 +1232,7 @@ export function CashFlow() {
                               onChange={(e) => {
                                 const next = e.target.checked
                                   ? [...cls.columnKeys, col.key]
-                                  : cls.columnKeys.filter((k) => k !== col.key);
+                                  : cls.columnKeys.filter((k: string) => k !== col.key);
                                 updateClassification.mutate({ key: cls.key, data: { columnKeys: next } });
                               }}
                             />
