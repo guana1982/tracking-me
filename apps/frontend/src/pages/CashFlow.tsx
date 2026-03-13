@@ -24,6 +24,7 @@ import type { CashFlowCheckDTO, CashFlowColumnDTO } from '@budget/shared';
 type CashFlowRow = CashFlowCheckDTO;
 type CashFlowColumn = CashFlowColumnDTO;
 
+
 type CashFlowSettings = {
   commissionPerEtf: number;
   etfCount: number;
