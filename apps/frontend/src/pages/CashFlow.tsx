@@ -74,11 +74,11 @@ type AllocationGroupDraft = {
   columns: ValuedColumn[];
 };
 
-const CLASSIFICATION_COLORS = ['#2563eb', '#0f766e', '#d97706', '#7c3aed', '#e11d48', '#0e7490', '#059669', '#ea580c'];
+const CLASSIFICATION_COLORS = ['#10B981', '#0EA5E9', '#F59E0B', '#94A3B8', '#14B8A6', '#38BDF8', '#FBBF24', '#CBD5E1'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
-const PIE_LABEL_MIN_GAP = 14;
-const PIE_LABEL_MIN_Y = 16;
-const PIE_LABEL_MAX_Y = 188;
+const PIE_LABEL_MIN_GAP = 12;
+const PIE_LABEL_OUTER_OFFSET = 10;
+const PIE_LABEL_SIDE_OFFSET = 18;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -239,7 +239,7 @@ function mixHexColors(colorA: string, colorB: string, weight: number): string {
 
 function getColumnShade(baseColor: string, index: number, total: number): string {
   if (total <= 1) return mixHexColors(baseColor, '#ffffff', 0.1);
-  const ratio = 0.05 + (index / Math.max(1, total - 1)) * 0.45;
+  const ratio = 0.04 + (index / Math.max(1, total - 1)) * 0.24;
   return mixHexColors(baseColor, '#ffffff', ratio);
 }
 
@@ -458,7 +458,7 @@ export function CashFlow() {
     const groups: AllocationGroupSlice[] = orderedGroups.map((group, index) => {
       const value = group.columns.reduce((sum: number, entry: ValuedColumn) => sum + entry.value, 0);
       const color = group.key === UNCLASSIFIED_GROUP_KEY
-        ? '#94a3b8'
+        ? '#CBD5E1'
         : CLASSIFICATION_COLORS[index % CLASSIFICATION_COLORS.length];
 
       return {
@@ -494,9 +494,9 @@ export function CashFlow() {
       right: [],
     };
 
-    const reserveY = (side: 'left' | 'right', index: number, desiredY: number): number => {
+    const reserveY = (side: 'left' | 'right', index: number, desiredY: number, yMin: number, yMax: number): number => {
       const slots = slotsBySide[side];
-      slots.push({ index, y: clamp(desiredY, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y) });
+      slots.push({ index, y: clamp(desiredY, yMin, yMax) });
       slots.sort((a, b) => a.y - b.y);
 
       for (let i = 1; i < slots.length; i += 1) {
@@ -505,8 +505,8 @@ export function CashFlow() {
         }
       }
 
-      if (slots.length > 0 && slots[slots.length - 1].y > PIE_LABEL_MAX_Y) {
-        slots[slots.length - 1].y = PIE_LABEL_MAX_Y;
+      if (slots.length > 0 && slots[slots.length - 1].y > yMax) {
+        slots[slots.length - 1].y = yMax;
         for (let i = slots.length - 2; i >= 0; i -= 1) {
           if (slots[i + 1].y - slots[i].y < PIE_LABEL_MIN_GAP) {
             slots[i].y = slots[i + 1].y - PIE_LABEL_MIN_GAP;
@@ -514,14 +514,14 @@ export function CashFlow() {
         }
       }
 
-      if (slots.length > 0 && slots[0].y < PIE_LABEL_MIN_Y) {
-        const shift = PIE_LABEL_MIN_Y - slots[0].y;
+      if (slots.length > 0 && slots[0].y < yMin) {
+        const shift = yMin - slots[0].y;
         slots.forEach((slot) => {
-          slot.y = clamp(slot.y + shift, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y);
+          slot.y = clamp(slot.y + shift, yMin, yMax);
         });
       }
 
-      return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y);
+      return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, yMin, yMax);
     };
 
     return (props: { cx: number; cy: number; midAngle: number; outerRadius: number; index: number }) => {
@@ -531,16 +531,21 @@ export function CashFlow() {
       const angle = (-props.midAngle * Math.PI) / 180;
       const isRightSide = Math.cos(angle) >= 0;
       const side: 'left' | 'right' = isRightSide ? 'right' : 'left';
-      const y = reserveY(side, props.index, props.cy + Math.sin(angle) * (props.outerRadius + 10));
-      const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 10);
-      const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 36);
+      const yMin = props.cy - (props.outerRadius + 18);
+      const yMax = props.cy + (props.outerRadius + 18);
+      const desiredY = props.cy + Math.sin(angle) * (props.outerRadius + PIE_LABEL_OUTER_OFFSET);
+      const y = reserveY(side, props.index, desiredY, yMin, yMax);
+      const startX = props.cx + Math.cos(angle) * (props.outerRadius + 1);
+      const startY = props.cy + Math.sin(angle) * (props.outerRadius + 1);
+      const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 8);
+      const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + PIE_LABEL_SIDE_OFFSET);
       const anchor = isRightSide ? 'start' : 'end';
       const text = `${point.shortLabel} ${point.percentage.toFixed(1)}%`;
 
       return (
         <g>
           <path
-            d={`M ${props.cx + Math.cos(angle) * props.outerRadius} ${props.cy + Math.sin(angle) * props.outerRadius}
+            d={`M ${startX} ${startY}
                L ${elbowX} ${y}
                L ${labelX} ${y}`}
             fill="none"
@@ -552,7 +557,7 @@ export function CashFlow() {
             y={y}
             textAnchor={anchor}
             dominantBaseline="central"
-            fontSize={9}
+            fontSize={8.5}
             fontWeight={600}
             fill="#334155"
           >
@@ -774,17 +779,17 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 h-52 max-w-[430px] mx-auto">
+              <div className="min-w-0 h-56 max-w-[420px] mx-auto relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
+                  <PieChart margin={{ top: 12, right: 24, bottom: 12, left: 24 }}>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={52}
-                      outerRadius={64}
+                      innerRadius={42}
+                      outerRadius={68}
                       minAngle={2}
                       paddingAngle={1}
                       startAngle={90}
@@ -816,6 +821,9 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <p className="text-sm font-bold text-slate-700">{formatCurrency(allocationChart.total)}</p>
+                </div>
               </div>
             </div>
               )}
