@@ -17,16 +17,16 @@ import type {
 import { AppError } from '../lib/error-handler.js';
 
 const LEGACY_COLUMNS: CashFlowColumnDTO[] = [
-  { key: 'bbva', label: 'BBVA c/c', position: 0, isActive: true },
-  { key: 'tradeRepublic', label: 'TRADE REP.', position: 1, isActive: true },
-  { key: 'webankCc', label: 'WEBANK c/c', position: 2, isActive: true },
-  { key: 'webankObbl', label: 'WEBANK Obbl', position: 3, isActive: true },
-  { key: 'etfLordo', label: 'ETF tutti LORDO', position: 4, isActive: true },
-  { key: 'rendimentoLordo', label: 'RENDIM. LORDO', position: 5, isActive: true },
-  { key: 'bper', label: 'BPER c/c', position: 6, isActive: true },
-  { key: 'tricount', label: 'TRIC DEB/CRED', position: 7, isActive: true },
-  { key: 'cartaWebank', label: 'CartaWeBank', position: 8, isActive: true },
-  { key: 'edenred', label: 'EDENRED', position: 9, isActive: true },
+  { key: 'bbva', label: 'BBVA c/c', position: 0, isActive: true, showInPie: true },
+  { key: 'tradeRepublic', label: 'TRADE REP.', position: 1, isActive: true, showInPie: true },
+  { key: 'webankCc', label: 'WEBANK c/c', position: 2, isActive: true, showInPie: true },
+  { key: 'webankObbl', label: 'WEBANK Obbl', position: 3, isActive: true, showInPie: true },
+  { key: 'etfLordo', label: 'ETF tutti LORDO', position: 4, isActive: true, showInPie: true },
+  { key: 'rendimentoLordo', label: 'RENDIM. LORDO', position: 5, isActive: true, showInPie: true },
+  { key: 'bper', label: 'BPER c/c', position: 6, isActive: true, showInPie: true },
+  { key: 'tricount', label: 'TRIC DEB/CRED', position: 7, isActive: true, showInPie: true },
+  { key: 'cartaWebank', label: 'CartaWeBank', position: 8, isActive: true, showInPie: true },
+  { key: 'edenred', label: 'EDENRED', position: 9, isActive: true, showInPie: true },
 ];
 
 const LEGACY_COLUMN_KEYS = new Set(LEGACY_COLUMNS.map((column) => column.key));
@@ -187,6 +187,7 @@ export class CashFlowService {
       label,
       position: columns.length,
       isActive: true,
+      showInPie: true,
     });
 
     const normalized = this.normalizeColumns(columns);
@@ -216,6 +217,7 @@ export class CashFlowService {
       label: data.label !== undefined ? data.label.trim() : current.label,
       position: data.position ?? current.position,
       isActive: data.isActive ?? current.isActive,
+      showInPie: data.showInPie ?? current.showInPie,
     };
 
     if (!next.label) {
@@ -480,6 +482,7 @@ export class CashFlowService {
         const labelValue = (entry as { label?: unknown }).label;
         const positionValue = (entry as { position?: unknown }).position;
         const isActiveValue = (entry as { isActive?: unknown }).isActive;
+        const showInPieValue = (entry as { showInPie?: unknown }).showInPie;
 
         const key =
           typeof keyValue === 'string' && COLUMN_KEY_REGEX.test(keyValue) ? keyValue : '';
@@ -489,10 +492,11 @@ export class CashFlowService {
             ? positionValue
             : index;
         const isActive = typeof isActiveValue === 'boolean' ? isActiveValue : true;
+        const showInPie = typeof showInPieValue === 'boolean' ? showInPieValue : true;
 
         if (!key || !label || seen.has(key)) return;
         seen.add(key);
-        result.push({ key, label, position, isActive });
+        result.push({ key, label, position, isActive, showInPie });
       });
     }
 

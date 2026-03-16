@@ -76,6 +76,9 @@ type AllocationGroupDraft = {
 
 const CLASSIFICATION_COLORS = ['#2563eb', '#0f766e', '#d97706', '#7c3aed', '#e11d48', '#0e7490', '#059669', '#ea580c'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
+const PIE_LABEL_MIN_GAP = 14;
+const PIE_LABEL_MIN_Y = 16;
+const PIE_LABEL_MAX_Y = 188;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -135,6 +138,10 @@ function parseAmount(value: string): number {
   if (!value.trim()) return 0;
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function getRowValue(row: CashFlowRow, key: string): number {
@@ -406,7 +413,9 @@ export function CashFlow() {
       return { groups: [] as AllocationGroupSlice[], columns: [] as AllocationColumnSlice[], total: 0 };
     }
 
-    const valuedColumns: ValuedColumn[] = activeColumns
+    const pieColumns = activeColumns.filter((column) => column.showInPie);
+
+    const valuedColumns: ValuedColumn[] = pieColumns
       .map((column) => ({
         column,
         value: Math.max(0, getRowValue(latestRow, column.key)),
@@ -478,10 +487,81 @@ export function CashFlow() {
 
     return { groups, columns: columnsData, total };
   }, [activeColumns, classifications, latestRow]);
-  const sortedAllocationColumns = useMemo(
-    () => [...allocationChart.columns].sort((a, b) => b.value - a.value),
-    [allocationChart.columns]
-  );
+
+  const renderColumnPieLabel = useMemo(() => {
+    const slotsBySide: Record<'left' | 'right', Array<{ index: number; y: number }>> = {
+      left: [],
+      right: [],
+    };
+
+    const reserveY = (side: 'left' | 'right', index: number, desiredY: number): number => {
+      const slots = slotsBySide[side];
+      slots.push({ index, y: clamp(desiredY, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y) });
+      slots.sort((a, b) => a.y - b.y);
+
+      for (let i = 1; i < slots.length; i += 1) {
+        if (slots[i].y - slots[i - 1].y < PIE_LABEL_MIN_GAP) {
+          slots[i].y = slots[i - 1].y + PIE_LABEL_MIN_GAP;
+        }
+      }
+
+      if (slots.length > 0 && slots[slots.length - 1].y > PIE_LABEL_MAX_Y) {
+        slots[slots.length - 1].y = PIE_LABEL_MAX_Y;
+        for (let i = slots.length - 2; i >= 0; i -= 1) {
+          if (slots[i + 1].y - slots[i].y < PIE_LABEL_MIN_GAP) {
+            slots[i].y = slots[i + 1].y - PIE_LABEL_MIN_GAP;
+          }
+        }
+      }
+
+      if (slots.length > 0 && slots[0].y < PIE_LABEL_MIN_Y) {
+        const shift = PIE_LABEL_MIN_Y - slots[0].y;
+        slots.forEach((slot) => {
+          slot.y = clamp(slot.y + shift, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y);
+        });
+      }
+
+      return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, PIE_LABEL_MIN_Y, PIE_LABEL_MAX_Y);
+    };
+
+    return (props: { cx: number; cy: number; midAngle: number; outerRadius: number; index: number }) => {
+      const point = allocationChart.columns[props.index];
+      if (!point) return null;
+
+      const angle = (-props.midAngle * Math.PI) / 180;
+      const isRightSide = Math.cos(angle) >= 0;
+      const side: 'left' | 'right' = isRightSide ? 'right' : 'left';
+      const y = reserveY(side, props.index, props.cy + Math.sin(angle) * (props.outerRadius + 10));
+      const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 10);
+      const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 36);
+      const anchor = isRightSide ? 'start' : 'end';
+      const text = `${point.shortLabel} ${point.percentage.toFixed(1)}%`;
+
+      return (
+        <g>
+          <path
+            d={`M ${props.cx + Math.cos(angle) * props.outerRadius} ${props.cy + Math.sin(angle) * props.outerRadius}
+               L ${elbowX} ${y}
+               L ${labelX} ${y}`}
+            fill="none"
+            stroke="#cbd5e1"
+            strokeWidth={1}
+          />
+          <text
+            x={labelX + (isRightSide ? 2 : -2)}
+            y={y}
+            textAnchor={anchor}
+            dominantBaseline="central"
+            fontSize={9}
+            fontWeight={600}
+            fill="#334155"
+          >
+            {text}
+          </text>
+        </g>
+      );
+    };
+  }, [allocationChart.columns]);
 
   const handleSettingsChange = (next: CashFlowSettings) => {
     setSettings(next);
@@ -676,7 +756,7 @@ export function CashFlow() {
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
-          <p className="text-[10px] text-slate-400 mb-2">Classificazioni sopra, legenda colonne ordinata sotto il grafico.</p>
+          <p className="text-[10px] text-slate-400 mb-2">Classificazioni sopra, etichette ordinate accanto agli spicchi.</p>
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
@@ -694,21 +774,25 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 h-44 max-w-[320px] mx-auto">
+              <div className="min-w-0 h-52 max-w-[430px] mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+                  <PieChart margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={56}
-                      outerRadius={70}
+                      innerRadius={52}
+                      outerRadius={64}
                       minAngle={2}
                       paddingAngle={1}
+                      startAngle={90}
+                      endAngle={-270}
                       stroke="#ffffff"
                       strokeWidth={2}
+                      labelLine={false}
+                      label={renderColumnPieLabel}
                     >
                       {allocationChart.columns.map((item) => (
                         <Cell key={item.key} fill={item.color} />
@@ -732,26 +816,6 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-              </div>
-              <div className="mx-auto w-full max-w-[420px]">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {sortedAllocationColumns.map((item) => (
-                    <div
-                      key={`legend-${item.key}`}
-                      className="flex min-w-0 items-center justify-between rounded-md border border-slate-200 bg-white px-2 py-1"
-                    >
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                        <span className="truncate text-[10px] font-medium text-slate-700" title={item.label}>
-                          {item.label}
-                        </span>
-                      </div>
-                      <span className="ml-2 shrink-0 text-[10px] font-semibold tabular-nums text-slate-900">
-                        {item.percentage.toFixed(1)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
               )}
@@ -1004,6 +1068,7 @@ export function CashFlow() {
                         <span className="font-medium text-slate-900">{column.label}</span>
                       )}
                       {!column.isActive && <span className="text-xs text-amber-600">nascosta</span>}
+                      {!column.showInPie && <span className="text-xs text-slate-500">no torta</span>}
                       {LEGACY_COLUMN_KEYS.has(column.key) && <span className="text-xs text-sky-600">base</span>}
                     </div>
                     <div className="flex items-center gap-1">
@@ -1035,9 +1100,22 @@ export function CashFlow() {
                         type="button"
                         className="p-1.5 rounded hover:bg-slate-100"
                         onClick={() => updateColumn.mutate({ key: column.key, data: { isActive: !column.isActive } })}
+                        title={column.isActive ? 'Nascondi colonna nel check' : 'Mostra colonna nel check'}
                       >
                         {column.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                       </button>
+                      <label className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1.5 py-0.5">
+                        <span className="text-[10px] text-slate-600">Torta</span>
+                        <button
+                          type="button"
+                          aria-pressed={column.showInPie}
+                          onClick={() => updateColumn.mutate({ key: column.key, data: { showInPie: !column.showInPie } })}
+                          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${column.showInPie ? 'bg-sky-600' : 'bg-slate-300'}`}
+                          title={column.showInPie ? 'Mostra spicchio nel grafico a torta' : 'Nascondi spicchio nel grafico a torta'}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${column.showInPie ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                        </button>
+                      </label>
                       {editingColumnKey === column.key ? (
                         <>
                           <button

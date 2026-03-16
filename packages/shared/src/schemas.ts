@@ -131,6 +131,7 @@ export const cashFlowColumnSchema = z.object({
   label: z.string().min(1).max(100).trim(),
   position: z.number().int().min(0),
   isActive: z.boolean(),
+  showInPie: z.boolean(),
 });
 
 export const createCashFlowCheckSchema = z.object({
@@ -167,9 +168,14 @@ export const updateCashFlowColumnSchema = z
     label: z.string().min(1).max(100).trim().optional(),
     position: z.number().int().min(0).optional(),
     isActive: z.boolean().optional(),
+    showInPie: z.boolean().optional(),
   })
   .refine(
-    (data) => data.label !== undefined || data.position !== undefined || data.isActive !== undefined,
+    (data) =>
+      data.label !== undefined ||
+      data.position !== undefined ||
+      data.isActive !== undefined ||
+      data.showInPie !== undefined,
     {
       message: 'At least one field must be provided',
     }

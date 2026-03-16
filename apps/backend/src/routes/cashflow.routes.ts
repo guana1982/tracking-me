@@ -212,6 +212,7 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
           label: { type: 'string', minLength: 1, maxLength: 100 },
           position: { type: 'number', minimum: 0 },
           isActive: { type: 'boolean' },
+          showInPie: { type: 'boolean' },
         },
       },
     },

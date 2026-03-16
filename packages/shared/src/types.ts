@@ -265,6 +265,7 @@ export interface CashFlowColumnDTO {
   label: string;
   position: number;
   isActive: boolean;
+  showInPie: boolean;
 }
 
 // CashFlow Check - net worth snapshot
@@ -295,6 +296,7 @@ export interface UpdateCashFlowColumnDTO {
   label?: string;
   position?: number;
   isActive?: boolean;
+  showInPie?: boolean;
 }
 
 // CashFlow Settings - per-user commission/ETF config
