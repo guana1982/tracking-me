@@ -821,7 +821,7 @@ export function CashFlow() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-sm font-bold text-slate-700">{formatCurrency(allocationChart.total)}</p>
+                  <p className="text-sm font-bold text-slate-700">{formatCurrency(latestRow?.total ?? 0)}</p>
                 </div>
               </div>
             </div>
