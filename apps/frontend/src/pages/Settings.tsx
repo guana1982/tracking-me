@@ -108,7 +108,7 @@ export function Settings() {
   }
 
   return (
-    <div className="space-y-8 sm:ml-16 max-w-2xl">
+    <div className="space-y-8 sm:ml-60 max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-900">Impostazioni</h1>
 
       {/* Budget Rule Section */}

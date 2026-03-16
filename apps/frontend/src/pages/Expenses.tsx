@@ -61,7 +61,7 @@ export function Expenses() {
   };
 
   return (
-    <div className="space-y-6 sm:ml-16">
+    <div className="space-y-6 sm:ml-60">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-900">Spese</h1>

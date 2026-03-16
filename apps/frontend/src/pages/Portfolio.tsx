@@ -448,7 +448,7 @@ export function Portfolio() {
   );
 
   return (
-    <div className="sm:ml-16 space-y-4">
+    <div className="sm:ml-60 space-y-4">
       <div className="card flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Portafoglio</h2>

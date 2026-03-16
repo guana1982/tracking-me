@@ -94,7 +94,7 @@ export function Dashboard() {
   const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
 
   return (
-    <div className="sm:ml-16 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
+    <div className="sm:ml-60 space-y-4 md:h-full md:flex md:flex-col md:space-y-4">
       {/* Chart with Stats - Full width responsive */}
       <div className="flex-shrink-0">
         <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} isClosed={isClosed} />

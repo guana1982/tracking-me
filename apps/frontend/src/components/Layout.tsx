@@ -45,7 +45,7 @@ export function Layout() {
     <div className="min-h-screen bg-slate-50 md:h-screen md:overflow-hidden md:flex md:flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="px-4 sm:px-6 lg:px-8 sm:ml-16">
+        <div className="px-4 sm:px-6 lg:px-8 sm:ml-60">
           <div className="flex items-center justify-between h-16">
             {/* Logo, Budget Rule & Period Selector */}
             <div className="flex items-center gap-4">
@@ -211,25 +211,35 @@ export function Layout() {
         </div>
       </nav>
 
-      {/* Desktop Navigation (Sidebar could be added here) */}
-      <nav className="hidden sm:flex fixed left-0 top-16 bottom-0 w-16 flex-col items-center py-4 bg-white border-r border-slate-200">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center justify-center w-12 h-12 rounded-lg mb-2 transition-colors',
-                isActive
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:bg-slate-100'
-              )
-            }
-            title={item.label}
-          >
-            <item.icon className="w-5 h-5" />
-          </NavLink>
-        ))}
+      {/* Desktop Navigation */}
+      <nav className="hidden sm:flex fixed left-0 top-16 bottom-0 w-60 flex-col bg-slate-50 border-r border-slate-200 px-3 py-4">
+        <div className="px-3 pb-4 border-b border-slate-200/80">
+          <p className="text-[28px] leading-none font-bold text-slate-900">Q</p>
+          <p className="mt-2 text-lg font-semibold text-slate-900 truncate">{user?.name || 'Utente'}</p>
+        </div>
+        <div className="mt-4 flex-1 space-y-1.5">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                    : 'text-slate-500 hover:bg-white hover:text-slate-700'
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon className={cn('w-5 h-5', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600')} />
+                  <span className="truncate">{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
       </nav>
 
       {/* Floating Action Button (Mobile) */}
