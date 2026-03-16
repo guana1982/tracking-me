@@ -74,7 +74,7 @@ type AllocationGroupDraft = {
   columns: ValuedColumn[];
 };
 
-const CLASSIFICATION_COLORS = ['#0f766e', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#ea580c'];
+const CLASSIFICATION_COLORS = ['#2563eb', '#0f766e', '#d97706', '#7c3aed', '#e11d48', '#0e7490', '#059669', '#ea580c'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
@@ -199,7 +199,7 @@ function getDiffHeaderLabel(column: CashFlowColumn): string {
 }
 
 function getPieShortLabel(column: CashFlowColumn): string {
-  return LEGACY_PIE_SHORT_LABELS[column.key] ?? (column.label.length > 8 ? `${column.label.slice(0, 8)}…` : column.label);
+  return LEGACY_PIE_SHORT_LABELS[column.key] ?? (column.label.length > 6 ? `${column.label.slice(0, 6)}.` : column.label);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -231,8 +231,8 @@ function mixHexColors(colorA: string, colorB: string, weight: number): string {
 }
 
 function getColumnShade(baseColor: string, index: number, total: number): string {
-  if (total <= 1) return mixHexColors(baseColor, '#ffffff', 0.12);
-  const ratio = 0.08 + (index / Math.max(1, total - 1)) * 0.32;
+  if (total <= 1) return mixHexColors(baseColor, '#ffffff', 0.1);
+  const ratio = 0.05 + (index / Math.max(1, total - 1)) * 0.45;
   return mixHexColors(baseColor, '#ffffff', ratio);
 }
 
@@ -488,23 +488,29 @@ export function CashFlow() {
   }) => {
     const { cx, cy, midAngle, outerRadius, index } = props;
     const point = allocationChart.columns[index];
-    const showLabel = allocationChart.columns.length <= 6 ? point?.percentage >= 2.5 : point?.percentage >= 5;
-    if (!point || !showLabel) return null;
+    if (!point) return null;
 
     const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + 10;
+    const radius = outerRadius + (index % 2 === 0 ? 14 : 24);
     const x = cx + radius * Math.cos(angle);
     const y = cy + radius * Math.sin(angle);
     const anchor = x > cx ? 'start' : 'end';
+    const labelText = `${point.shortLabel} ${point.percentage.toFixed(1)}%`;
 
     return (
-      <text x={x} y={y} textAnchor={anchor} fill="#334155">
-        <tspan x={x} dy="0" fontSize={10} fontWeight={600}>
-          {point.shortLabel}
-        </tspan>
-        <tspan x={x} dy="12" fontSize={10} fill="#64748b">
-          {point.percentage.toFixed(1)}%
-        </tspan>
+      <text
+        x={x}
+        y={y}
+        textAnchor={anchor}
+        dominantBaseline="central"
+        fontSize={9}
+        fontWeight={600}
+        fill="#334155"
+        stroke="#ffffff"
+        strokeWidth={2.4}
+        paintOrder="stroke"
+      >
+        {labelText}
       </text>
     );
   };
@@ -706,7 +712,7 @@ export function CashFlow() {
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-1.5">
                 {allocationChart.groups.map((group) => (
                   <div
@@ -720,17 +726,18 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 h-56 max-w-[390px] mx-auto">
+              <div className="min-w-0 h-56 max-w-[420px] mx-auto pt-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart margin={{ top: 14, right: 46, bottom: 14, left: 46 }}>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
-                      cy="50%"
-                      innerRadius={52}
-                      outerRadius={105}
+                      cy="54%"
+                      innerRadius={66}
+                      outerRadius={86}
+                      minAngle={2}
                       paddingAngle={1}
                       stroke="#ffffff"
                       strokeWidth={2}
