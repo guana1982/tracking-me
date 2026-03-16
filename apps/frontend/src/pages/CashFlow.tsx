@@ -827,7 +827,7 @@ export function CashFlow() {
             </div>
               )}
         </div>
-        <div className="flex flex-col pl-4">
+        <div className="flex flex-col pl-4 xl:min-h-0">
           <div className="flex flex-wrap items-center justify-end gap-1.5 mb-2">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
@@ -866,7 +866,7 @@ export function CashFlow() {
           ) : !hasVisibleTrendSeries ? (
             <p className="text-xs text-slate-500">Attiva almeno una linea per visualizzare il trend.</p>
           ) : (
-            <div className="h-52">
+            <div className="h-52 xl:h-auto xl:min-h-[260px] xl:flex-1">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
