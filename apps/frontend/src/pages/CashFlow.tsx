@@ -47,12 +47,9 @@ type RowWithMetrics = CashFlowRow & {
 type AllocationGroupSlice = {
   key: string;
   label: string;
-  shortLabel: string;
   value: number;
   percentage: number;
   color: string;
-  columnCount: number;
-  level: 'classification';
 };
 
 type AllocationColumnSlice = {
@@ -64,7 +61,6 @@ type AllocationColumnSlice = {
   color: string;
   groupKey: string;
   groupLabel: string;
-  level: 'column';
 };
 
 type ValuedColumn = {
@@ -80,7 +76,6 @@ type AllocationGroupDraft = {
 
 const CLASSIFICATION_COLORS = ['#0f766e', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#65a30d', '#ea580c'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
-const MAX_HISTOGRAM_BARS = 5;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -205,10 +200,6 @@ function getDiffHeaderLabel(column: CashFlowColumn): string {
 
 function getPieShortLabel(column: CashFlowColumn): string {
   return LEGACY_PIE_SHORT_LABELS[column.key] ?? (column.label.length > 8 ? `${column.label.slice(0, 8)}…` : column.label);
-}
-
-function getGroupShortLabel(label: string): string {
-  return label.length > 14 ? `${label.slice(0, 14)}...` : label;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -464,12 +455,9 @@ export function CashFlow() {
       return {
         key: group.key,
         label: group.label,
-        shortLabel: getGroupShortLabel(group.label),
         value,
         percentage: total > 0 ? (value / total) * 100 : 0,
         color,
-        columnCount: group.columns.length,
-        level: 'classification',
       };
     });
 
@@ -485,37 +473,11 @@ export function CashFlow() {
         color: getColumnShade(baseColor, index, group.columns.length),
         groupKey: group.key,
         groupLabel: group.label,
-        level: 'column',
       }));
     });
 
     return { groups, columns: columnsData, total };
   }, [activeColumns, classifications, latestRow]);
-
-  const histogramGroups = useMemo(() => {
-    const ordered = [...allocationChart.groups].sort((a, b) => b.value - a.value);
-    if (ordered.length <= MAX_HISTOGRAM_BARS) return ordered;
-
-    const visible = ordered.slice(0, MAX_HISTOGRAM_BARS - 1);
-    const hidden = ordered.slice(MAX_HISTOGRAM_BARS - 1);
-    const hiddenValue = hidden.reduce((sum, group) => sum + group.value, 0);
-    const hiddenPercentage = hidden.reduce((sum, group) => sum + group.percentage, 0);
-    const hiddenColumns = hidden.reduce((sum, group) => sum + group.columnCount, 0);
-
-    return [
-      ...visible,
-      {
-        key: '__histogram_other',
-        label: `Altre ${hidden.length}`,
-        shortLabel: 'Altre',
-        value: hiddenValue,
-        percentage: hiddenPercentage,
-        color: '#64748b',
-        columnCount: hiddenColumns,
-        level: 'classification' as const,
-      },
-    ];
-  }, [allocationChart.groups]);
 
   const renderColumnPieLabel = (props: {
     cx: number;
@@ -740,38 +702,35 @@ export function CashFlow() {
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
-          <p className="text-[10px] text-slate-400 mb-2">Anello interno: classificazioni. Anello esterno: colonne.</p>
+          <p className="text-[10px] text-slate-400 mb-2">Classificazioni in evidenza sopra il grafico.</p>
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
-            <div className="grid h-60 grid-cols-[300px,minmax(0,1fr)] items-center gap-4">
-              <div className="min-w-0 h-full">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {allocationChart.groups.map((group) => (
+                  <div
+                    key={`group-${group.key}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: group.color }} />
+                    <span className="text-[10px] font-semibold text-slate-700">{group.label}</span>
+                    <span className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</span>
+                    <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="min-w-0 h-56 max-w-[390px] mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={allocationChart.groups}
-                      dataKey="value"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={32}
-                      outerRadius={56}
-                      paddingAngle={3}
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                    >
-                      {allocationChart.groups.map((item) => (
-                        <Cell key={item.key} fill={item.color} />
-                      ))}
-                    </Pie>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={62}
-                      outerRadius={95}
+                      innerRadius={52}
+                      outerRadius={105}
                       paddingAngle={1}
                       stroke="#ffffff"
                       strokeWidth={2}
@@ -785,21 +744,13 @@ export function CashFlow() {
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null;
-                        const point = payload[0]?.payload as
-                          | AllocationGroupSlice
-                          | AllocationColumnSlice
-                          | undefined;
+                        const point = payload[0]?.payload as AllocationColumnSlice | undefined;
                         if (!point) return null;
 
                         return (
                           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                             <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                            {point.level === 'column' && (
-                              <p className="text-xs text-slate-500">Classificazione: {point.groupLabel}</p>
-                            )}
-                            {point.level === 'classification' && (
-                              <p className="text-xs text-slate-500">{point.columnCount} colonne</p>
-                            )}
+                            <p className="text-xs text-slate-500">Classificazione: {point.groupLabel}</p>
                             <p className="text-sm text-slate-700">{formatCurrency(point.value)}</p>
                             <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
                           </div>
@@ -808,35 +759,6 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-              </div>
-              <div className="min-w-0">
-                <div className="h-full rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-3 py-2">
-                  <div className="flex h-[150px] items-end gap-2 border-b border-slate-200 pb-2">
-                    {histogramGroups.map((group) => (
-                      <div key={group.key} className="flex min-w-0 flex-1 flex-col items-center">
-                        <span className="mb-1 text-[9px] font-semibold text-slate-600">{group.percentage.toFixed(1)}%</span>
-                        <div className="relative h-28 w-full max-w-[58px] overflow-hidden rounded-t-md border border-slate-200 bg-white/80">
-                          <div
-                            className="absolute inset-x-0 bottom-0 rounded-t-sm"
-                            style={{
-                              height: `${Math.max(8, group.percentage)}%`,
-                              backgroundColor: group.color,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1.5">
-                    {histogramGroups.map((group) => (
-                      <div key={`${group.key}-meta`} className="min-w-0 rounded-md bg-white/80 px-2 py-1">
-                        <p className="text-[10px] leading-tight font-semibold text-slate-800 whitespace-normal break-words">{group.label}</p>
-                        <p className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</p>
-                        <p className="text-[9px] text-slate-500">{group.percentage.toFixed(1)}%</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
               )}
