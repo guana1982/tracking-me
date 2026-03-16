@@ -478,42 +478,10 @@ export function CashFlow() {
 
     return { groups, columns: columnsData, total };
   }, [activeColumns, classifications, latestRow]);
-
-  const renderColumnPieLabel = (props: {
-    cx: number;
-    cy: number;
-    midAngle: number;
-    outerRadius: number;
-    index: number;
-  }) => {
-    const { cx, cy, midAngle, outerRadius, index } = props;
-    const point = allocationChart.columns[index];
-    if (!point) return null;
-
-    const angle = (-midAngle * Math.PI) / 180;
-    const radius = outerRadius + (index % 2 === 0 ? 14 : 24);
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    const anchor = x > cx ? 'start' : 'end';
-    const labelText = `${point.shortLabel} ${point.percentage.toFixed(1)}%`;
-
-    return (
-      <text
-        x={x}
-        y={y}
-        textAnchor={anchor}
-        dominantBaseline="central"
-        fontSize={9}
-        fontWeight={600}
-        fill="#334155"
-        stroke="#ffffff"
-        strokeWidth={2.4}
-        paintOrder="stroke"
-      >
-        {labelText}
-      </text>
-    );
-  };
+  const sortedAllocationColumns = useMemo(
+    () => [...allocationChart.columns].sort((a, b) => b.value - a.value),
+    [allocationChart.columns]
+  );
 
   const handleSettingsChange = (next: CashFlowSettings) => {
     setSettings(next);
@@ -708,7 +676,7 @@ export function CashFlow() {
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
-          <p className="text-[10px] text-slate-400 mb-2">Classificazioni in evidenza sopra il grafico.</p>
+          <p className="text-[10px] text-slate-400 mb-2">Classificazioni sopra, legenda colonne ordinata sotto il grafico.</p>
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
@@ -726,23 +694,21 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 h-56 max-w-[420px] mx-auto pt-1">
+              <div className="min-w-0 h-44 max-w-[320px] mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 14, right: 46, bottom: 14, left: 46 }}>
+                  <PieChart margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
-                      cy="54%"
-                      innerRadius={66}
-                      outerRadius={86}
+                      cy="50%"
+                      innerRadius={56}
+                      outerRadius={70}
                       minAngle={2}
                       paddingAngle={1}
                       stroke="#ffffff"
                       strokeWidth={2}
-                      labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                      label={renderColumnPieLabel}
                     >
                       {allocationChart.columns.map((item) => (
                         <Cell key={item.key} fill={item.color} />
@@ -766,6 +732,26 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="mx-auto w-full max-w-[420px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {sortedAllocationColumns.map((item) => (
+                    <div
+                      key={`legend-${item.key}`}
+                      className="flex min-w-0 items-center justify-between rounded-md border border-slate-200 bg-white px-2 py-1"
+                    >
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="truncate text-[10px] font-medium text-slate-700" title={item.label}>
+                          {item.label}
+                        </span>
+                      </div>
+                      <span className="ml-2 shrink-0 text-[10px] font-semibold tabular-nums text-slate-900">
+                        {item.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
               )}
