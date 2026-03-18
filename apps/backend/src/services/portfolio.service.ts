@@ -74,6 +74,19 @@ export class PortfolioService {
     };
   }
 
+  async getJustEtfRawChart(isin: string): Promise<JustEtfChartPayload> {
+    const normalizedIsin = isin.trim().toUpperCase();
+    if (!ISIN_REGEX.test(normalizedIsin)) {
+      throw new AppError(
+        `Invalid ISIN '${isin}'.`,
+        422,
+        'PROVIDER_SYMBOL_ERROR'
+      );
+    }
+
+    return this.fetchJustEtfChartPayload(normalizedIsin);
+  }
+
   private async getSymbolHistory(
     symbol: string,
     horizon: PortfolioHistoryHorizonDTO
@@ -117,43 +130,7 @@ export class PortfolioService {
       );
     }
 
-    const params = new URLSearchParams({
-      ...JUSTETF_CHART_DEFAULT_PARAMS,
-      currency: this.justEtfCurrency,
-    });
-
-    let payload: JustEtfChartPayload;
-    try {
-      const response = await fetch(
-        `${JUSTETF_CHART_BASE_URL}/${encodeURIComponent(symbol)}/performance-chart?${params.toString()}`,
-        {
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': this.userAgent,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new AppError(
-            `ISIN '${symbol}' not found on justETF`,
-            422,
-            'PROVIDER_SYMBOL_ERROR'
-          );
-        }
-        throw new AppError(
-          `justETF provider error (${response.status})`,
-          502,
-          'PROVIDER_ERROR'
-        );
-      }
-
-      payload = (await response.json()) as JustEtfChartPayload;
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('Unable to reach justETF provider', 502, 'PROVIDER_UNAVAILABLE');
-    }
+    const payload = await this.fetchJustEtfChartPayload(symbol);
 
     const dailyQuoteSeries = this.parseDailyQuotes(payload);
     if (dailyQuoteSeries.length < 2) {
@@ -172,6 +149,46 @@ export class PortfolioService {
       throw new AppError(`Insufficient monthly history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
     }
     return output;
+  }
+
+  private async fetchJustEtfChartPayload(isin: string): Promise<JustEtfChartPayload> {
+    const params = new URLSearchParams({
+      ...JUSTETF_CHART_DEFAULT_PARAMS,
+      currency: this.justEtfCurrency,
+    });
+
+    try {
+      const response = await fetch(
+        `${JUSTETF_CHART_BASE_URL}/${encodeURIComponent(isin)}/performance-chart?${params.toString()}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': this.userAgent,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new AppError(
+            `ISIN '${isin}' not found on justETF`,
+            422,
+            'PROVIDER_SYMBOL_ERROR'
+          );
+        }
+
+        throw new AppError(
+          `justETF provider error (${response.status})`,
+          502,
+          'PROVIDER_ERROR'
+        );
+      }
+
+      return (await response.json()) as JustEtfChartPayload;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('Unable to reach justETF provider', 502, 'PROVIDER_UNAVAILABLE');
+    }
   }
 
   private parseDailyQuotes(payload: JustEtfChartPayload): Array<{ date: string; close: number }> {

@@ -343,6 +343,9 @@ export const fixedExpensesApi = {
 
 // Portfolio
 export const portfolioApi = {
+  getJustEtfDebugRaw: (isin: string) =>
+    fetchApi<Record<string, unknown>>(`/portfolio/debug/justetf?isin=${encodeURIComponent(isin)}`),
+
   getHistory: (symbols: string[], horizon: PortfolioHistoryHorizonDTO) => {
     const params = new URLSearchParams({
       symbols: symbols.join(','),

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Loader2, RefreshCw, Plus, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { usePortfolioHistory } from '../hooks/useQueries';
+import { portfolioApi } from '../lib/api';
 import type {
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
@@ -43,6 +44,7 @@ type PerformanceMetrics = {
   annualizedVolatility: number;
   maxDrawdown: number;
 };
+const ENABLE_PORTFOLIO_HISTORY = false;
 
 const INSTRUMENTS: InstrumentDefinition[] = [
   {
@@ -245,6 +247,7 @@ function buildInitialStudyConfig(positions: InvestedPosition[]): StudyConfig[] {
 }
 
 export function Portfolio() {
+  const justEtfDebugCallDoneRef = useRef(false);
   const [investedPositions, setInvestedPositions] = useState<InvestedPosition[]>(
     DEFAULT_INVESTED_POSITIONS
   );
@@ -329,7 +332,11 @@ export function Portfolio() {
     isLoading: isSeriesLoading,
     isError: isSeriesError,
     error: portfolioHistoryError,
-  } = usePortfolioHistory(isinsForSeries, horizon, isinsForSeries.length > 0);
+  } = usePortfolioHistory(
+    isinsForSeries,
+    horizon,
+    ENABLE_PORTFOLIO_HISTORY && isinsForSeries.length > 0
+  );
 
   const seriesBySymbol = useMemo<SeriesBySymbol>(() => {
     if (!portfolioHistory?.series) return {};
@@ -347,6 +354,28 @@ export function Portfolio() {
       ? portfolioHistoryError.message
       : 'Impossibile caricare le serie storiche.'
     : null;
+
+  useEffect(() => {
+    if (justEtfDebugCallDoneRef.current) return;
+    const debugIsin = INSTRUMENTS[0]?.isin;
+    if (!debugIsin) return;
+
+    justEtfDebugCallDoneRef.current = true;
+
+    portfolioApi
+      .getJustEtfDebugRaw(debugIsin)
+      .then((payload) => {
+        console.groupCollapsed('[Portfolio][justETF debug]');
+        console.log('ISIN', debugIsin);
+        console.log('raw payload', payload);
+        console.log('series length', Array.isArray(payload.series) ? payload.series.length : 0);
+        console.log('first 5 series rows', Array.isArray(payload.series) ? payload.series.slice(0, 5) : []);
+        console.groupEnd();
+      })
+      .catch((error: unknown) => {
+        console.error('[Portfolio][justETF debug] call failed', error);
+      });
+  }, []);
 
   useEffect(() => {
     if (!isAddInstrumentModalOpen) return;

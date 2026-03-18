@@ -8,7 +8,42 @@ type PortfolioHistoryQuery = {
   horizon?: PortfolioHistoryHorizonDTO;
 };
 
+type PortfolioJustEtfDebugQuery = {
+  isin?: string;
+};
+
 export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{ Querystring: PortfolioJustEtfDebugQuery }>('/debug/justetf', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Debug raw justETF payload for one ISIN',
+      querystring: {
+        type: 'object',
+        properties: {
+          isin: {
+            type: 'string',
+            description: 'ISIN code (e.g. IE00B4L5Y983)',
+          },
+        },
+        required: ['isin'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const isin = (request.query.isin || '').trim().toUpperCase();
+      const data = await portfolioService.getJustEtfRawChart(isin);
+      return { success: true, data };
+    },
+  });
+
   fastify.get<{ Querystring: PortfolioHistoryQuery }>('/history', {
     schema: {
       tags: ['Portfolio'],
