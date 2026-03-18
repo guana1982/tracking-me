@@ -31,7 +31,7 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
           },
         },
       },
@@ -70,7 +70,7 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
           },
         },
       },
