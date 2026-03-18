@@ -280,6 +280,8 @@ export function CashFlow() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [form, setForm] = useState<FormState>({ checkLabel: '', date: today, notes: '', values: {} });
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const tableDragActiveRef = useRef(false);
@@ -715,36 +717,51 @@ export function CashFlow() {
         </div>
       </div>
 
-      <div className="card !p-3 flex-shrink-0 grid grid-cols-1 md:grid-cols-3 gap-2">
-        <div>
-          <label className="label text-xs">Commissione per ETF</label>
-          <input
-            type="number"
-            step="0.01"
-            className="input h-8 text-sm"
-            value={settings.commissionPerEtf}
-            onChange={(e) => handleSettingsChange({ ...settings, commissionPerEtf: parseAmount(e.target.value) })}
-          />
-        </div>
-        <div>
-          <label className="label text-xs">Numero ETF</label>
-          <input
-            type="number"
-            step="1"
-            min="0"
-            className="input h-8 text-sm"
-            value={settings.etfCount}
-            onChange={(e) =>
-              handleSettingsChange({ ...settings, etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))) })
-            }
-          />
-        </div>
-        <div className="flex flex-col justify-end">
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">Commissioni Teoriche Totali</p>
-          <p className="text-lg font-bold text-slate-900 tabular-nums">
-            {formatCurrency(settings.commissionPerEtf * settings.etfCount)}
-          </p>
-        </div>
+      <div className="card !p-3 flex-shrink-0">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 w-full text-left"
+          onClick={() => setIsSettingsOpen((prev) => !prev)}
+        >
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isSettingsOpen ? 'rotate-0' : '-rotate-90'}`} />
+          Parametri ETF
+          <span className="text-xs font-normal text-slate-500 ml-1">
+            — Comm. totali: {formatCurrency(settings.commissionPerEtf * settings.etfCount)}
+          </span>
+        </button>
+        {isSettingsOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+            <div>
+              <label className="label text-xs">Commissione per ETF</label>
+              <input
+                type="number"
+                step="0.01"
+                className="input h-8 text-sm"
+                value={settings.commissionPerEtf}
+                onChange={(e) => handleSettingsChange({ ...settings, commissionPerEtf: parseAmount(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="label text-xs">Numero ETF</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                className="input h-8 text-sm"
+                value={settings.etfCount}
+                onChange={(e) =>
+                  handleSettingsChange({ ...settings, etfCount: Math.max(0, Math.floor(parseAmount(e.target.value))) })
+                }
+              />
+            </div>
+            <div className="flex flex-col justify-end">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Commissioni Teoriche Totali</p>
+              <p className="text-lg font-bold text-slate-900 tabular-nums">
+                {formatCurrency(settings.commissionPerEtf * settings.etfCount)}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card !p-3 flex-shrink-0">
@@ -942,7 +959,6 @@ export function CashFlow() {
                   <th className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-emerald-200/80">Totale</th>
                   <th className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">Diff Tot</th>
                   <th className="text-left py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur w-[260px] min-w-[260px] max-w-[260px]">Note</th>
-                  <th className="text-right py-2 pl-3 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur w-[76px] min-w-[76px]">Azioni</th>
                 </tr>
               </thead>
               <tbody>
@@ -951,7 +967,14 @@ export function CashFlow() {
                     <td className="py-2 pl-2 pr-2">
                       <div className="flex items-center gap-1">
                         <button type="button" className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors" onClick={() => openEditModal(row)}><Pencil className="w-4 h-4" /></button>
-                        <button type="button" className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors" onClick={() => deleteCheck.mutate(row.id)}><Trash2 className="w-4 h-4" /></button>
+                        {deletingRowId === row.id ? (
+                          <>
+                            <button type="button" className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors" onClick={() => { deleteCheck.mutate(row.id); setDeletingRowId(null); }}><Check className="w-4 h-4" /></button>
+                            <button type="button" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" onClick={() => setDeletingRowId(null)}><X className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <button type="button" className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors" onClick={() => setDeletingRowId(row.id)}><Trash2 className="w-4 h-4" /></button>
+                        )}
                       </div>
                     </td>
                     <td className="py-2 pr-3 font-medium">{row.checkLabel}</td>
@@ -970,12 +993,6 @@ export function CashFlow() {
                       <span className="block truncate" title={row.notes || '-'}>
                         {row.notes || '-'}
                       </span>
-                    </td>
-                    <td className="py-2 pl-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button type="button" className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors" onClick={() => openEditModal(row)}><Pencil className="w-4 h-4" /></button>
-                        <button type="button" className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors" onClick={() => deleteCheck.mutate(row.id)}><Trash2 className="w-4 h-4" /></button>
-                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1350,8 +1367,11 @@ export function CashFlow() {
                 </div>
               </div>
               <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
-                <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>Annulla</button>
-                <button type="submit" className="btn btn-primary">Salva</button>
+                <button type="button" className="btn" onClick={() => setIsModalOpen(false)} disabled={createCheck.isPending || updateCheck.isPending}>Annulla</button>
+                <button type="submit" className="btn btn-primary" disabled={createCheck.isPending || updateCheck.isPending}>
+                  {(createCheck.isPending || updateCheck.isPending) && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+                  Salva
+                </button>
               </div>
             </form>
           </div>
