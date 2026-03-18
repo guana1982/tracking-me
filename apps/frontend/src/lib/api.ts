@@ -37,6 +37,12 @@ import type {
   PortfolioHistoryResponseDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
+  PortfolioAssetClassDTO,
+  PortfolioInstrumentDTO,
+  CreatePortfolioAssetClassDTO,
+  UpdatePortfolioAssetClassDTO,
+  CreatePortfolioInstrumentDTO,
+  UpdatePortfolioInstrumentDTO,
   PortfolioInvestedStateDTO,
   UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
@@ -347,6 +353,36 @@ export const fixedExpensesApi = {
 
 // Portfolio
 export const portfolioApi = {
+  getAssetClasses: () =>
+    fetchApi<PortfolioAssetClassDTO[]>('/portfolio/asset-classes'),
+
+  createAssetClass: (data: CreatePortfolioAssetClassDTO) =>
+    fetchApi<PortfolioAssetClassDTO>('/portfolio/asset-classes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAssetClass: (id: string, data: UpdatePortfolioAssetClassDTO) =>
+    fetchApi<PortfolioAssetClassDTO>(`/portfolio/asset-classes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  getInstruments: () =>
+    fetchApi<PortfolioInstrumentDTO[]>('/portfolio/instruments'),
+
+  createInstrument: (data: CreatePortfolioInstrumentDTO) =>
+    fetchApi<PortfolioInstrumentDTO>('/portfolio/instruments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateInstrument: (id: string, data: UpdatePortfolioInstrumentDTO) =>
+    fetchApi<PortfolioInstrumentDTO>(`/portfolio/instruments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   getInvested: () =>
     fetchApi<PortfolioInvestedStateDTO>('/portfolio/invested'),
 

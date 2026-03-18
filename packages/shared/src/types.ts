@@ -430,6 +430,46 @@ export interface UpdatePortfolioInvestedStateDTO {
   positions: PortfolioInvestedPositionDTO[];
 }
 
+export interface PortfolioAssetClassDTO {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePortfolioAssetClassDTO {
+  name: string;
+}
+
+export interface UpdatePortfolioAssetClassDTO {
+  name: string;
+}
+
+export interface PortfolioInstrumentDTO {
+  id: string;
+  symbol: string;
+  name: string;
+  isin: string;
+  assetClassId: string;
+  assetClassName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePortfolioInstrumentDTO {
+  symbol: string;
+  name: string;
+  isin: string;
+  assetClassId: string;
+}
+
+export interface UpdatePortfolioInstrumentDTO {
+  symbol?: string;
+  name?: string;
+  isin?: string;
+  assetClassId?: string;
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;

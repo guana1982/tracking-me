@@ -1,14 +1,20 @@
 import type {
+  CreatePortfolioAssetClassDTO,
+  CreatePortfolioInstrumentDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
   PortfolioComparisonResultDTO,
+  PortfolioAssetClassDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
   PortfolioHistoryResponseDTO,
+  PortfolioInstrumentDTO,
   PortfolioInvestedPositionDTO,
   PortfolioInvestedStateDTO,
   PortfolioInputValueModeDTO,
   PortfolioSymbolHistoryDTO,
+  UpdatePortfolioAssetClassDTO,
+  UpdatePortfolioInstrumentDTO,
   UpdatePortfolioInvestedStateDTO,
   PortfolioUniverseItemDTO,
 } from '@budget/shared';
@@ -50,6 +56,13 @@ type InvestedPositionJson = {
   amount?: unknown;
 };
 
+type DefaultInstrumentSeed = {
+  symbol: string;
+  name: string;
+  isin: string;
+  assetClassName: string;
+};
+
 const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
 const JUSTETF_OVERVIEW_URL = 'https://www.justetf.com/en/search-api/etfs';
 const JUSTETF_OVERVIEW_STRATEGIES = ['epg-longOnly', 'epg-activeEtfs', 'epg-shortAndLeveraged'] as const;
@@ -87,6 +100,42 @@ const HORIZON_OUTPUT_SIZE: Record<PortfolioHistoryHorizonDTO, number> = {
   '3Y': 37,
   '5Y': 61,
 };
+
+const DEFAULT_ASSET_CLASS_NAMES = ['AZIONARIO', 'OBBLIGAZIONARIO', 'COMMODITIES', 'MONETARIO'] as const;
+
+const DEFAULT_INSTRUMENT_SEEDS: DefaultInstrumentSeed[] = [
+  { symbol: 'XEON', isin: 'LU0290358497', name: 'Xtrackers EUR Overnight', assetClassName: 'MONETARIO' },
+  { symbol: 'GOLD', isin: 'IE00B579F325', name: 'WisdomTree Physical Gold', assetClassName: 'COMMODITIES' },
+  { symbol: 'AMUNDI_EMERGING', isin: 'LU1681045370', name: 'Amundi Emerging', assetClassName: 'AZIONARIO' },
+  { symbol: 'PACIFIC_EXJP', isin: 'IE00B52MJY50', name: 'iShares Pacific ex Japan', assetClassName: 'AZIONARIO' },
+  { symbol: 'WORLD', isin: 'IE00B4L5Y983', name: 'iShares MSCI World', assetClassName: 'AZIONARIO' },
+  { symbol: 'JP_SMALLCAP', isin: 'IE00B2QWDY88', name: 'Japan Small Cap', assetClassName: 'AZIONARIO' },
+  { symbol: 'LG_CLEAN_ENERGY', isin: 'IE00BK5BCH80', name: 'L&G Clean Energy', assetClassName: 'AZIONARIO' },
+  { symbol: 'WORLD_SMALL_CAP', isin: 'IE00BCBJG560', name: 'World Small Cap', assetClassName: 'AZIONARIO' },
+  { symbol: 'WISDOM_AI', isin: 'IE00BDVPNG13', name: 'Wisdom AI', assetClassName: 'AZIONARIO' },
+  { symbol: 'EMERGING', isin: 'IE00BKM4GZ66', name: 'MSCI Emerging IMI', assetClassName: 'AZIONARIO' },
+  { symbol: 'US_SMALLCAP', isin: 'IE00BJ38QD84', name: 'US Small Cap', assetClassName: 'AZIONARIO' },
+  { symbol: 'WORLD_EX_USA', isin: 'IE000R4ZNTN3', name: 'World ex USA', assetClassName: 'AZIONARIO' },
+  { symbol: 'UTILITIES', isin: 'IE00B4KBBD01', name: 'S&P500 Utilities', assetClassName: 'AZIONARIO' },
+  { symbol: 'EM_EX_CHINA', isin: 'IE00BMG6Z448', name: 'EM ex China', assetClassName: 'AZIONARIO' },
+  { symbol: 'SWITZERLAND', isin: 'LU0977261329', name: 'MSCI Switzerland', assetClassName: 'AZIONARIO' },
+  { symbol: 'UK', isin: 'LU0950670850', name: 'MSCI UK', assetClassName: 'AZIONARIO' },
+  { symbol: 'AI_BIGDATA', isin: 'IE00BGV5VN51', name: 'AI Big Data', assetClassName: 'AZIONARIO' },
+  { symbol: 'JAPAN', isin: 'LU1781541252', name: 'MSCI Japan', assetClassName: 'AZIONARIO' },
+  { symbol: 'EUROPE', isin: 'LU0908500753', name: 'MSCI Europe', assetClassName: 'AZIONARIO' },
+  { symbol: 'CHINA-A', isin: 'IE00BQT3WG13', name: 'China A', assetClassName: 'AZIONARIO' },
+  { symbol: 'BRAZIL', isin: 'LU1900066207', name: 'Brazil', assetClassName: 'AZIONARIO' },
+  { symbol: 'SUSW', isin: 'IE00BYX2JD69', name: 'MSCI World SRI', assetClassName: 'AZIONARIO' },
+  { symbol: 'S&P500', isin: 'IE00B5BMR087', name: 'S&P500', assetClassName: 'AZIONARIO' },
+  { symbol: 'XTR_GOLD', isin: 'DE000A2T0VU5', name: 'Xtrackers Gold', assetClassName: 'COMMODITIES' },
+  { symbol: 'MSCI_EUROPE_ENERGY', isin: 'IE00BKWQ0F09', name: 'Europe Energy', assetClassName: 'AZIONARIO' },
+  { symbol: 'AMUNDI_SMART_OVERNOGHT', isin: 'LU1190417599', name: 'Amundi Smart Overnight', assetClassName: 'MONETARIO' },
+  { symbol: 'USB_FOREIN_DIST', isin: 'LU0879397742', name: 'UBS US Bond Dist', assetClassName: 'OBBLIGAZIONARIO' },
+  { symbol: 'AMUNDI_BLOOMERG_EX_AGRIC', isin: 'LU1829218749', name: 'Amundi Bloomberg Ex Agric', assetClassName: 'COMMODITIES' },
+  { symbol: 'ISHARE_CINA_A', isin: 'IE00BJ5JPG56', name: 'iShares China A', assetClassName: 'AZIONARIO' },
+  { symbol: 'MSCI_EMU', isin: 'IE00B53QG562', name: 'MSCI EMU', assetClassName: 'AZIONARIO' },
+  { symbol: 'MSCI_SMALLCAP', isin: 'IE00BF4RFH31', name: 'MSCI Small Cap', assetClassName: 'AZIONARIO' },
+];
 
 export class PortfolioService {
   private cache = new Map<string, CacheEntry>();
@@ -237,6 +286,166 @@ export class PortfolioService {
     return this.fetchJustEtfChartPayload(normalizedIsin);
   }
 
+  async getAssetClasses(userId: string): Promise<PortfolioAssetClassDTO[]> {
+    await this.ensureDefaultInstrumentCatalog(userId);
+
+    const rows = await prisma.portfolioAssetClass.findMany({
+      where: { userId },
+      orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return rows.map((row) => this.toAssetClassDTO(row));
+  }
+
+  async createAssetClass(userId: string, input: CreatePortfolioAssetClassDTO): Promise<PortfolioAssetClassDTO> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new AppError('Asset class name is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const existing = await prisma.portfolioAssetClass.findFirst({
+      where: { userId, name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new AppError(`Asset class '${name}' already exists`, 409, 'CONFLICT');
+    }
+
+    const row = await prisma.portfolioAssetClass.create({
+      data: { userId, name },
+    });
+
+    return this.toAssetClassDTO(row);
+  }
+
+  async updateAssetClass(
+    userId: string,
+    assetClassId: string,
+    input: UpdatePortfolioAssetClassDTO,
+  ): Promise<PortfolioAssetClassDTO> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new AppError('Asset class name is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const existing = await prisma.portfolioAssetClass.findFirst({
+      where: { id: assetClassId, userId },
+    });
+    if (!existing) {
+      throw new AppError('Asset class not found', 404, 'NOT_FOUND');
+    }
+
+    const conflict = await prisma.portfolioAssetClass.findFirst({
+      where: {
+        userId,
+        id: { not: assetClassId },
+        name: { equals: name, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (conflict) {
+      throw new AppError(`Asset class '${name}' already exists`, 409, 'CONFLICT');
+    }
+
+    const row = await prisma.portfolioAssetClass.update({
+      where: { id: assetClassId },
+      data: { name },
+    });
+
+    return this.toAssetClassDTO(row);
+  }
+
+  async getInstruments(userId: string): Promise<PortfolioInstrumentDTO[]> {
+    await this.ensureDefaultInstrumentCatalog(userId);
+
+    const rows = await prisma.portfolioInstrument.findMany({
+      where: { userId },
+      include: {
+        assetClass: true,
+      },
+      orderBy: [{ symbol: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return rows.map((row) => this.toInstrumentDTO(row));
+  }
+
+  async createInstrument(
+    userId: string,
+    input: CreatePortfolioInstrumentDTO,
+  ): Promise<PortfolioInstrumentDTO> {
+    const symbol = this.normalizeInstrumentSymbol(input.symbol);
+    const name = input.name.trim();
+    const isin = this.normalizeIsin(input.isin);
+
+    if (!name) {
+      throw new AppError('Instrument name is required', 400, 'VALIDATION_ERROR');
+    }
+
+    await this.assertAssetClassOwnership(userId, input.assetClassId);
+
+    try {
+      const row = await prisma.portfolioInstrument.create({
+        data: {
+          userId,
+          symbol,
+          name,
+          isin,
+          assetClassId: input.assetClassId,
+        },
+        include: {
+          assetClass: true,
+        },
+      });
+      return this.toInstrumentDTO(row);
+    } catch (error) {
+      this.handleInstrumentUniqueError(error, symbol, isin);
+      throw error;
+    }
+  }
+
+  async updateInstrument(
+    userId: string,
+    instrumentId: string,
+    input: UpdatePortfolioInstrumentDTO,
+  ): Promise<PortfolioInstrumentDTO> {
+    const existing = await prisma.portfolioInstrument.findFirst({
+      where: { id: instrumentId, userId },
+    });
+    if (!existing) {
+      throw new AppError('Instrument not found', 404, 'NOT_FOUND');
+    }
+
+    const symbol = input.symbol ? this.normalizeInstrumentSymbol(input.symbol) : undefined;
+    const isin = input.isin ? this.normalizeIsin(input.isin) : undefined;
+    const name = input.name !== undefined ? input.name.trim() : undefined;
+    if (name !== undefined && !name) {
+      throw new AppError('Instrument name is required', 400, 'VALIDATION_ERROR');
+    }
+
+    if (input.assetClassId) {
+      await this.assertAssetClassOwnership(userId, input.assetClassId);
+    }
+
+    try {
+      const row = await prisma.portfolioInstrument.update({
+        where: { id: instrumentId },
+        data: {
+          symbol,
+          name,
+          isin,
+          assetClassId: input.assetClassId,
+        },
+        include: {
+          assetClass: true,
+        },
+      });
+      return this.toInstrumentDTO(row);
+    } catch (error) {
+      this.handleInstrumentUniqueError(error, symbol ?? existing.symbol, isin ?? existing.isin);
+      throw error;
+    }
+  }
+
   async getInvestedState(userId: string): Promise<PortfolioInvestedStateDTO> {
     const row = await prisma.investedPortfolio.findUnique({
       where: { userId },
@@ -317,10 +526,118 @@ export class PortfolioService {
 
     return Array.from(aggregated.entries())
       .map(([symbol, amount]) => ({
-        symbol,
+        symbol: symbol.toUpperCase(),
         amount: this.roundToCents(amount),
       }))
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
+  }
+
+  private normalizeInstrumentSymbol(symbol: string): string {
+    const clean = symbol.trim().toUpperCase();
+    if (!clean) {
+      throw new AppError('Instrument symbol is required', 400, 'VALIDATION_ERROR');
+    }
+    if (!/^[A-Z0-9 _./&()+-]{1,60}$/.test(clean)) {
+      throw new AppError(`Invalid instrument symbol '${symbol}'`, 400, 'VALIDATION_ERROR');
+    }
+    return clean;
+  }
+
+  private normalizeIsin(isin: string): string {
+    const clean = isin.trim().toUpperCase();
+    if (!ISIN_REGEX.test(clean)) {
+      throw new AppError(`Invalid ISIN '${isin}'`, 400, 'VALIDATION_ERROR');
+    }
+    return clean;
+  }
+
+  private async assertAssetClassOwnership(userId: string, assetClassId: string): Promise<void> {
+    const row = await prisma.portfolioAssetClass.findFirst({
+      where: { id: assetClassId, userId },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new AppError('Asset class not found', 404, 'NOT_FOUND');
+    }
+  }
+
+  private handleInstrumentUniqueError(error: unknown, symbol: string, isin: string): void {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new AppError(
+        `Instrument conflict: symbol '${symbol}' or ISIN '${isin}' already exists`,
+        409,
+        'CONFLICT',
+      );
+    }
+  }
+
+  private toAssetClassDTO(row: { id: string; name: string; createdAt: Date; updatedAt: Date }): PortfolioAssetClassDTO {
+    return {
+      id: row.id,
+      name: row.name,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private toInstrumentDTO(row: {
+    id: string;
+    symbol: string;
+    name: string;
+    isin: string;
+    assetClassId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    assetClass: { name: string };
+  }): PortfolioInstrumentDTO {
+    return {
+      id: row.id,
+      symbol: row.symbol,
+      name: row.name,
+      isin: row.isin,
+      assetClassId: row.assetClassId,
+      assetClassName: row.assetClass.name,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private async ensureDefaultInstrumentCatalog(userId: string): Promise<void> {
+    const classesCount = await prisma.portfolioAssetClass.count({ where: { userId } });
+    if (classesCount > 0) return;
+
+    await prisma.$transaction(async (tx) => {
+      const insideCount = await tx.portfolioAssetClass.count({ where: { userId } });
+      if (insideCount > 0) return;
+
+      await tx.portfolioAssetClass.createMany({
+        data: DEFAULT_ASSET_CLASS_NAMES.map((name) => ({ userId, name })),
+      });
+
+      const classes = await tx.portfolioAssetClass.findMany({
+        where: { userId },
+      });
+      const classIdByName = new Map(classes.map((item) => [item.name, item.id]));
+
+      const instruments = DEFAULT_INSTRUMENT_SEEDS.map((seed) => {
+        const assetClassId = classIdByName.get(seed.assetClassName);
+        if (!assetClassId) return null;
+        return {
+          userId,
+          symbol: seed.symbol,
+          name: seed.name,
+          isin: seed.isin,
+          assetClassId,
+        };
+      }).filter((item): item is { userId: string; symbol: string; name: string; isin: string; assetClassId: string } => item !== null);
+
+      if (instruments.length > 0) {
+        await tx.portfolioInstrument.createMany({
+          data: instruments,
+          skipDuplicates: true,
+        });
+      }
+    });
   }
 
   private getUsedLabels(portfolios: PortfolioCompareRequestDTO['portfolios']): string[] {

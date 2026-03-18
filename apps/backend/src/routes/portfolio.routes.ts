@@ -1,13 +1,21 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { portfolioService } from '../services/portfolio.service.js';
 import {
+  createPortfolioAssetClassSchema,
+  createPortfolioInstrumentSchema,
   portfolioCompareRequestSchema,
   portfolioHistoryQuerySchema,
+  updatePortfolioAssetClassSchema,
+  updatePortfolioInstrumentSchema,
   updatePortfolioInvestedStateSchema,
 } from '@budget/shared';
 import type {
+  CreatePortfolioAssetClassDTO,
+  CreatePortfolioInstrumentDTO,
   PortfolioCompareRequestDTO,
   PortfolioHistoryHorizonDTO,
+  UpdatePortfolioAssetClassDTO,
+  UpdatePortfolioInstrumentDTO,
   UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
 
@@ -21,6 +29,162 @@ type PortfolioJustEtfDebugQuery = {
 };
 
 export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/asset-classes', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Get user asset classes for portfolio instruments',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const data = await portfolioService.getAssetClasses(request.authUser!.id);
+      return { success: true, data };
+    },
+  });
+
+  fastify.post<{ Body: CreatePortfolioAssetClassDTO }>('/asset-classes', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Create a new user asset class',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const parsed = createPortfolioAssetClassSchema.parse(request.body);
+      const data = await portfolioService.createAssetClass(request.authUser!.id, parsed);
+      reply.status(201);
+      return { success: true, data };
+    },
+  });
+
+  fastify.put<{ Params: { id: string }; Body: UpdatePortfolioAssetClassDTO }>('/asset-classes/:id', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Update a user asset class',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      },
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = updatePortfolioAssetClassSchema.parse(request.body);
+      const data = await portfolioService.updateAssetClass(request.authUser!.id, request.params.id, parsed);
+      return { success: true, data };
+    },
+  });
+
+  fastify.get('/instruments', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Get user instrument catalog for portfolio',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const data = await portfolioService.getInstruments(request.authUser!.id);
+      return { success: true, data };
+    },
+  });
+
+  fastify.post<{ Body: CreatePortfolioInstrumentDTO }>('/instruments', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Create a new user instrument',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const parsed = createPortfolioInstrumentSchema.parse(request.body);
+      const data = await portfolioService.createInstrument(request.authUser!.id, parsed);
+      reply.status(201);
+      return { success: true, data };
+    },
+  });
+
+  fastify.put<{ Params: { id: string }; Body: UpdatePortfolioInstrumentDTO }>('/instruments/:id', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Update an existing user instrument',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      },
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = updatePortfolioInstrumentSchema.parse(request.body);
+      const data = await portfolioService.updateInstrument(request.authUser!.id, request.params.id, parsed);
+      return { success: true, data };
+    },
+  });
+
   fastify.get('/invested', {
     schema: {
       tags: ['Portfolio'],

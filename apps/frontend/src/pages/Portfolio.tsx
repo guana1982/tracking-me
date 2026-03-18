@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -14,53 +14,28 @@ import { ChevronRight, Loader2, Pencil, Plus, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { portfolioApi } from '../lib/api';
 import type {
+  PortfolioAssetClassDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
   PortfolioHistoryHorizonDTO,
+  PortfolioInstrumentDTO,
   PortfolioInputValueModeDTO,
 } from '@budget/shared';
 
-type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
 type Horizon = PortfolioHistoryHorizonDTO;
-type Instrument = { symbol: string; isin: string; name: string; assetClass: AssetClass };
 type Invested = { symbol: string; amount: number };
-type InvestedDraft = { symbol: string; amount: string };
+type InvestedDraft = {
+  amount: string;
+  instrumentId: string | null;
+  symbol: string;
+  name: string;
+  isin: string;
+  assetClassId: string;
+  newAssetClassName: string;
+  renameAssetClassName: string;
+};
 type StudyRow = { id: string; label: string; weight: string };
 type StudyPortfolio = { id: string; name: string; rows: StudyRow[] };
-
-const INSTRUMENTS: Instrument[] = [
-  { symbol: 'XEON', isin: 'LU0290358497', name: 'Xtrackers EUR Overnight', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'GOLD', isin: 'IE00B579F325', name: 'WisdomTree Physical Gold', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'AMUNDI_EMERGING', isin: 'LU1681045370', name: 'Amundi Emerging', assetClass: 'AZIONARIO' },
-  { symbol: 'PACIFIC_EXJP', isin: 'IE00B52MJY50', name: 'iShares Pacific ex Japan', assetClass: 'AZIONARIO' },
-  { symbol: 'WORLD', isin: 'IE00B4L5Y983', name: 'iShares MSCI World', assetClass: 'AZIONARIO' },
-  { symbol: 'JP_SMALLCAP', isin: 'IE00B2QWDY88', name: 'Japan Small Cap', assetClass: 'AZIONARIO' },
-  { symbol: 'LG_CLEAN_ENERGY', isin: 'IE00BK5BCH80', name: 'L&G Clean Energy', assetClass: 'AZIONARIO' },
-  { symbol: 'WORLD_SMALL_CAP', isin: 'IE00BCBJG560', name: 'World Small Cap', assetClass: 'AZIONARIO' },
-  { symbol: 'WISDOM_AI', isin: 'IE00BDVPNG13', name: 'Wisdom AI', assetClass: 'AZIONARIO' },
-  { symbol: 'EMERGING', isin: 'IE00BKM4GZ66', name: 'MSCI Emerging IMI', assetClass: 'AZIONARIO' },
-  { symbol: 'US_SMALLCAP', isin: 'IE00BJ38QD84', name: 'US Small Cap', assetClass: 'AZIONARIO' },
-  { symbol: 'WORLD_EX_USA', isin: 'IE000R4ZNTN3', name: 'World ex USA', assetClass: 'AZIONARIO' },
-  { symbol: 'UTILITIES', isin: 'IE00B4KBBD01', name: 'S&P500 Utilities', assetClass: 'AZIONARIO' },
-  { symbol: 'EM_EX_CHINA', isin: 'IE00BMG6Z448', name: 'EM ex China', assetClass: 'AZIONARIO' },
-  { symbol: 'SWITZERLAND', isin: 'LU0977261329', name: 'MSCI Switzerland', assetClass: 'AZIONARIO' },
-  { symbol: 'UK', isin: 'LU0950670850', name: 'MSCI UK', assetClass: 'AZIONARIO' },
-  { symbol: 'AI_BIGDATA', isin: 'IE00BGV5VN51', name: 'AI Big Data', assetClass: 'AZIONARIO' },
-  { symbol: 'JAPAN', isin: 'LU1781541252', name: 'MSCI Japan', assetClass: 'AZIONARIO' },
-  { symbol: 'EUROPE', isin: 'LU0908500753', name: 'MSCI Europe', assetClass: 'AZIONARIO' },
-  { symbol: 'CHINA-A', isin: 'IE00BQT3WG13', name: 'China A', assetClass: 'AZIONARIO' },
-  { symbol: 'BRAZIL', isin: 'LU1900066207', name: 'Brazil', assetClass: 'AZIONARIO' },
-  { symbol: 'SUSW', isin: 'IE00BYX2JD69', name: 'MSCI World SRI', assetClass: 'AZIONARIO' },
-  { symbol: 'S&P500', isin: 'IE00B5BMR087', name: 'S&P500', assetClass: 'AZIONARIO' },
-  { symbol: 'XTR_GOLD', isin: 'DE000A2T0VU5', name: 'Xtrackers Gold', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'MSCI_EUROPE_ENERGY', isin: 'IE00BKWQ0F09', name: 'Europe Energy', assetClass: 'AZIONARIO' },
-  { symbol: 'AMUNDI_SMART_OVERNOGHT', isin: 'LU1190417599', name: 'Amundi Smart Overnight', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'USB_FOREIN_DIST', isin: 'LU0879397742', name: 'UBS US Bond Dist', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'AMUNDI_BLOOMERG_EX_AGRIC', isin: 'LU1829218749', name: 'Amundi Bloomberg Ex Agric', assetClass: 'OBBLIGAZIONARIO' },
-  { symbol: 'ISHARE_CINA_A', isin: 'IE00BJ5JPG56', name: 'iShares China A', assetClass: 'AZIONARIO' },
-  { symbol: 'MSCI_EMU', isin: 'IE00B53QG562', name: 'MSCI EMU', assetClass: 'AZIONARIO' },
-  { symbol: 'MSCI_SMALLCAP', isin: 'IE00BF4RFH31', name: 'MSCI Small Cap', assetClass: 'AZIONARIO' },
-];
 
 const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'];
 const mk = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
@@ -70,7 +45,7 @@ const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 's
 function normalizeInvestedForSave(positions: Invested[]): Invested[] {
   const bySymbol = new Map<string, number>();
   positions.forEach((item) => {
-    const symbol = item.symbol.trim();
+    const symbol = item.symbol.trim().toUpperCase();
     const amount = Number(item.amount);
     if (!symbol || !Number.isFinite(amount) || amount <= 0) return;
     bySymbol.set(symbol, (bySymbol.get(symbol) ?? 0) + amount);
@@ -125,12 +100,17 @@ export function Portfolio() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioCompareResponseDTO | null>(null);
+  const [assetClasses, setAssetClasses] = useState<PortfolioAssetClassDTO[]>([]);
+  const [instruments, setInstruments] = useState<PortfolioInstrumentDTO[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
   const [investedDraft, setInvestedDraft] = useState<InvestedDraft | null>(null);
   const [editingInvestedSymbol, setEditingInvestedSymbol] = useState<string | null>(null);
   const [investedDraftError, setInvestedDraftError] = useState<string | null>(null);
+  const [savingInvestedDraft, setSavingInvestedDraft] = useState(false);
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [portfolioDraft, setPortfolioDraft] = useState<StudyPortfolio | null>(null);
   const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
@@ -138,21 +118,33 @@ export function Portfolio() {
   const [isInvestedLoaded, setIsInvestedLoaded] = useState(false);
   const skipNextInvestedSaveRef = useRef(true);
 
+  const instrumentBySymbol = useMemo(
+    () => new Map(instruments.map((instrument) => [instrument.symbol.toUpperCase(), instrument])),
+    [instruments],
+  );
+
   const investedTotal = useMemo(() => invested.reduce((s, p) => s + Math.max(0, p.amount), 0), [invested]);
   const investedSplit = useMemo(() => {
     const equity = invested.reduce((sum, item) => {
-      const instrument = INSTRUMENTS.find((i) => i.symbol === item.symbol);
-      if (!instrument || instrument.assetClass !== 'AZIONARIO') return sum;
+      const instrument = instrumentBySymbol.get(item.symbol.toUpperCase());
+      if (!instrument || instrument.assetClassName.toUpperCase() !== 'AZIONARIO') return sum;
       return sum + Math.max(0, item.amount);
     }, 0);
     const bond = invested.reduce((sum, item) => {
-      const instrument = INSTRUMENTS.find((i) => i.symbol === item.symbol);
-      if (!instrument || instrument.assetClass !== 'OBBLIGAZIONARIO') return sum;
+      const instrument = instrumentBySymbol.get(item.symbol.toUpperCase());
+      if (!instrument || instrument.assetClassName.toUpperCase() !== 'OBBLIGAZIONARIO') return sum;
       return sum + Math.max(0, item.amount);
     }, 0);
     return { equity, bond };
-  }, [invested]);
-  const universeByLabel = useMemo(() => INSTRUMENTS.reduce<Record<string, string>>((a, i) => ((a[i.symbol] = i.isin), a), {}), []);
+  }, [invested, instrumentBySymbol]);
+  const universeByLabel = useMemo(
+    () =>
+      instruments.reduce<Record<string, string>>((acc, instrument) => {
+        acc[instrument.symbol] = instrument.isin;
+        return acc;
+      }, {}),
+    [instruments],
+  );
 
   const cumulativeData = useMemo(() => {
     if (!result) return [] as Array<Record<string, string | number>>;
@@ -176,6 +168,27 @@ export function Portfolio() {
       return row;
     });
   }, [result]);
+
+  const refreshCatalog = useCallback(async () => {
+    try {
+      setCatalogLoading(true);
+      setCatalogError(null);
+      const [nextAssetClasses, nextInstruments] = await Promise.all([
+        portfolioApi.getAssetClasses(),
+        portfolioApi.getInstruments(),
+      ]);
+      setAssetClasses(nextAssetClasses);
+      setInstruments(nextInstruments);
+    } catch (err) {
+      setCatalogError(err instanceof Error ? err.message : 'Errore caricamento anagrafica strumenti');
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCatalog();
+  }, [refreshCatalog]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -226,17 +239,39 @@ export function Portfolio() {
     return () => clearTimeout(timer);
   }, [invested, isInvestedLoaded]);
 
+  const firstAssetClassId = assetClasses[0]?.id ?? '';
+  const firstInstrument = instruments[0] ?? null;
+
   const openCreateInvestedModal = () => {
     setEditingInvestedSymbol(null);
     setInvestedDraftError(null);
-    setInvestedDraft({ symbol: 'WORLD', amount: '1000' });
+    setInvestedDraft({
+      amount: '1000',
+      instrumentId: firstInstrument?.id ?? null,
+      symbol: firstInstrument?.symbol ?? '',
+      name: firstInstrument?.name ?? '',
+      isin: firstInstrument?.isin ?? '',
+      assetClassId: firstInstrument?.assetClassId ?? firstAssetClassId,
+      newAssetClassName: '',
+      renameAssetClassName: '',
+    });
     setIsInvestedModalOpen(true);
   };
 
   const openEditInvestedModal = (item: Invested) => {
-    setEditingInvestedSymbol(item.symbol);
+    const instrument = instrumentBySymbol.get(item.symbol.toUpperCase()) ?? null;
+    setEditingInvestedSymbol(item.symbol.toUpperCase());
     setInvestedDraftError(null);
-    setInvestedDraft({ symbol: item.symbol, amount: String(item.amount) });
+    setInvestedDraft({
+      amount: String(item.amount),
+      instrumentId: instrument?.id ?? null,
+      symbol: instrument?.symbol ?? item.symbol.toUpperCase(),
+      name: instrument?.name ?? '',
+      isin: instrument?.isin ?? '',
+      assetClassId: instrument?.assetClassId ?? firstAssetClassId,
+      newAssetClassName: '',
+      renameAssetClassName: '',
+    });
     setIsInvestedModalOpen(true);
   };
 
@@ -245,9 +280,35 @@ export function Portfolio() {
     setInvestedDraft(null);
     setEditingInvestedSymbol(null);
     setInvestedDraftError(null);
+    setSavingInvestedDraft(false);
   };
 
-  const saveInvestedFromModal = () => {
+  const onDraftInstrumentSelect = (instrumentId: string) => {
+    if (!investedDraft) return;
+    if (instrumentId === '__new__') {
+      setInvestedDraft({
+        ...investedDraft,
+        instrumentId: null,
+        symbol: '',
+        name: '',
+        isin: '',
+      });
+      return;
+    }
+    const selected = instruments.find((item) => item.id === instrumentId);
+    if (!selected) return;
+    setInvestedDraft({
+      ...investedDraft,
+      instrumentId: selected.id,
+      symbol: selected.symbol,
+      name: selected.name,
+      isin: selected.isin,
+      assetClassId: selected.assetClassId,
+      renameAssetClassName: '',
+    });
+  };
+
+  const saveInvestedFromModal = async () => {
     if (!investedDraft) return;
     const amount = Number(investedDraft.amount.replace(',', '.'));
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -255,38 +316,102 @@ export function Portfolio() {
       return;
     }
 
-    const symbol = investedDraft.symbol;
-    setInvested((prev) => {
-      if (editingInvestedSymbol) {
-        const withoutEditing = prev.filter((p) => p.symbol !== editingInvestedSymbol);
-        const targetIndex = withoutEditing.findIndex((p) => p.symbol === symbol);
-        if (targetIndex >= 0) {
-          const next = [...withoutEditing];
-          next[targetIndex] = { symbol, amount: next[targetIndex].amount + amount };
+    const symbol = investedDraft.symbol.trim().toUpperCase();
+    const name = investedDraft.name.trim();
+    const isin = investedDraft.isin.trim().toUpperCase();
+    if (!symbol || !name || !isin) {
+      setInvestedDraftError('Compila simbolo, nome e ISIN dello strumento');
+      return;
+    }
+
+    let selectedAssetClassId = investedDraft.assetClassId;
+    if (!selectedAssetClassId && !investedDraft.newAssetClassName.trim()) {
+      setInvestedDraftError("Seleziona un'asset class o creane una nuova");
+      return;
+    }
+
+    try {
+      setSavingInvestedDraft(true);
+      setInvestedDraftError(null);
+
+      if (selectedAssetClassId && investedDraft.renameAssetClassName.trim()) {
+        const updatedClass = await portfolioApi.updateAssetClass(selectedAssetClassId, {
+          name: investedDraft.renameAssetClassName.trim(),
+        });
+        setAssetClasses((prev) => prev.map((item) => (item.id === updatedClass.id ? updatedClass : item)));
+      }
+
+      if (investedDraft.newAssetClassName.trim()) {
+        const createdClass = await portfolioApi.createAssetClass({ name: investedDraft.newAssetClassName.trim() });
+        setAssetClasses((prev) => [...prev, createdClass].sort((a, b) => a.name.localeCompare(b.name)));
+        selectedAssetClassId = createdClass.id;
+      }
+
+      if (!selectedAssetClassId) {
+        setInvestedDraftError("Asset class non valida. Selezionane una o creane una nuova");
+        setSavingInvestedDraft(false);
+        return;
+      }
+
+      const savedInstrument = investedDraft.instrumentId
+        ? await portfolioApi.updateInstrument(investedDraft.instrumentId, {
+            symbol,
+            name,
+            isin,
+            assetClassId: selectedAssetClassId,
+          })
+        : await portfolioApi.createInstrument({
+            symbol,
+            name,
+            isin,
+            assetClassId: selectedAssetClassId,
+          });
+
+      setInstruments((prev) => {
+        const exists = prev.some((item) => item.id === savedInstrument.id);
+        const next = exists
+          ? prev.map((item) => (item.id === savedInstrument.id ? savedInstrument : item))
+          : [...prev, savedInstrument];
+        return next.sort((a, b) => a.symbol.localeCompare(b.symbol));
+      });
+
+      setInvested((prev) => {
+        const savedSymbol = savedInstrument.symbol.toUpperCase();
+        if (editingInvestedSymbol) {
+          const withoutEditing = prev.filter((p) => p.symbol.toUpperCase() !== editingInvestedSymbol);
+          const targetIndex = withoutEditing.findIndex((p) => p.symbol.toUpperCase() === savedSymbol);
+          if (targetIndex >= 0) {
+            const next = [...withoutEditing];
+            next[targetIndex] = { symbol: savedSymbol, amount: next[targetIndex].amount + amount };
+            return next;
+          }
+          return [...withoutEditing, { symbol: savedSymbol, amount }];
+        }
+
+        const existingIndex = prev.findIndex((p) => p.symbol.toUpperCase() === savedSymbol);
+        if (existingIndex >= 0) {
+          const next = [...prev];
+          next[existingIndex] = { symbol: savedSymbol, amount: next[existingIndex].amount + amount };
           return next;
         }
-        return [...withoutEditing, { symbol, amount }];
-      }
+        return [...prev, { symbol: savedSymbol, amount }];
+      });
 
-      const existingIndex = prev.findIndex((p) => p.symbol === symbol);
-      if (existingIndex >= 0) {
-        const next = [...prev];
-        next[existingIndex] = { symbol, amount: next[existingIndex].amount + amount };
-        return next;
-      }
-      return [...prev, { symbol, amount }];
-    });
-
-    closeInvestedModal();
+      closeInvestedModal();
+    } catch (err) {
+      setInvestedDraftError(err instanceof Error ? err.message : 'Errore salvataggio strumento');
+      setSavingInvestedDraft(false);
+    }
   };
 
   const openCreatePortfolioModal = () => {
+    const defaultSymbol = instruments[0]?.symbol ?? '';
     setEditingPortfolioId(null);
     setPortfolioDraftError(null);
     setPortfolioDraft({
       id: mk('p'),
       name: `PORTFOLIO ${study.length + 1}`,
-      rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }],
+      rows: [{ id: mk('r'), label: defaultSymbol, weight: '10' }],
     });
     setIsPortfolioModalOpen(true);
   };
@@ -340,6 +465,9 @@ export function Portfolio() {
     setError(null);
     const rf = Number(riskFreeAnnual.replace(',', '.'));
     if (!Number.isFinite(rf)) return setError('Risk free non valido');
+    if (Object.keys(universeByLabel).length === 0) {
+      return setError('Nessuno strumento censito. Inserisci almeno uno strumento reale.');
+    }
 
     const portfolios = study
       .map((p) => {
@@ -387,6 +515,7 @@ export function Portfolio() {
 
         {isInvestedOpen && (
           <div className="px-4 pb-4 pt-3.5 space-y-4 border-t border-slate-200 bg-white">
+            {catalogError && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{catalogError}</div>}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-500 uppercase tracking-wide">Totale</p>
@@ -404,7 +533,7 @@ export function Portfolio() {
 
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm text-slate-600">Gestione strumenti del portafoglio reale.</p>
-              <button className="btn btn-secondary" onClick={openCreateInvestedModal}>
+              <button className="btn btn-secondary" onClick={openCreateInvestedModal} disabled={catalogLoading}>
                 <Plus className="w-4 h-4 mr-1" />
                 Nuovo strumento
               </button>
@@ -425,13 +554,13 @@ export function Portfolio() {
                   </thead>
                   <tbody>
                     {invested.map((position) => {
-                      const instrument = INSTRUMENTS.find((i) => i.symbol === position.symbol);
+                      const instrument = instrumentBySymbol.get(position.symbol.toUpperCase());
                       return (
                         <tr key={position.symbol} className="border-t border-slate-100">
                           <td className="px-3 py-2 font-medium text-slate-800">{position.symbol}</td>
                           <td className="px-3 py-2 text-slate-700">{instrument?.name ?? 'N/A'}</td>
                           <td className="px-3 py-2 text-slate-600">{instrument?.isin ?? 'N/A'}</td>
-                          <td className="px-3 py-2 text-slate-600">{instrument?.assetClass ?? 'N/A'}</td>
+                          <td className="px-3 py-2 text-slate-600">{instrument?.assetClassName ?? 'N/A'}</td>
                           <td className="px-3 py-2 text-right text-slate-800 font-medium">{formatCurrency(position.amount)}</td>
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-end gap-2">
@@ -461,11 +590,11 @@ export function Portfolio() {
       {isInvestedModalOpen && investedDraft && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeInvestedModal} />
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+          <div className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">{editingInvestedSymbol ? 'Modifica strumento' : 'Nuovo strumento'}</h4>
-                <p className="text-xs text-slate-500 mt-0.5">Gestione allocazione del portafoglio investito.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Puoi usare uno strumento censito o crearne/modificarne uno nuovo.</p>
               </div>
               <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeInvestedModal}>
                 <X className="w-5 h-5" />
@@ -474,18 +603,84 @@ export function Portfolio() {
 
             <div className="p-4 space-y-3 overflow-y-auto">
               <div>
-                <label className="label">Strumento</label>
+                <label className="label">Strumento censito</label>
                 <select
                   className="input"
-                  value={investedDraft.symbol}
-                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, symbol: e.target.value } : prev))}
+                  value={investedDraft.instrumentId ?? '__new__'}
+                  onChange={(e) => onDraftInstrumentSelect(e.target.value)}
                 >
-                  {INSTRUMENTS.map((i) => (
-                    <option key={i.symbol} value={i.symbol}>
-                      {i.symbol} - {i.name}
+                  <option value="__new__">+ Nuovo strumento</option>
+                  {instruments.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.symbol} - {item.name}
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="label">Simbolo</label>
+                  <input
+                    className="input"
+                    value={investedDraft.symbol}
+                    onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, symbol: e.target.value.toUpperCase() } : prev))}
+                    placeholder="Es. WORLD"
+                  />
+                </div>
+                <div>
+                  <label className="label">ISIN</label>
+                  <input
+                    className="input"
+                    value={investedDraft.isin}
+                    onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, isin: e.target.value.toUpperCase() } : prev))}
+                    placeholder="Es. IE00B4L5Y983"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Nome strumento</label>
+                <input
+                  className="input"
+                  value={investedDraft.name}
+                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="label">Asset class</label>
+                  <select
+                    className="input"
+                    value={investedDraft.assetClassId}
+                    onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, assetClassId: e.target.value } : prev))}
+                  >
+                    {assetClasses.map((assetClass) => (
+                      <option key={assetClass.id} value={assetClass.id}>
+                        {assetClass.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Nuova asset class (opzionale)</label>
+                  <input
+                    className="input"
+                    value={investedDraft.newAssetClassName}
+                    onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, newAssetClassName: e.target.value } : prev))}
+                    placeholder="Es. REAL ESTATE"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Rinomina asset class selezionata (opzionale)</label>
+                <input
+                  className="input"
+                  value={investedDraft.renameAssetClassName}
+                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, renameAssetClassName: e.target.value } : prev))}
+                />
               </div>
 
               <div>
@@ -504,10 +699,11 @@ export function Portfolio() {
             </div>
 
             <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
-              <button type="button" className="btn" onClick={closeInvestedModal}>
+              <button type="button" className="btn" onClick={closeInvestedModal} disabled={savingInvestedDraft}>
                 Annulla
               </button>
-              <button type="button" className="btn btn-primary" onClick={saveInvestedFromModal}>
+              <button type="button" className="btn btn-primary" onClick={saveInvestedFromModal} disabled={savingInvestedDraft}>
+                {savingInvestedDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                 Conferma
               </button>
             </div>
@@ -539,7 +735,7 @@ export function Portfolio() {
                 <option value="quote">quote</option>
               </select>
               <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
-              <button className="btn btn-secondary" onClick={openCreatePortfolioModal}>
+              <button className="btn btn-secondary" onClick={openCreatePortfolioModal} disabled={catalogLoading || instruments.length === 0}>
                 <Plus className="w-4 h-4 mr-1" /> Nuovo portafoglio
               </button>
               <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
@@ -630,7 +826,7 @@ export function Portfolio() {
                         type="button"
                         onClick={() =>
                           setPortfolioDraft((prev) =>
-                            prev ? { ...prev, rows: [...prev.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : prev,
+                            prev ? { ...prev, rows: [...prev.rows, { id: mk('r'), label: instruments[0]?.symbol ?? '', weight: '10' }] } : prev,
                           )
                         }
                       >
@@ -672,9 +868,9 @@ export function Portfolio() {
                                       )
                                     }
                                   >
-                                    {INSTRUMENTS.map((i) => (
-                                      <option key={i.symbol} value={i.symbol}>
-                                        {i.symbol} - {i.name}
+                                    {instruments.map((item) => (
+                                      <option key={item.id} value={item.symbol}>
+                                        {item.symbol} - {item.name}
                                       </option>
                                     ))}
                                   </select>

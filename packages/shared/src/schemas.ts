@@ -231,6 +231,7 @@ const portfolioIsinSchema = z
   .regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/);
 
 const portfolioWeightMapSchema = z.record(portfolioLabelSchema, z.number().min(0).max(1_000_000));
+const portfolioAssetClassNameSchema = z.string().min(1).max(80).trim();
 
 export const portfolioComparePortfolioSchema = z.object({
   name: z.string().min(1).max(60).trim(),
@@ -257,6 +258,39 @@ export const updatePortfolioInvestedStateSchema = z.object({
   positions: z.array(portfolioInvestedPositionSchema).max(300),
 });
 
+export const createPortfolioAssetClassSchema = z.object({
+  name: portfolioAssetClassNameSchema,
+});
+
+export const updatePortfolioAssetClassSchema = z.object({
+  name: portfolioAssetClassNameSchema,
+});
+
+export const createPortfolioInstrumentSchema = z.object({
+  symbol: portfolioLabelSchema.transform((value) => value.trim().toUpperCase()),
+  name: z.string().min(1).max(160).trim(),
+  isin: portfolioIsinSchema,
+  assetClassId: z.string().min(1).max(80),
+});
+
+export const updatePortfolioInstrumentSchema = z
+  .object({
+    symbol: portfolioLabelSchema.transform((value) => value.trim().toUpperCase()).optional(),
+    name: z.string().min(1).max(160).trim().optional(),
+    isin: portfolioIsinSchema.optional(),
+    assetClassId: z.string().min(1).max(80).optional(),
+  })
+  .refine(
+    (data) =>
+      data.symbol !== undefined ||
+      data.name !== undefined ||
+      data.isin !== undefined ||
+      data.assetClassId !== undefined,
+    {
+      message: 'At least one field must be provided',
+    },
+  );
+
 // Type exports from schemas
 export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
 export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
@@ -277,3 +311,7 @@ export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;
 export type PortfolioHistoryQueryInput = z.infer<typeof portfolioHistoryQuerySchema>;
 export type PortfolioCompareRequestInput = z.infer<typeof portfolioCompareRequestSchema>;
 export type UpdatePortfolioInvestedStateInput = z.infer<typeof updatePortfolioInvestedStateSchema>;
+export type CreatePortfolioAssetClassInput = z.infer<typeof createPortfolioAssetClassSchema>;
+export type UpdatePortfolioAssetClassInput = z.infer<typeof updatePortfolioAssetClassSchema>;
+export type CreatePortfolioInstrumentInput = z.infer<typeof createPortfolioInstrumentSchema>;
+export type UpdatePortfolioInstrumentInput = z.infer<typeof updatePortfolioInstrumentSchema>;
