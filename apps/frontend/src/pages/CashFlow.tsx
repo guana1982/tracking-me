@@ -820,8 +820,8 @@ export function CashFlow() {
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={46}
-                      outerRadius={72}
+                      innerRadius={54}
+                      outerRadius={74}
                       minAngle={2}
                       paddingAngle={1}
                       startAngle={90}
@@ -853,9 +853,10 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-[10px] text-slate-400 leading-none">Totale</p>
-                  <p className="text-base font-bold text-slate-700 mt-0.5">{formatCurrency(latestRow?.total ?? 0)}</p>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                  <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">
+                    {formatCurrency(latestRow?.total ?? 0)}
+                  </p>
                 </div>
               </div>
             </div>
