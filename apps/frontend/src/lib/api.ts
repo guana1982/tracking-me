@@ -37,6 +37,8 @@ import type {
   PortfolioHistoryResponseDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
+  PortfolioInvestedStateDTO,
+  UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
 
@@ -345,6 +347,15 @@ export const fixedExpensesApi = {
 
 // Portfolio
 export const portfolioApi = {
+  getInvested: () =>
+    fetchApi<PortfolioInvestedStateDTO>('/portfolio/invested'),
+
+  updateInvested: (data: UpdatePortfolioInvestedStateDTO) =>
+    fetchApi<PortfolioInvestedStateDTO>('/portfolio/invested', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   getJustEtfDebugRaw: (isin?: string) => {
     const query = isin ? `?isin=${encodeURIComponent(isin)}` : '';
     return fetchApi<{ isin: string; payload: Record<string, unknown> }>(

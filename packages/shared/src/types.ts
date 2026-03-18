@@ -415,6 +415,21 @@ export interface PortfolioCompareResponseDTO {
   scatter: PortfolioScatterPointDTO[];
 }
 
+export interface PortfolioInvestedPositionDTO {
+  symbol: string;
+  amount: number;
+}
+
+export interface PortfolioInvestedStateDTO {
+  hasSaved: boolean;
+  updatedAt: string | null;
+  positions: PortfolioInvestedPositionDTO[];
+}
+
+export interface UpdatePortfolioInvestedStateDTO {
+  positions: PortfolioInvestedPositionDTO[];
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;

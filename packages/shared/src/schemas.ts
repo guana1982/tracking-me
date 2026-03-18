@@ -248,6 +248,15 @@ export const portfolioCompareRequestSchema = z.object({
   portfolios: z.array(portfolioComparePortfolioSchema).min(1).max(24),
 });
 
+export const portfolioInvestedPositionSchema = z.object({
+  symbol: portfolioLabelSchema,
+  amount: z.number().min(0).max(1_000_000_000),
+});
+
+export const updatePortfolioInvestedStateSchema = z.object({
+  positions: z.array(portfolioInvestedPositionSchema).max(300),
+});
+
 // Type exports from schemas
 export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
 export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
@@ -267,3 +276,4 @@ export type UpdateCashFlowColumnInput = z.infer<typeof updateCashFlowColumnSchem
 export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;
 export type PortfolioHistoryQueryInput = z.infer<typeof portfolioHistoryQuerySchema>;
 export type PortfolioCompareRequestInput = z.infer<typeof portfolioCompareRequestSchema>;
+export type UpdatePortfolioInvestedStateInput = z.infer<typeof updatePortfolioInvestedStateSchema>;

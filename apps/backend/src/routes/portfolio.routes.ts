@@ -3,10 +3,12 @@ import { portfolioService } from '../services/portfolio.service.js';
 import {
   portfolioCompareRequestSchema,
   portfolioHistoryQuerySchema,
+  updatePortfolioInvestedStateSchema,
 } from '@budget/shared';
 import type {
   PortfolioCompareRequestDTO,
   PortfolioHistoryHorizonDTO,
+  UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
 
 type PortfolioHistoryQuery = {
@@ -19,6 +21,51 @@ type PortfolioJustEtfDebugQuery = {
 };
 
 export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/invested', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Get persisted invested portfolio for authenticated user',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const data = await portfolioService.getInvestedState(request.authUser!.id);
+      return { success: true, data };
+    },
+  });
+
+  fastify.put<{ Body: UpdatePortfolioInvestedStateDTO }>('/invested', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Persist invested portfolio for authenticated user',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = updatePortfolioInvestedStateSchema.parse(request.body);
+      const data = await portfolioService.updateInvestedState(request.authUser!.id, parsed);
+      return { success: true, data };
+    },
+  });
+
   fastify.post<{ Body: PortfolioCompareRequestDTO }>('/compare', {
     schema: {
       tags: ['Portfolio'],

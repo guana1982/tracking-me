@@ -5,11 +5,16 @@ import type {
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
   PortfolioHistoryResponseDTO,
+  PortfolioInvestedPositionDTO,
+  PortfolioInvestedStateDTO,
   PortfolioInputValueModeDTO,
   PortfolioSymbolHistoryDTO,
+  UpdatePortfolioInvestedStateDTO,
   PortfolioUniverseItemDTO,
 } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
+import { prisma } from '../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 
 type CacheEntry = {
   expiresAt: number;
@@ -38,6 +43,11 @@ type JustEtfOverviewItem = {
 
 type JustEtfOverviewPayload = {
   data?: JustEtfOverviewItem[];
+};
+
+type InvestedPositionJson = {
+  symbol?: unknown;
+  amount?: unknown;
 };
 
 const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
@@ -227,6 +237,58 @@ export class PortfolioService {
     return this.fetchJustEtfChartPayload(normalizedIsin);
   }
 
+  async getInvestedState(userId: string): Promise<PortfolioInvestedStateDTO> {
+    const row = await prisma.investedPortfolio.findUnique({
+      where: { userId },
+      select: {
+        positionsJson: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!row) {
+      return {
+        hasSaved: false,
+        updatedAt: null,
+        positions: [],
+      };
+    }
+
+    return {
+      hasSaved: true,
+      updatedAt: row.updatedAt.toISOString(),
+      positions: this.normalizeInvestedPositions(row.positionsJson),
+    };
+  }
+
+  async updateInvestedState(
+    userId: string,
+    input: UpdatePortfolioInvestedStateDTO
+  ): Promise<PortfolioInvestedStateDTO> {
+    const normalized = this.normalizeInvestedPositions(input.positions);
+
+    const row = await prisma.investedPortfolio.upsert({
+      where: { userId },
+      update: {
+        positionsJson: normalized as unknown as Prisma.InputJsonValue,
+      },
+      create: {
+        userId,
+        positionsJson: normalized as unknown as Prisma.InputJsonValue,
+      },
+      select: {
+        positionsJson: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      hasSaved: true,
+      updatedAt: row.updatedAt.toISOString(),
+      positions: this.normalizeInvestedPositions(row.positionsJson),
+    };
+  }
+
   private normalizeUniverse(universeByLabel: Record<string, string>): Record<string, string> {
     return Object.entries(universeByLabel).reduce<Record<string, string>>((acc, [label, isin]) => {
       const cleanLabel = label.trim();
@@ -238,6 +300,27 @@ export class PortfolioService {
       acc[cleanLabel] = cleanIsin;
       return acc;
     }, {});
+  }
+
+  private normalizeInvestedPositions(value: unknown): PortfolioInvestedPositionDTO[] {
+    if (!Array.isArray(value)) return [];
+
+    const aggregated = new Map<string, number>();
+
+    value.forEach((item) => {
+      const row = item as InvestedPositionJson;
+      const symbol = typeof row.symbol === 'string' ? row.symbol.trim() : '';
+      const amount = Number(row.amount);
+      if (!symbol || !Number.isFinite(amount) || amount <= 0) return;
+      aggregated.set(symbol, (aggregated.get(symbol) ?? 0) + amount);
+    });
+
+    return Array.from(aggregated.entries())
+      .map(([symbol, amount]) => ({
+        symbol,
+        amount: this.roundToCents(amount),
+      }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
   }
 
   private getUsedLabels(portfolios: PortfolioCompareRequestDTO['portfolios']): string[] {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -67,6 +67,19 @@ const mk = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const pct = (v: number | null | undefined) => (!Number.isFinite(v ?? NaN) ? 'N/A' : `${((v as number) * 100).toFixed(2)}%`);
 const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
 
+function normalizeInvestedForSave(positions: Invested[]): Invested[] {
+  const bySymbol = new Map<string, number>();
+  positions.forEach((item) => {
+    const symbol = item.symbol.trim();
+    const amount = Number(item.amount);
+    if (!symbol || !Number.isFinite(amount) || amount <= 0) return;
+    bySymbol.set(symbol, (bySymbol.get(symbol) ?? 0) + amount);
+  });
+  return Array.from(bySymbol.entries())
+    .map(([symbol, amount]) => ({ symbol, amount: Math.round(amount * 100) / 100 }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
 function defaultStudy(): StudyPortfolio[] {
   return [
     {
@@ -122,6 +135,8 @@ export function Portfolio() {
   const [portfolioDraft, setPortfolioDraft] = useState<StudyPortfolio | null>(null);
   const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
   const [portfolioDraftError, setPortfolioDraftError] = useState<string | null>(null);
+  const [isInvestedLoaded, setIsInvestedLoaded] = useState(false);
+  const skipNextInvestedSaveRef = useRef(true);
 
   const investedTotal = useMemo(() => invested.reduce((s, p) => s + Math.max(0, p.amount), 0), [invested]);
   const investedSplit = useMemo(() => {
@@ -161,6 +176,55 @@ export function Portfolio() {
       return row;
     });
   }, [result]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadInvested = async () => {
+      try {
+        const persisted = await portfolioApi.getInvested();
+        if (isCancelled) return;
+        if (persisted.hasSaved) {
+          setInvested(
+            normalizeInvestedForSave(
+              persisted.positions.map((position) => ({
+                symbol: position.symbol,
+                amount: position.amount,
+              })),
+            ),
+          );
+        }
+      } catch (err) {
+        console.error('Unable to load invested portfolio from DB', err);
+      } finally {
+        if (!isCancelled) setIsInvestedLoaded(true);
+      }
+    };
+
+    void loadInvested();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isInvestedLoaded) return;
+    if (skipNextInvestedSaveRef.current) {
+      skipNextInvestedSaveRef.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void portfolioApi.updateInvested({
+        positions: normalizeInvestedForSave(invested),
+      }).catch((err) => {
+        console.error('Unable to persist invested portfolio to DB', err);
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [invested, isInvestedLoaded]);
 
   const openCreateInvestedModal = () => {
     setEditingInvestedSymbol(null);
