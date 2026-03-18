@@ -1,7 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { portfolioService } from '../services/portfolio.service.js';
-import { portfolioHistoryQuerySchema } from '@budget/shared';
-import type { PortfolioHistoryHorizonDTO } from '@budget/shared';
+import {
+  portfolioCompareRequestSchema,
+  portfolioHistoryQuerySchema,
+} from '@budget/shared';
+import type {
+  PortfolioCompareRequestDTO,
+  PortfolioHistoryHorizonDTO,
+} from '@budget/shared';
 
 type PortfolioHistoryQuery = {
   symbols?: string;
@@ -13,6 +19,31 @@ type PortfolioJustEtfDebugQuery = {
 };
 
 export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post<{ Body: PortfolioCompareRequestDTO }>('/compare', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Compare study portfolios using justETF monthly series',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = portfolioCompareRequestSchema.parse(request.body);
+      const data = await portfolioService.comparePortfolios(parsed);
+      return { success: true, data };
+    },
+  });
+
   fastify.get<{ Querystring: PortfolioJustEtfDebugQuery }>('/debug/justetf', {
     schema: {
       tags: ['Portfolio'],

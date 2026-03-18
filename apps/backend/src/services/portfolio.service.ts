@@ -1,8 +1,13 @@
 import type {
+  PortfolioCompareRequestDTO,
+  PortfolioCompareResponseDTO,
+  PortfolioComparisonResultDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
   PortfolioHistoryResponseDTO,
+  PortfolioInputValueModeDTO,
   PortfolioSymbolHistoryDTO,
+  PortfolioUniverseItemDTO,
 } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 
@@ -23,9 +28,21 @@ type JustEtfChartPayload = {
   };
 };
 
-type InputValueMode = 'quote' | 'quote_with_dividends';
+type JustEtfOverviewItem = {
+  isin?: string;
+  name?: string;
+  ticker?: string;
+  currency?: string;
+  strategy?: string;
+};
+
+type JustEtfOverviewPayload = {
+  data?: JustEtfOverviewItem[];
+};
 
 const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
+const JUSTETF_OVERVIEW_URL = 'https://www.justetf.com/en/search-api/etfs';
+const JUSTETF_OVERVIEW_STRATEGIES = ['epg-longOnly', 'epg-activeEtfs', 'epg-shortAndLeveraged'] as const;
 const JUSTETF_CHART_DEFAULT_PARAMS = {
   locale: 'en',
   valuesType: 'MARKET_VALUE',
@@ -33,7 +50,27 @@ const JUSTETF_CHART_DEFAULT_PARAMS = {
   includeDividends: 'false',
   features: 'DIVIDENDS',
 };
+const JUSTETF_OVERVIEW_BASE_PARAMS = {
+  page: 1,
+  pageSize: 10,
+  sortField: 'name',
+  sortOrder: 'asc',
+  tab: 'overview',
+  search: 'ETF',
+  quoteCurrency: 'EUR',
+  cmp: 'etf-comparison',
+  distributionPolicy: 'distributionPolicy-unknown',
+  dataInterval: 'dataInterval-unknown',
+  stockExchange: '',
+  sector: '',
+  assetClass: '',
+  region: '',
+  country: '',
+  index: '',
+};
+
 const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+const MONTHS_IN_YEAR = 12;
 
 const HORIZON_OUTPUT_SIZE: Record<PortfolioHistoryHorizonDTO, number> = {
   '1Y': 13,
@@ -63,7 +100,7 @@ export class PortfolioService {
 
     const series: PortfolioSymbolHistoryDTO[] = [];
     for (const symbol of normalizedSymbols) {
-      const points = await this.getSymbolHistory(symbol, horizon);
+      const points = await this.getSymbolHistory(symbol, horizon, this.defaultInputValueMode);
       series.push({ symbol, points });
     }
 
@@ -74,35 +111,439 @@ export class PortfolioService {
     };
   }
 
+  async comparePortfolios(input: PortfolioCompareRequestDTO): Promise<PortfolioCompareResponseDTO> {
+    const universeByLabel = this.normalizeUniverse(input.universeByLabel);
+    const usedLabels = this.getUsedLabels(input.portfolios);
+
+    if (usedLabels.length === 0) {
+      throw new AppError('At least one instrument weight must be provided', 400, 'VALIDATION_ERROR');
+    }
+
+    usedLabels.forEach((label) => {
+      if (!universeByLabel[label]) {
+        throw new AppError(`Instrument label '${label}' is missing in universe`, 400, 'VALIDATION_ERROR');
+      }
+    });
+
+    const uniqueUsedIsins = Array.from(new Set(usedLabels.map((label) => universeByLabel[label])));
+    const seriesByIsin = new Map<string, PortfolioHistoryPointDTO[]>();
+    for (const isin of uniqueUsedIsins) {
+      const points = await this.getSymbolHistory(isin, input.horizon, input.inputValue);
+      seriesByIsin.set(isin, points);
+    }
+
+    const returnsByLabel = new Map<string, Map<string, number>>();
+    const allReturnDates = new Set<string>();
+    usedLabels.forEach((label) => {
+      const isin = universeByLabel[label];
+      const points = seriesByIsin.get(isin) ?? [];
+      const returns = this.buildMonthlyReturns(points);
+      returnsByLabel.set(label, returns);
+      returns.forEach((_value, date) => allReturnDates.add(date));
+    });
+    const sortedReturnDates = Array.from(allReturnDates).sort((a, b) => a.localeCompare(b));
+
+    const results: PortfolioComparisonResultDTO[] = input.portfolios.map((portfolio) => {
+      const normalizedWeights = this.normalizeWeights(portfolio.weights, usedLabels);
+      const selectedLabels = Object.keys(normalizedWeights);
+      if (selectedLabels.length === 0) {
+        throw new AppError(`Portfolio '${portfolio.name}' has no valid instrument weights`, 400, 'VALIDATION_ERROR');
+      }
+
+      const series = this.buildPortfolioReturnSeries(selectedLabels, normalizedWeights, returnsByLabel, sortedReturnDates);
+      if (series.length < 2) {
+        throw new AppError(
+          `Portfolio '${portfolio.name}' has insufficient overlapping monthly data`,
+          422,
+          'INSUFFICIENT_HISTORY'
+        );
+      }
+
+      const monthlyReturns = series.map((point) => point.value);
+      const annualizedReturn = this.annualizedReturn(monthlyReturns);
+      const annualizedVolatility = this.annualizedVolatility(monthlyReturns);
+      const sharpe =
+        annualizedVolatility > 0
+          ? (annualizedReturn - input.riskFreeAnnual) / annualizedVolatility
+          : null;
+      const divers = this.effectiveNumberOfBets(normalizedWeights);
+      const avgCorr = this.avgPairwiseCorrelation(selectedLabels, returnsByLabel, sortedReturnDates);
+      const score = this.computeScore(annualizedReturn, annualizedVolatility, divers, avgCorr);
+
+      return {
+        name: portfolio.name,
+        weights: normalizedWeights,
+        metrics: {
+          annualizedReturn: this.round6(annualizedReturn),
+          annualizedVolatility: this.round6(annualizedVolatility),
+          sharpe: sharpe === null ? null : this.round6(sharpe),
+          nMonths: series.length,
+          divers: this.round6(divers),
+          avgCorr: avgCorr === null ? null : this.round6(avgCorr),
+          score: score === null ? null : this.round6(score),
+        },
+        series: series.map((point) => ({
+          date: point.date,
+          value: this.round6(point.value),
+        })),
+      };
+    });
+
+    const ranking = [...results]
+      .sort((a, b) => this.compareNullableNumbersDesc(a.metrics.score, b.metrics.score))
+      .map((item) => item.name);
+
+    const correlationBetweenPortfolios = this.computePortfolioCorrelationMatrix(results);
+    const scatter = results.map((item) => ({
+      name: item.name,
+      annualizedReturn: item.metrics.annualizedReturn,
+      annualizedVolatility: item.metrics.annualizedVolatility,
+      divers: item.metrics.divers,
+      avgCorr: item.metrics.avgCorr,
+      score: item.metrics.score,
+    }));
+
+    const universe = await this.resolveUniverseFromOverview(universeByLabel);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      horizon: input.horizon,
+      inputValue: input.inputValue,
+      riskFreeAnnual: input.riskFreeAnnual,
+      universe,
+      portfolios: results,
+      ranking,
+      correlationBetweenPortfolios,
+      scatter,
+    };
+  }
+
   async getJustEtfRawChart(isin: string): Promise<JustEtfChartPayload> {
     const normalizedIsin = isin.trim().toUpperCase();
     if (!ISIN_REGEX.test(normalizedIsin)) {
-      throw new AppError(
-        `Invalid ISIN '${isin}'.`,
-        422,
-        'PROVIDER_SYMBOL_ERROR'
-      );
+      throw new AppError(`Invalid ISIN '${isin}'.`, 422, 'PROVIDER_SYMBOL_ERROR');
     }
 
     return this.fetchJustEtfChartPayload(normalizedIsin);
   }
 
+  private normalizeUniverse(universeByLabel: Record<string, string>): Record<string, string> {
+    return Object.entries(universeByLabel).reduce<Record<string, string>>((acc, [label, isin]) => {
+      const cleanLabel = label.trim();
+      const cleanIsin = isin.trim().toUpperCase();
+      if (!cleanLabel || !cleanIsin) return acc;
+      if (!ISIN_REGEX.test(cleanIsin)) {
+        throw new AppError(`Invalid ISIN '${isin}' for label '${label}'`, 400, 'VALIDATION_ERROR');
+      }
+      acc[cleanLabel] = cleanIsin;
+      return acc;
+    }, {});
+  }
+
+  private getUsedLabels(portfolios: PortfolioCompareRequestDTO['portfolios']): string[] {
+    const labels = new Set<string>();
+    portfolios.forEach((portfolio) => {
+      Object.entries(portfolio.weights).forEach(([label, weight]) => {
+        if (Number(weight) > 0) labels.add(label.trim());
+      });
+    });
+    return Array.from(labels);
+  }
+
+  private normalizeWeights(
+    weights: Record<string, number>,
+    availableLabels: string[]
+  ): Record<string, number> {
+    const availableSet = new Set(availableLabels);
+    const sanitizedEntries = Object.entries(weights)
+      .map(([label, value]) => [label.trim(), Math.max(0, Number(value) || 0)] as const)
+      .filter(([label, value]) => availableSet.has(label) && value > 0);
+
+    if (sanitizedEntries.length === 0) return {};
+    const total = sanitizedEntries.reduce((sum, [, value]) => sum + value, 0);
+    if (!Number.isFinite(total) || total <= 0) return {};
+
+    return sanitizedEntries.reduce<Record<string, number>>((acc, [label, value]) => {
+      acc[label] = value / total;
+      return acc;
+    }, {});
+  }
+
+  private buildMonthlyReturns(points: PortfolioHistoryPointDTO[]): Map<string, number> {
+    const sorted = [...points].sort((a, b) => a.date.localeCompare(b.date));
+    const returns = new Map<string, number>();
+
+    for (let index = 1; index < sorted.length; index += 1) {
+      const prev = sorted[index - 1].close;
+      const curr = sorted[index].close;
+      if (!Number.isFinite(prev) || !Number.isFinite(curr) || prev <= 0) continue;
+      returns.set(sorted[index].date, curr / prev - 1);
+    }
+
+    return returns;
+  }
+
+  private buildPortfolioReturnSeries(
+    labels: string[],
+    normalizedWeights: Record<string, number>,
+    returnsByLabel: Map<string, Map<string, number>>,
+    sortedDates: string[]
+  ): Array<{ date: string; value: number }> {
+    const output: Array<{ date: string; value: number }> = [];
+
+    sortedDates.forEach((date) => {
+      const rowValues = labels.map((label) => returnsByLabel.get(label)?.get(date));
+      if (rowValues.some((value) => !Number.isFinite(value))) return;
+
+      const value = labels.reduce((sum, label, idx) => {
+        const ret = rowValues[idx] as number;
+        return sum + ret * (normalizedWeights[label] ?? 0);
+      }, 0);
+
+      if (Number.isFinite(value)) output.push({ date, value });
+    });
+
+    return output;
+  }
+
+  private annualizedReturn(monthlyReturns: number[]): number {
+    if (monthlyReturns.length === 0) return Number.NaN;
+    const mean = monthlyReturns.reduce((sum, value) => sum + value, 0) / monthlyReturns.length;
+    return (1 + mean) ** MONTHS_IN_YEAR - 1;
+  }
+
+  private annualizedVolatility(monthlyReturns: number[]): number {
+    const std = this.sampleStd(monthlyReturns);
+    if (!Number.isFinite(std)) return Number.NaN;
+    return std * Math.sqrt(MONTHS_IN_YEAR);
+  }
+
+  private sampleStd(values: number[]): number {
+    if (values.length < 2) return Number.NaN;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance =
+      values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
+    return Math.sqrt(variance);
+  }
+
+  private effectiveNumberOfBets(weights: Record<string, number>): number {
+    const sumSquares = Object.values(weights).reduce((sum, weight) => sum + weight ** 2, 0);
+    if (!Number.isFinite(sumSquares) || sumSquares <= 0) return Number.NaN;
+    return 1 / sumSquares;
+  }
+
+  private avgPairwiseCorrelation(
+    labels: string[],
+    returnsByLabel: Map<string, Map<string, number>>,
+    sortedDates: string[]
+  ): number | null {
+    if (labels.length < 2) return null;
+
+    const values: number[] = [];
+    for (let i = 0; i < labels.length; i += 1) {
+      for (let j = i + 1; j < labels.length; j += 1) {
+        const lhs = labels[i];
+        const rhs = labels[j];
+        const pairedLhs: number[] = [];
+        const pairedRhs: number[] = [];
+
+        sortedDates.forEach((date) => {
+          const lv = returnsByLabel.get(lhs)?.get(date);
+          const rv = returnsByLabel.get(rhs)?.get(date);
+          if (Number.isFinite(lv) && Number.isFinite(rv)) {
+            pairedLhs.push(lv as number);
+            pairedRhs.push(rv as number);
+          }
+        });
+
+        const corr = this.pearsonCorrelation(pairedLhs, pairedRhs);
+        if (corr !== null) values.push(corr);
+      }
+    }
+
+    if (values.length === 0) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  private pearsonCorrelation(lhs: number[], rhs: number[]): number | null {
+    if (lhs.length < 2 || rhs.length < 2 || lhs.length !== rhs.length) return null;
+
+    const meanLhs = lhs.reduce((sum, value) => sum + value, 0) / lhs.length;
+    const meanRhs = rhs.reduce((sum, value) => sum + value, 0) / rhs.length;
+
+    let cov = 0;
+    let sumSqLhs = 0;
+    let sumSqRhs = 0;
+    for (let index = 0; index < lhs.length; index += 1) {
+      const dl = lhs[index] - meanLhs;
+      const dr = rhs[index] - meanRhs;
+      cov += dl * dr;
+      sumSqLhs += dl ** 2;
+      sumSqRhs += dr ** 2;
+    }
+
+    const denominator = Math.sqrt(sumSqLhs * sumSqRhs);
+    if (!Number.isFinite(denominator) || denominator <= 0) return null;
+    return cov / denominator;
+  }
+
+  private computeScore(
+    annualizedReturn: number,
+    annualizedVolatility: number,
+    divers: number,
+    avgCorr: number | null
+  ): number | null {
+    if (!Number.isFinite(annualizedReturn) || !Number.isFinite(annualizedVolatility) || annualizedVolatility <= 0) {
+      return null;
+    }
+    if (!Number.isFinite(divers) || divers <= 0 || avgCorr === null || !Number.isFinite(avgCorr) || avgCorr <= -1) {
+      return null;
+    }
+    return (annualizedReturn / annualizedVolatility) * (divers / (1 + avgCorr));
+  }
+
+  private computePortfolioCorrelationMatrix(results: PortfolioComparisonResultDTO[]): {
+    labels: string[];
+    values: Array<Array<number | null>>;
+  } {
+    const labels = results.map((item) => item.name);
+    const valueByPortfolioDate = new Map<string, Map<string, number>>();
+
+    results.forEach((portfolio) => {
+      const dateMap = new Map<string, number>();
+      portfolio.series.forEach((point) => dateMap.set(point.date, point.value));
+      valueByPortfolioDate.set(portfolio.name, dateMap);
+    });
+
+    const commonDates = results
+      .map((portfolio) => new Set(portfolio.series.map((point) => point.date)))
+      .reduce<Set<string> | null>((acc, current) => {
+        if (!acc) return new Set(current);
+        return new Set(Array.from(acc).filter((date) => current.has(date)));
+      }, null);
+
+    const dates = Array.from(commonDates ?? []).sort((a, b) => a.localeCompare(b));
+    const values = labels.map((lhsName, rowIndex) =>
+      labels.map((rhsName, colIndex) => {
+        if (rowIndex === colIndex) return 1;
+        if (dates.length < 2) return null;
+
+        const lhsValues: number[] = [];
+        const rhsValues: number[] = [];
+        dates.forEach((date) => {
+          const lhs = valueByPortfolioDate.get(lhsName)?.get(date);
+          const rhs = valueByPortfolioDate.get(rhsName)?.get(date);
+          if (Number.isFinite(lhs) && Number.isFinite(rhs)) {
+            lhsValues.push(lhs as number);
+            rhsValues.push(rhs as number);
+          }
+        });
+
+        const corr = this.pearsonCorrelation(lhsValues, rhsValues);
+        return corr === null ? null : this.round6(corr);
+      })
+    );
+
+    return { labels, values };
+  }
+
+  private async resolveUniverseFromOverview(
+    universeByLabel: Record<string, string>
+  ): Promise<PortfolioUniverseItemDTO[]> {
+    const uniqueIsins = Array.from(new Set(Object.values(universeByLabel)));
+    const metadataByIsin = new Map<string, Omit<PortfolioUniverseItemDTO, 'label' | 'isin'>>();
+
+    for (const isin of uniqueIsins) {
+      const metadata = await this.fetchOverviewMetadataByIsin(isin);
+      metadataByIsin.set(isin, metadata);
+    }
+
+    return Object.entries(universeByLabel)
+      .map(([label, isin]) => {
+        const metadata = metadataByIsin.get(isin);
+        return {
+          label,
+          isin,
+          name: metadata?.name ?? null,
+          ticker: metadata?.ticker ?? null,
+          currency: metadata?.currency ?? null,
+          strategy: metadata?.strategy ?? null,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  private async fetchOverviewMetadataByIsin(
+    isin: string
+  ): Promise<Omit<PortfolioUniverseItemDTO, 'label' | 'isin'>> {
+    for (const strategy of JUSTETF_OVERVIEW_STRATEGIES) {
+      try {
+        const payload = await this.fetchOverviewPayload(isin, strategy);
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+        const match = rows.find((item) => item.isin?.toUpperCase() === isin);
+        if (!match) continue;
+
+        return {
+          name: typeof match.name === 'string' ? match.name : null,
+          ticker: typeof match.ticker === 'string' ? match.ticker : null,
+          currency: typeof match.currency === 'string' ? match.currency : null,
+          strategy: typeof match.strategy === 'string' ? match.strategy : null,
+        };
+      } catch {
+        // Ignore overview scraping failures: chart data analysis can still run.
+      }
+    }
+
+    return {
+      name: null,
+      ticker: null,
+      currency: null,
+      strategy: null,
+    };
+  }
+
+  private async fetchOverviewPayload(
+    query: string,
+    strategy: (typeof JUSTETF_OVERVIEW_STRATEGIES)[number]
+  ): Promise<JustEtfOverviewPayload> {
+    const body = JSON.stringify({
+      ...JUSTETF_OVERVIEW_BASE_PARAMS,
+      query,
+      productGroup: strategy,
+      quoteCurrency: this.justEtfCurrency,
+    });
+
+    const response = await fetch(JUSTETF_OVERVIEW_URL, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'en',
+        'Content-Type': 'application/json',
+        'User-Agent': this.userAgent,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new AppError(`justETF overview provider error (${response.status})`, 502, 'PROVIDER_ERROR');
+    }
+
+    return (await response.json()) as JustEtfOverviewPayload;
+  }
+
   private async getSymbolHistory(
     symbol: string,
-    horizon: PortfolioHistoryHorizonDTO
+    horizon: PortfolioHistoryHorizonDTO,
+    valueMode: PortfolioInputValueModeDTO
   ): Promise<PortfolioHistoryPointDTO[]> {
-    const cacheKey = `${symbol}|${horizon}`;
+    const cacheKey = `${symbol}|${horizon}|${valueMode}`;
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.points;
-    }
+    if (cached && cached.expiresAt > Date.now()) return cached.points;
 
     const existingPromise = this.inFlight.get(cacheKey);
-    if (existingPromise) {
-      return existingPromise;
-    }
+    if (existingPromise) return existingPromise;
 
-    const nextPromise = this.fetchFromProvider(symbol, horizon)
+    const nextPromise = this.fetchFromProvider(symbol, horizon, valueMode)
       .then((points) => {
         this.cache.set(cacheKey, {
           points,
@@ -110,9 +551,7 @@ export class PortfolioService {
         });
         return points;
       })
-      .finally(() => {
-        this.inFlight.delete(cacheKey);
-      });
+      .finally(() => this.inFlight.delete(cacheKey));
 
     this.inFlight.set(cacheKey, nextPromise);
     return nextPromise;
@@ -120,7 +559,8 @@ export class PortfolioService {
 
   private async fetchFromProvider(
     symbol: string,
-    horizon: PortfolioHistoryHorizonDTO
+    horizon: PortfolioHistoryHorizonDTO,
+    valueMode: PortfolioInputValueModeDTO
   ): Promise<PortfolioHistoryPointDTO[]> {
     if (!ISIN_REGEX.test(symbol)) {
       throw new AppError(
@@ -131,7 +571,6 @@ export class PortfolioService {
     }
 
     const payload = await this.fetchJustEtfChartPayload(symbol);
-
     const dailyQuoteSeries = this.parseDailyQuotes(payload);
     if (dailyQuoteSeries.length < 2) {
       throw new AppError(`Insufficient history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
@@ -140,7 +579,7 @@ export class PortfolioService {
     const monthlyPoints = this.toMonthlySeries(
       dailyQuoteSeries,
       this.parseDividends(payload),
-      this.inputValueMode
+      valueMode
     );
 
     const outputSize = HORIZON_OUTPUT_SIZE[horizon];
@@ -170,18 +609,9 @@ export class PortfolioService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new AppError(
-            `ISIN '${isin}' not found on justETF`,
-            422,
-            'PROVIDER_SYMBOL_ERROR'
-          );
+          throw new AppError(`ISIN '${isin}' not found on justETF`, 422, 'PROVIDER_SYMBOL_ERROR');
         }
-
-        throw new AppError(
-          `justETF provider error (${response.status})`,
-          502,
-          'PROVIDER_ERROR'
-        );
+        throw new AppError(`justETF provider error (${response.status})`, 502, 'PROVIDER_ERROR');
       }
 
       return (await response.json()) as JustEtfChartPayload;
@@ -238,7 +668,7 @@ export class PortfolioService {
   private toMonthlySeries(
     dailyQuoteSeries: Array<{ date: string; close: number }>,
     dividendsByDate: Map<string, number>,
-    valueMode: InputValueMode
+    valueMode: PortfolioInputValueModeDTO
   ): PortfolioHistoryPointDTO[] {
     let cumulativeDividends = 0;
     const pointsByMonth = new Map<string, PortfolioHistoryPointDTO>();
@@ -264,13 +694,23 @@ export class PortfolioService {
     return Math.round(value * 100) / 100;
   }
 
+  private round6(value: number): number {
+    return Math.round(value * 1_000_000) / 1_000_000;
+  }
+
+  private compareNullableNumbersDesc(lhs: number | null, rhs: number | null): number {
+    const left = lhs === null || Number.isNaN(lhs) ? Number.NEGATIVE_INFINITY : lhs;
+    const right = rhs === null || Number.isNaN(rhs) ? Number.NEGATIVE_INFINITY : rhs;
+    return right - left;
+  }
+
   private get cacheTtlMs(): number {
     const minutes = Number(process.env.PORTFOLIO_CACHE_TTL_MINUTES ?? '360');
     if (!Number.isFinite(minutes) || minutes <= 0) return 6 * 60 * 1000;
     return minutes * 60 * 1000;
   }
 
-  private get inputValueMode(): InputValueMode {
+  private get defaultInputValueMode(): PortfolioInputValueModeDTO {
     return (process.env.PORTFOLIO_JUSTETF_INPUT_VALUE || 'quote_with_dividends') === 'quote'
       ? 'quote'
       : 'quote_with_dividends';

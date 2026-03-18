@@ -35,6 +35,8 @@ import type {
   FixedExpenseCategory,
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryResponseDTO,
+  PortfolioCompareRequestDTO,
+  PortfolioCompareResponseDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
 
@@ -349,6 +351,12 @@ export const portfolioApi = {
       `/portfolio/debug/justetf${query}`
     );
   },
+
+  compare: (data: PortfolioCompareRequestDTO) =>
+    fetchApi<PortfolioCompareResponseDTO>('/portfolio/compare', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   getHistory: (symbols: string[], horizon: PortfolioHistoryHorizonDTO) => {
     const params = new URLSearchParams({

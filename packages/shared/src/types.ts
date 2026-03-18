@@ -343,6 +343,78 @@ export interface PortfolioHistoryResponseDTO {
   series: PortfolioSymbolHistoryDTO[];
 }
 
+export type PortfolioInputValueModeDTO = 'quote' | 'quote_with_dividends';
+
+export interface PortfolioCompareDefinitionDTO {
+  name: string;
+  weights: Record<string, number>;
+}
+
+export interface PortfolioCompareRequestDTO {
+  horizon: PortfolioHistoryHorizonDTO;
+  inputValue: PortfolioInputValueModeDTO;
+  riskFreeAnnual: number;
+  universeByLabel: Record<string, string>;
+  portfolios: PortfolioCompareDefinitionDTO[];
+}
+
+export interface PortfolioUniverseItemDTO {
+  label: string;
+  isin: string;
+  name: string | null;
+  ticker: string | null;
+  currency: string | null;
+  strategy: string | null;
+}
+
+export interface PortfolioSeriesPointValueDTO {
+  date: string;
+  value: number;
+}
+
+export interface PortfolioMetricsDTO {
+  annualizedReturn: number;
+  annualizedVolatility: number;
+  sharpe: number | null;
+  nMonths: number;
+  divers: number;
+  avgCorr: number | null;
+  score: number | null;
+}
+
+export interface PortfolioComparisonResultDTO {
+  name: string;
+  weights: Record<string, number>;
+  metrics: PortfolioMetricsDTO;
+  series: PortfolioSeriesPointValueDTO[];
+}
+
+export interface PortfolioCorrelationMatrixDTO {
+  labels: string[];
+  values: Array<Array<number | null>>;
+}
+
+export interface PortfolioScatterPointDTO {
+  name: string;
+  annualizedReturn: number;
+  annualizedVolatility: number;
+  divers: number;
+  avgCorr: number | null;
+  score: number | null;
+}
+
+export interface PortfolioCompareResponseDTO {
+  generatedAt: string;
+  horizon: PortfolioHistoryHorizonDTO;
+  inputValue: PortfolioInputValueModeDTO;
+  riskFreeAnnual: number;
+  universe: PortfolioUniverseItemDTO[];
+  portfolios: PortfolioComparisonResultDTO[];
+  ranking: string[];
+  correlationBetweenPortfolios: PortfolioCorrelationMatrixDTO;
+  scatter: PortfolioScatterPointDTO[];
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;

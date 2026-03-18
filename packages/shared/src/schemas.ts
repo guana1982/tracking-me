@@ -216,6 +216,38 @@ export const portfolioHistoryQuerySchema = z.object({
   horizon: portfolioHistoryHorizonSchema.default('3Y'),
 });
 
+export const portfolioInputValueModeSchema = z.enum(['quote', 'quote_with_dividends']);
+
+const portfolioLabelSchema = z
+  .string()
+  .min(1)
+  .max(60)
+  .regex(/^[A-Za-z0-9 _./&()+-]+$/);
+
+const portfolioIsinSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/);
+
+const portfolioWeightMapSchema = z.record(portfolioLabelSchema, z.number().min(0).max(1_000_000));
+
+export const portfolioComparePortfolioSchema = z.object({
+  name: z.string().min(1).max(60).trim(),
+  weights: portfolioWeightMapSchema,
+});
+
+export const portfolioCompareRequestSchema = z.object({
+  horizon: portfolioHistoryHorizonSchema.default('3Y'),
+  inputValue: portfolioInputValueModeSchema.default('quote_with_dividends'),
+  riskFreeAnnual: z.number().min(-1).max(1).default(0.03),
+  universeByLabel: z.record(portfolioLabelSchema, portfolioIsinSchema).refine(
+    (value) => Object.keys(value).length > 0,
+    { message: 'At least one instrument must be provided' }
+  ),
+  portfolios: z.array(portfolioComparePortfolioSchema).min(1).max(24),
+});
+
 // Type exports from schemas
 export type CreateMonthPeriodInput = z.infer<typeof createMonthPeriodSchema>;
 export type UpdateBudgetRuleInput = z.infer<typeof updateBudgetRuleSchema>;
@@ -234,3 +266,4 @@ export type CreateCashFlowColumnInput = z.infer<typeof createCashFlowColumnSchem
 export type UpdateCashFlowColumnInput = z.infer<typeof updateCashFlowColumnSchema>;
 export type CashFlowSettingsInput = z.infer<typeof cashFlowSettingsSchema>;
 export type PortfolioHistoryQueryInput = z.infer<typeof portfolioHistoryQuerySchema>;
+export type PortfolioCompareRequestInput = z.infer<typeof portfolioCompareRequestSchema>;

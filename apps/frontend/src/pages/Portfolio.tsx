@@ -1,989 +1,315 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Loader2, RefreshCw, Plus, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
-import { usePortfolioHistory } from '../hooks/useQueries';
 import { portfolioApi } from '../lib/api';
 import type {
+  PortfolioCompareRequestDTO,
+  PortfolioCompareResponseDTO,
   PortfolioHistoryHorizonDTO,
-  PortfolioHistoryPointDTO,
-  PortfolioSymbolHistoryDTO,
+  PortfolioInputValueModeDTO,
 } from '@budget/shared';
 
 type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
 type Horizon = PortfolioHistoryHorizonDTO;
-type InstrumentInsertType = 'ETF' | 'OBBLIGAZIONE';
+type Instrument = { symbol: string; isin: string; name: string; assetClass: AssetClass };
+type Invested = { symbol: string; amount: number };
+type StudyRow = { id: string; label: string; weight: string };
+type StudyPortfolio = { id: string; name: string; rows: StudyRow[] };
 
-type InstrumentDefinition = {
-  symbol: string;
-  name: string;
-  isin: string;
-  assetClass: AssetClass;
-};
-
-type InvestedPosition = {
-  symbol: string;
-  amount: number;
-};
-
-type StudyConfig = {
-  symbol: string;
-  enabled: boolean;
-  weight: number;
-};
-type SeriesBySymbol = Record<string, PortfolioHistoryPointDTO[]>;
-
-type PortfolioPoint = {
-  date: string;
-  value: number;
-};
-
-type PerformanceMetrics = {
-  cumulativeReturn: number;
-  annualizedReturn: number;
-  annualizedVolatility: number;
-  maxDrawdown: number;
-};
-const ENABLE_PORTFOLIO_HISTORY = false;
-
-const INSTRUMENTS: InstrumentDefinition[] = [
-  {
-    symbol: 'WORLD',
-    name: 'iShares Core MSCI World UCITS ETF USD (Acc)',
-    isin: 'IE00B4L5Y983',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'PACIFIC_EXJP',
-    name: 'iShares Core MSCI Pacific ex Japan UCITS ETF',
-    isin: 'IE00B52MJY50',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'EM_EX_CHINA',
-    name: 'iShares MSCI EM ex-China UCITS ETF',
-    isin: 'IE00BMG6Z448',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'SWITZERLAND',
-    name: 'UBS MSCI Switzerland 20/35 UCITS ETF',
-    isin: 'LU0977261329',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'UK',
-    name: 'UBS MSCI United Kingdom UCITS ETF',
-    isin: 'LU0950670850',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'AI_BIGDATA',
-    name: 'Xtrackers AI & Big Data UCITS ETF 1C',
-    isin: 'IE00BGV5VN51',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'MSCI_SMALLCAP',
-    name: 'SPDR MSCI World Small Cap UCITS ETF',
-    isin: 'IE00BF4RFH31',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'S&P500',
-    name: 'iShares Core S&P 500 UCITS ETF',
-    isin: 'IE00B5BMR087',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'WORLD_EX_USA',
-    name: 'iShares MSCI World ex-USA UCITS ETF USD (Acc)',
-    isin: 'IE000R4ZNTN3',
-    assetClass: 'AZIONARIO',
-  },
-  {
-    symbol: 'XEON',
-    name: 'Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C',
-    isin: 'LU0290358497',
-    assetClass: 'OBBLIGAZIONARIO',
-  },
-  {
-    symbol: 'AMUNDI_SMART_OVN',
-    name: 'Amundi Smart Overnight Return UCITS ETF',
-    isin: 'LU1190417599',
-    assetClass: 'OBBLIGAZIONARIO',
-  },
-  {
-    symbol: 'USB_FOREIGN_BOND',
-    name: 'UBS Bloomberg US Liquid Corporates UCITS ETF (Dist)',
-    isin: 'LU0879397742',
-    assetClass: 'OBBLIGAZIONARIO',
-  },
+const INSTRUMENTS: Instrument[] = [
+  { symbol: 'XEON', isin: 'LU0290358497', name: 'Xtrackers EUR Overnight', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'GOLD', isin: 'IE00B579F325', name: 'WisdomTree Physical Gold', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'AMUNDI_EMERGING', isin: 'LU1681045370', name: 'Amundi Emerging', assetClass: 'AZIONARIO' },
+  { symbol: 'PACIFIC_EXJP', isin: 'IE00B52MJY50', name: 'iShares Pacific ex Japan', assetClass: 'AZIONARIO' },
+  { symbol: 'WORLD', isin: 'IE00B4L5Y983', name: 'iShares MSCI World', assetClass: 'AZIONARIO' },
+  { symbol: 'JP_SMALLCAP', isin: 'IE00B2QWDY88', name: 'Japan Small Cap', assetClass: 'AZIONARIO' },
+  { symbol: 'LG_CLEAN_ENERGY', isin: 'IE00BK5BCH80', name: 'L&G Clean Energy', assetClass: 'AZIONARIO' },
+  { symbol: 'WORLD_SMALL_CAP', isin: 'IE00BCBJG560', name: 'World Small Cap', assetClass: 'AZIONARIO' },
+  { symbol: 'WISDOM_AI', isin: 'IE00BDVPNG13', name: 'Wisdom AI', assetClass: 'AZIONARIO' },
+  { symbol: 'EMERGING', isin: 'IE00BKM4GZ66', name: 'MSCI Emerging IMI', assetClass: 'AZIONARIO' },
+  { symbol: 'US_SMALLCAP', isin: 'IE00BJ38QD84', name: 'US Small Cap', assetClass: 'AZIONARIO' },
+  { symbol: 'WORLD_EX_USA', isin: 'IE000R4ZNTN3', name: 'World ex USA', assetClass: 'AZIONARIO' },
+  { symbol: 'UTILITIES', isin: 'IE00B4KBBD01', name: 'S&P500 Utilities', assetClass: 'AZIONARIO' },
+  { symbol: 'EM_EX_CHINA', isin: 'IE00BMG6Z448', name: 'EM ex China', assetClass: 'AZIONARIO' },
+  { symbol: 'SWITZERLAND', isin: 'LU0977261329', name: 'MSCI Switzerland', assetClass: 'AZIONARIO' },
+  { symbol: 'UK', isin: 'LU0950670850', name: 'MSCI UK', assetClass: 'AZIONARIO' },
+  { symbol: 'AI_BIGDATA', isin: 'IE00BGV5VN51', name: 'AI Big Data', assetClass: 'AZIONARIO' },
+  { symbol: 'JAPAN', isin: 'LU1781541252', name: 'MSCI Japan', assetClass: 'AZIONARIO' },
+  { symbol: 'EUROPE', isin: 'LU0908500753', name: 'MSCI Europe', assetClass: 'AZIONARIO' },
+  { symbol: 'CHINA-A', isin: 'IE00BQT3WG13', name: 'China A', assetClass: 'AZIONARIO' },
+  { symbol: 'BRAZIL', isin: 'LU1900066207', name: 'Brazil', assetClass: 'AZIONARIO' },
+  { symbol: 'SUSW', isin: 'IE00BYX2JD69', name: 'MSCI World SRI', assetClass: 'AZIONARIO' },
+  { symbol: 'S&P500', isin: 'IE00B5BMR087', name: 'S&P500', assetClass: 'AZIONARIO' },
+  { symbol: 'XTR_GOLD', isin: 'DE000A2T0VU5', name: 'Xtrackers Gold', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'MSCI_EUROPE_ENERGY', isin: 'IE00BKWQ0F09', name: 'Europe Energy', assetClass: 'AZIONARIO' },
+  { symbol: 'AMUNDI_SMART_OVERNOGHT', isin: 'LU1190417599', name: 'Amundi Smart Overnight', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'USB_FOREIN_DIST', isin: 'LU0879397742', name: 'UBS US Bond Dist', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'AMUNDI_BLOOMERG_EX_AGRIC', isin: 'LU1829218749', name: 'Amundi Bloomberg Ex Agric', assetClass: 'OBBLIGAZIONARIO' },
+  { symbol: 'ISHARE_CINA_A', isin: 'IE00BJ5JPG56', name: 'iShares China A', assetClass: 'AZIONARIO' },
+  { symbol: 'MSCI_EMU', isin: 'IE00B53QG562', name: 'MSCI EMU', assetClass: 'AZIONARIO' },
+  { symbol: 'MSCI_SMALLCAP', isin: 'IE00BF4RFH31', name: 'MSCI Small Cap', assetClass: 'AZIONARIO' },
 ];
 
-const DEFAULT_INVESTED_POSITIONS: InvestedPosition[] = [
-  { symbol: 'WORLD', amount: 18000 },
-  { symbol: 'PACIFIC_EXJP', amount: 7500 },
-  { symbol: 'EM_EX_CHINA', amount: 6000 },
-  { symbol: 'XEON', amount: 5000 },
-];
+const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'];
+const mk = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
+const pct = (v: number | null | undefined) => (!Number.isFinite(v ?? NaN) ? 'N/A' : `${((v as number) * 100).toFixed(2)}%`);
+const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
 
-function getInstrument(symbol: string): InstrumentDefinition | undefined {
-  return INSTRUMENTS.find((item) => item.symbol === symbol);
-}
-
-function mapInsertTypeToAssetClass(type: InstrumentInsertType): AssetClass {
-  return type === 'ETF' ? 'AZIONARIO' : 'OBBLIGAZIONARIO';
-}
-
-function formatMonthLabel(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString('it-IT', {
-    month: 'short',
-    year: '2-digit',
-  });
-}
-
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
-}
-
-function normalizeWeights(input: { symbol: string; weight: number }[]): Record<string, number> {
-  const sanitized = input
-    .map((item) => ({ symbol: item.symbol, weight: Math.max(0, item.weight) }))
-    .filter((item) => item.weight > 0);
-
-  if (sanitized.length === 0) return {};
-
-  const total = sanitized.reduce((sum, item) => sum + item.weight, 0);
-  if (total <= 0) {
-    const equal = 1 / sanitized.length;
-    return sanitized.reduce<Record<string, number>>((acc, item) => {
-      acc[item.symbol] = equal;
-      return acc;
-    }, {});
-  }
-
-  return sanitized.reduce<Record<string, number>>((acc, item) => {
-    acc[item.symbol] = item.weight / total;
-    return acc;
-  }, {});
-}
-
-function computePortfolioSeries(seriesBySymbol: SeriesBySymbol, weights: Record<string, number>): PortfolioPoint[] {
-  const symbols = Object.keys(weights).filter((symbol) => seriesBySymbol[symbol]?.length > 0);
-  if (symbols.length === 0) return [];
-
-  const pointsCount = Math.min(...symbols.map((symbol) => seriesBySymbol[symbol].length));
-  if (pointsCount < 2) return [];
-
-  const basePrices = symbols.reduce<Record<string, number>>((acc, symbol) => {
-    acc[symbol] = seriesBySymbol[symbol][0].close;
-    return acc;
-  }, {});
-
-  const referenceSymbol = symbols[0];
-  const result: PortfolioPoint[] = [];
-
-  for (let index = 0; index < pointsCount; index += 1) {
-    const date = seriesBySymbol[referenceSymbol][index].date;
-    const value = symbols.reduce((sum, symbol) => {
-      const normalized = (seriesBySymbol[symbol][index].close / basePrices[symbol]) * 100;
-      return sum + normalized * weights[symbol];
-    }, 0);
-
-    result.push({ date, value });
-  }
-
-  return result;
-}
-
-function computePerformanceMetrics(series: PortfolioPoint[]): PerformanceMetrics | null {
-  if (series.length < 2) return null;
-
-  const values = series.map((point) => point.value);
-  const start = values[0];
-  const end = values[values.length - 1];
-  if (start <= 0 || end <= 0) return null;
-
-  const periods = values.length - 1;
-  const monthlyReturns = values.slice(1).map((value, index) => value / values[index] - 1);
-  const avgReturn = monthlyReturns.reduce((sum, value) => sum + value, 0) / monthlyReturns.length;
-  const variance =
-    monthlyReturns.reduce((sum, value) => sum + (value - avgReturn) ** 2, 0) /
-    Math.max(1, monthlyReturns.length - 1);
-
-  let peak = values[0];
-  let maxDrawdown = 0;
-  values.forEach((value) => {
-    peak = Math.max(peak, value);
-    const drawdown = value / peak - 1;
-    maxDrawdown = Math.min(maxDrawdown, drawdown);
-  });
-
-  return {
-    cumulativeReturn: end / start - 1,
-    annualizedReturn: Math.pow(end / start, 12 / periods) - 1,
-    annualizedVolatility: Math.sqrt(variance) * Math.sqrt(12),
-    maxDrawdown,
-  };
-}
-
-function buildInitialStudyConfig(positions: InvestedPosition[]): StudyConfig[] {
-  const investedMap = normalizeWeights(
-    positions.map((position) => ({
-      symbol: position.symbol,
-      weight: position.amount,
-    }))
-  );
-
-  return INSTRUMENTS.map((instrument) => {
-    const investedWeight = investedMap[instrument.symbol] ?? 0;
-    return {
-      symbol: instrument.symbol,
-      enabled: investedWeight > 0,
-      weight: Number((investedWeight * 100).toFixed(2)),
-    };
-  });
+function defaultStudy(): StudyPortfolio[] {
+  return [
+    {
+      id: mk('p'),
+      name: 'ASIS',
+      rows: [
+        { id: mk('r'), label: 'WORLD', weight: '33' },
+        { id: mk('r'), label: 'PACIFIC_EXJP', weight: '14' },
+        { id: mk('r'), label: 'EM_EX_CHINA', weight: '12' },
+        { id: mk('r'), label: 'SWITZERLAND', weight: '11' },
+        { id: mk('r'), label: 'UK', weight: '11' },
+        { id: mk('r'), label: 'AI_BIGDATA', weight: '7' },
+        { id: mk('r'), label: 'JP_SMALLCAP', weight: '12' },
+      ],
+    },
+    {
+      id: mk('p'),
+      name: 'NEW',
+      rows: [
+        { id: mk('r'), label: 'WORLD', weight: '33' },
+        { id: mk('r'), label: 'PACIFIC_EXJP', weight: '14' },
+        { id: mk('r'), label: 'EM_EX_CHINA', weight: '12' },
+        { id: mk('r'), label: 'SWITZERLAND', weight: '11' },
+        { id: mk('r'), label: 'UK', weight: '11' },
+        { id: mk('r'), label: 'AI_BIGDATA', weight: '7' },
+        { id: mk('r'), label: 'MSCI_SMALLCAP', weight: '12' },
+      ],
+    },
+  ];
 }
 
 export function Portfolio() {
-  const justEtfDebugCallDoneRef = useRef(false);
-  const [investedPositions, setInvestedPositions] = useState<InvestedPosition[]>(
-    DEFAULT_INVESTED_POSITIONS
-  );
+  const [invested, setInvested] = useState<Invested[]>([
+    { symbol: 'WORLD', amount: 18000 },
+    { symbol: 'PACIFIC_EXJP', amount: 7500 },
+    { symbol: 'EM_EX_CHINA', amount: 6000 },
+    { symbol: 'XEON', amount: 5000 },
+  ]);
+  const [addSymbol, setAddSymbol] = useState('WORLD');
+  const [addAmount, setAddAmount] = useState('1000');
   const [horizon, setHorizon] = useState<Horizon>('3Y');
-  const [studyConfig, setStudyConfig] = useState<StudyConfig[]>(
-    buildInitialStudyConfig(DEFAULT_INVESTED_POSITIONS)
-  );
-  const [isAddInstrumentModalOpen, setIsAddInstrumentModalOpen] = useState(false);
-  const [insertType, setInsertType] = useState<InstrumentInsertType>('ETF');
-  const [insertSymbol, setInsertSymbol] = useState('');
-  const [insertAmount, setInsertAmount] = useState('');
-  const [insertError, setInsertError] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState<PortfolioInputValueModeDTO>('quote_with_dividends');
+  const [riskFreeAnnual, setRiskFreeAnnual] = useState('0.03');
+  const [study, setStudy] = useState<StudyPortfolio[]>(defaultStudy());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PortfolioCompareResponseDTO | null>(null);
 
-  const investedTotal = useMemo(
-    () => investedPositions.reduce((sum, position) => sum + Math.max(0, position.amount), 0),
-    [investedPositions]
-  );
-  const investedSymbols = useMemo(
-    () => new Set(investedPositions.map((position) => position.symbol)),
-    [investedPositions]
-  );
-  const availableInstruments = useMemo(
-    () => INSTRUMENTS.filter((instrument) => !investedSymbols.has(instrument.symbol)),
-    [investedSymbols]
-  );
-  const availableInsertInstruments = useMemo(
-    () =>
-      availableInstruments.filter(
-        (instrument) => instrument.assetClass === mapInsertTypeToAssetClass(insertType)
-      ),
-    [availableInstruments, insertType]
-  );
+  const investedTotal = useMemo(() => invested.reduce((s, p) => s + Math.max(0, p.amount), 0), [invested]);
+  const universeByLabel = useMemo(() => INSTRUMENTS.reduce<Record<string, string>>((a, i) => ((a[i.symbol] = i.isin), a), {}), []);
 
-  const investedWeightMap = useMemo(
-    () =>
-      normalizeWeights(
-        investedPositions.map((position) => ({
-          symbol: position.symbol,
-          weight: Math.max(0, position.amount),
-        }))
-      ),
-    [investedPositions]
-  );
-
-  const scenarioWeightMap = useMemo(
-    () =>
-      normalizeWeights(
-        studyConfig
-          .filter((item) => item.enabled)
-          .map((item) => ({ symbol: item.symbol, weight: item.weight }))
-      ),
-    [studyConfig]
-  );
-
-  const symbolToIsin = useMemo<Record<string, string>>(
-    () =>
-      INSTRUMENTS.reduce<Record<string, string>>((acc, instrument) => {
-        acc[instrument.symbol] = instrument.isin;
-        return acc;
-      }, {}),
-    []
-  );
-  const isinToSymbol = useMemo<Record<string, string>>(
-    () =>
-      INSTRUMENTS.reduce<Record<string, string>>((acc, instrument) => {
-        acc[instrument.isin] = instrument.symbol;
-        return acc;
-      }, {}),
-    []
-  );
-
-  const isinsForSeries = useMemo(() => {
-    const symbols = new Set([...Object.keys(investedWeightMap), ...Object.keys(scenarioWeightMap)]);
-    const isins = Array.from(symbols)
-      .map((symbol) => symbolToIsin[symbol])
-      .filter((isin): isin is string => Boolean(isin));
-    return Array.from(new Set(isins));
-  }, [investedWeightMap, scenarioWeightMap, symbolToIsin]);
-
-  const {
-    data: portfolioHistory,
-    isLoading: isSeriesLoading,
-    isError: isSeriesError,
-    error: portfolioHistoryError,
-  } = usePortfolioHistory(
-    isinsForSeries,
-    horizon,
-    ENABLE_PORTFOLIO_HISTORY && isinsForSeries.length > 0
-  );
-
-  const seriesBySymbol = useMemo<SeriesBySymbol>(() => {
-    if (!portfolioHistory?.series) return {};
-
-    return portfolioHistory.series.reduce<SeriesBySymbol>((acc, item: PortfolioSymbolHistoryDTO) => {
-      const mappedSymbol = isinToSymbol[item.symbol];
-      if (!mappedSymbol) return acc;
-      acc[mappedSymbol] = item.points;
-      return acc;
-    }, {});
-  }, [portfolioHistory, isinToSymbol]);
-
-  const seriesError = isSeriesError
-    ? portfolioHistoryError instanceof Error
-      ? portfolioHistoryError.message
-      : 'Impossibile caricare le serie storiche.'
-    : null;
-
-  useEffect(() => {
-    if (justEtfDebugCallDoneRef.current) return;
-    justEtfDebugCallDoneRef.current = true;
-
-    portfolioApi
-      .getJustEtfDebugRaw()
-      .then((response) => {
-        const usedIsin = response.isin;
-        const payload = response.payload;
-        console.groupCollapsed('[Portfolio][justETF debug]');
-        console.log('ISIN', usedIsin);
-        console.log('raw payload', payload);
-        console.log('series length', Array.isArray(payload.series) ? payload.series.length : 0);
-        console.log('first 5 series rows', Array.isArray(payload.series) ? payload.series.slice(0, 5) : []);
-        console.groupEnd();
-      })
-      .catch((error: unknown) => {
-        console.error('[Portfolio][justETF debug] call failed', error);
+  const cumulativeData = useMemo(() => {
+    if (!result) return [] as Array<Record<string, string | number>>;
+    const dates = new Set<string>();
+    const maps = result.portfolios.map((p) => {
+      let x = 100;
+      const m = new Map<string, number>();
+      [...p.series].sort((a, b) => a.date.localeCompare(b.date)).forEach((pt) => {
+        x *= 1 + pt.value;
+        m.set(pt.date, x);
+        dates.add(pt.date);
       });
-  }, []);
+      return { name: p.name, m };
+    });
+    return Array.from(dates).sort((a, b) => a.localeCompare(b)).map((date) => {
+      const row: Record<string, string | number> = { date, dateLabel: month(date) };
+      maps.forEach((p) => {
+        const v = p.m.get(date);
+        if (Number.isFinite(v)) row[p.name] = v as number;
+      });
+      return row;
+    });
+  }, [result]);
 
-  useEffect(() => {
-    if (!isAddInstrumentModalOpen) return;
-    if (availableInsertInstruments.length === 0) {
-      setInsertSymbol('');
-      return;
-    }
-
-    if (!availableInsertInstruments.some((instrument) => instrument.symbol === insertSymbol)) {
-      setInsertSymbol(availableInsertInstruments[0].symbol);
-    }
-  }, [isAddInstrumentModalOpen, availableInsertInstruments, insertSymbol]);
-
-  const currentPortfolioSeries = useMemo(
-    () => computePortfolioSeries(seriesBySymbol, investedWeightMap),
-    [seriesBySymbol, investedWeightMap]
-  );
-
-  const simulatedPortfolioSeries = useMemo(
-    () => computePortfolioSeries(seriesBySymbol, scenarioWeightMap),
-    [seriesBySymbol, scenarioWeightMap]
-  );
-  const hasCurrentSeries = currentPortfolioSeries.length >= 2;
-  const hasSimulatedSeries = simulatedPortfolioSeries.length >= 2;
-
-  const chartData = useMemo(() => {
-    const currentLength = currentPortfolioSeries.length;
-    const simulatedLength = simulatedPortfolioSeries.length;
-    if (currentLength < 2 && simulatedLength < 2) return [];
-
-    if (currentLength >= 2 && simulatedLength >= 2) {
-      const points = Math.min(currentLength, simulatedLength);
-      const output: Array<{ dateLabel: string; current?: number; simulated?: number }> = [];
-      for (let i = 0; i < points; i += 1) {
-        output.push({
-          dateLabel: formatMonthLabel(simulatedPortfolioSeries[i].date),
-          current: currentPortfolioSeries[i].value,
-          simulated: simulatedPortfolioSeries[i].value,
-        });
-      }
-      return output;
-    }
-
-    if (simulatedLength >= 2) {
-      return simulatedPortfolioSeries.map((point) => ({
-        dateLabel: formatMonthLabel(point.date),
-        simulated: point.value,
-      }));
-    }
-
-    return currentPortfolioSeries.map((point) => ({
-      dateLabel: formatMonthLabel(point.date),
-      current: point.value,
-    }));
-  }, [currentPortfolioSeries, simulatedPortfolioSeries]);
-
-  const currentMetrics = useMemo(
-    () => computePerformanceMetrics(currentPortfolioSeries),
-    [currentPortfolioSeries]
-  );
-  const simulatedMetrics = useMemo(
-    () => computePerformanceMetrics(simulatedPortfolioSeries),
-    [simulatedPortfolioSeries]
-  );
-
-  const investedAssetMix = useMemo(() => {
-    const equity = investedPositions.reduce((sum, position) => {
-      const instrument = getInstrument(position.symbol);
-      if (!instrument || instrument.assetClass !== 'AZIONARIO') return sum;
-      return sum + Math.max(0, position.amount);
-    }, 0);
-    const bond = investedPositions.reduce((sum, position) => {
-      const instrument = getInstrument(position.symbol);
-      if (!instrument || instrument.assetClass !== 'OBBLIGAZIONARIO') return sum;
-      return sum + Math.max(0, position.amount);
-    }, 0);
-    return { equity, bond };
-  }, [investedPositions]);
-
-  const openAddInstrumentModal = () => {
-    setInsertError(null);
-    setInsertAmount('');
-
-    if (availableInstruments.length === 0) {
-      setInsertType('ETF');
-      setInsertSymbol('');
-      setIsAddInstrumentModalOpen(true);
-      return;
-    }
-
-    const hasEtf = availableInstruments.some((instrument) => instrument.assetClass === 'AZIONARIO');
-    const nextType: InstrumentInsertType = hasEtf ? 'ETF' : 'OBBLIGAZIONE';
-    setInsertType(nextType);
-    const firstForType = availableInstruments.find(
-      (instrument) => instrument.assetClass === mapInsertTypeToAssetClass(nextType)
-    );
-    setInsertSymbol(firstForType?.symbol ?? '');
-    setIsAddInstrumentModalOpen(true);
+  const addInvested = () => {
+    const amount = Number(addAmount.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setInvested((prev) => {
+      const idx = prev.findIndex((p) => p.symbol === addSymbol);
+      if (idx < 0) return [...prev, { symbol: addSymbol, amount }];
+      const next = [...prev];
+      next[idx] = { ...next[idx], amount: next[idx].amount + amount };
+      return next;
+    });
   };
 
-  const closeAddInstrumentModal = () => {
-    setIsAddInstrumentModalOpen(false);
-    setInsertError(null);
-  };
+  const runCompare = async () => {
+    setError(null);
+    const rf = Number(riskFreeAnnual.replace(',', '.'));
+    if (!Number.isFinite(rf)) return setError('Risk free non valido');
 
-  const removeInvestedPosition = (symbol: string) => {
-    setInvestedPositions((prev) => prev.filter((position) => position.symbol !== symbol));
-  };
+    const portfolios = study
+      .map((p) => {
+        const weights = p.rows.reduce<Record<string, number>>((acc, row) => {
+          const w = Number(row.weight.replace(',', '.'));
+          if (row.label && Number.isFinite(w) && w > 0) acc[row.label] = (acc[row.label] ?? 0) + w;
+          return acc;
+        }, {});
+        return { name: p.name.trim() || 'Portfolio', weights };
+      })
+      .filter((p) => Object.keys(p.weights).length > 0);
 
-  const updateInvestedAmount = (symbol: string, nextValue: string) => {
-    const parsed = Number(nextValue);
-    const amount = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-    setInvestedPositions((prev) =>
-      prev.map((position) => (position.symbol === symbol ? { ...position, amount } : position))
-    );
-  };
+    if (portfolios.length < 2) return setError('Servono almeno 2 portafogli con pesi validi');
 
-  const addInvestedInstrument = () => {
-    if (!insertSymbol) {
-      setInsertError('Seleziona uno strumento da aggiungere.');
-      return;
+    const payload: PortfolioCompareRequestDTO = { horizon, inputValue, riskFreeAnnual: rf, universeByLabel, portfolios };
+    try {
+      setLoading(true);
+      setResult(await portfolioApi.compare(payload));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore confronto');
+    } finally {
+      setLoading(false);
     }
-
-    if (investedSymbols.has(insertSymbol)) {
-      setInsertError('Questo strumento e gia presente in portafoglio.');
-      return;
-    }
-
-    const parsed = Number(insertAmount.replace(',', '.'));
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setInsertError('Inserisci un importo valido maggiore di zero.');
-      return;
-    }
-
-    setInvestedPositions((prev) => [...prev, { symbol: insertSymbol, amount: Math.round(parsed * 100) / 100 }]);
-    setInsertAmount('');
-    setInsertError(null);
-    setIsAddInstrumentModalOpen(false);
   };
-
-  const toggleScenarioInstrument = (symbol: string) => {
-    setStudyConfig((prev) =>
-      prev.map((item) =>
-        item.symbol === symbol
-          ? { ...item, enabled: !item.enabled, weight: item.enabled ? item.weight : Math.max(item.weight, 5) }
-          : item
-      )
-    );
-  };
-
-  const updateScenarioWeight = (symbol: string, nextValue: string) => {
-    const parsed = Number(nextValue);
-    const weight = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
-    setStudyConfig((prev) =>
-      prev.map((item) => (item.symbol === symbol ? { ...item, weight } : item))
-    );
-  };
-
-  const resetScenarioToInvested = () => {
-    setStudyConfig(buildInitialStudyConfig(investedPositions));
-  };
-
-  const activeScenarioCount = Object.keys(scenarioWeightMap).length;
-  const selectedInsertInstrument = useMemo(
-    () => availableInsertInstruments.find((instrument) => instrument.symbol === insertSymbol) ?? null,
-    [availableInsertInstruments, insertSymbol]
-  );
 
   return (
     <div className="sm:ml-60 space-y-4">
-      <div className="card flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Portafoglio</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Studio portafoglio azionario/obbligazionario con confronto tra allocazione attuale e
-            simulata.
-          </p>
-        </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-          Serie storiche mensili via justETF (provider backend su ISIN, cache attiva).
-        </div>
+      <div className="card">
+        <h2 className="text-lg font-semibold">Portafoglio</h2>
+        <p className="text-sm text-slate-500">Confronto N portafogli di studio su dati justETF.</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        <section className="card xl:col-span-2 space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Portafoglio Investito</h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Inserisci i capitali gia investiti per costruire il benchmark attuale.
-              </p>
-            </div>
-            <button type="button" className="btn btn-secondary text-sm" onClick={openAddInstrumentModal}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              Aggiungi strumento
-            </button>
+        <section className="card xl:col-span-2 space-y-3">
+          <h3 className="font-semibold">Portafoglio Investito</h3>
+          <p className="text-sm text-slate-500">Totale: {formatCurrency(investedTotal)}</p>
+          <div className="flex gap-2">
+            <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} className="input">
+              {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
+            </select>
+            <input value={addAmount} onChange={(e) => setAddAmount(e.target.value)} className="input w-28" type="number" />
+            <button className="btn btn-secondary" onClick={addInvested}><Plus className="w-4 h-4" /></button>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Totale investito</p>
-              <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(investedTotal)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Azionario</p>
-              <p className="text-base font-semibold text-slate-900 mt-1">
-                {investedTotal > 0 ? `${((investedAssetMix.equity / investedTotal) * 100).toFixed(1)}%` : '0.0%'}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Obbligazionario</p>
-              <p className="text-base font-semibold text-slate-900 mt-1">
-                {investedTotal > 0 ? `${((investedAssetMix.bond / investedTotal) * 100).toFixed(1)}%` : '0.0%'}
-              </p>
-            </div>
-          </div>
-
           <div className="space-y-2">
-            {investedPositions.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500 text-center">
-                Nessuno strumento presente. Usa "Aggiungi strumento" per registrare ETF o obbligazioni.
-              </div>
-            )}
-            {investedPositions.map((position) => {
-              const instrument = getInstrument(position.symbol);
-              if (!instrument) return null;
-
-              const effectiveWeight = (investedWeightMap[position.symbol] ?? 0) * 100;
-
-              return (
-                <div
-                  key={position.symbol}
-                  className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900">{instrument.symbol}</p>
-                      <p className="text-xs text-slate-500 truncate">{instrument.name}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`text-[10px] px-2 py-1 rounded-full font-medium ${
-                          instrument.assetClass === 'AZIONARIO'
-                            ? 'bg-sky-100 text-sky-700'
-                            : 'bg-violet-100 text-violet-700'
-                        }`}
-                      >
-                        {instrument.assetClass}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeInvestedPosition(position.symbol)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Rimuovi strumento"
-                        aria-label={`Rimuovi ${instrument.symbol}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-[1fr,96px] gap-2 items-center">
-                    <label className="text-xs text-slate-500">Capitale investito</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-right tabular-nums"
-                      value={Number.isFinite(position.amount) ? position.amount : 0}
-                      onChange={(event) => updateInvestedAmount(position.symbol, event.target.value)}
-                    />
-                  </div>
-
-                  <p className="text-xs text-slate-500">
-                    Peso corrente: <span className="font-semibold text-slate-700">{effectiveWeight.toFixed(2)}%</span>
-                  </p>
+            {invested.map((p) => (
+              <div key={p.symbol} className="rounded border border-slate-200 p-2 flex items-center justify-between">
+                <span className="text-sm font-medium">{p.symbol}</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    className="input w-28 text-right"
+                    value={p.amount}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setInvested((prev) => prev.map((x) => (x.symbol === p.symbol ? { ...x, amount: Number.isFinite(v) ? Math.max(0, v) : 0 } : x)));
+                    }}
+                  />
+                  <button className="p-1 text-slate-500 hover:text-red-600" onClick={() => setInvested((prev) => prev.filter((x) => x.symbol !== p.symbol))}>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </section>
 
         <section className="card xl:col-span-3 space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Laboratorio Portafoglio</h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Attiva strumenti, imposta pesi e confronta scenario simulato vs portafoglio attuale.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={horizon}
-                onChange={(event) => setHorizon(event.target.value as Horizon)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="1Y">Orizzonte 1 anno</option>
-                <option value="3Y">Orizzonte 3 anni</option>
-                <option value="5Y">Orizzonte 5 anni</option>
-              </select>
-              <button type="button" className="btn btn-secondary text-sm" onClick={resetScenarioToInvested}>
-                <RefreshCw className="w-4 h-4 mr-1.5" />
-                Reset scenario
-              </button>
-            </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)} className="input">
+              <option value="1Y">1Y</option><option value="3Y">3Y</option><option value="5Y">5Y</option>
+            </select>
+            <select value={inputValue} onChange={(e) => setInputValue(e.target.value as PortfolioInputValueModeDTO)} className="input">
+              <option value="quote_with_dividends">quote_with_dividends</option>
+              <option value="quote">quote</option>
+            </select>
+            <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
+            <button className="btn btn-secondary" onClick={() => setStudy((prev) => [...prev, { id: mk('p'), name: `PORTFOLIO ${prev.length + 1}`, rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }] }])}>
+              <Plus className="w-4 h-4 mr-1" /> Nuovo
+            </button>
+            <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
+              {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[340px,1fr] gap-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2 max-h-[480px] overflow-auto">
-              {studyConfig.map((item) => {
-                const instrument = getInstrument(item.symbol);
-                if (!instrument) return null;
-                const normalizedWeight = (scenarioWeightMap[item.symbol] ?? 0) * 100;
+          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-                return (
-                  <div key={item.symbol} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{instrument.symbol}</p>
-                        <p className="text-xs text-slate-500 truncate">{instrument.name}</p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-pressed={item.enabled}
-                        onClick={() => toggleScenarioInstrument(item.symbol)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          item.enabled ? 'bg-slate-900' : 'bg-slate-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            item.enabled ? 'translate-x-4' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-[1fr,68px] items-center gap-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        disabled={!item.enabled}
-                        value={item.weight}
-                        onChange={(event) => updateScenarioWeight(item.symbol, event.target.value)}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        disabled={!item.enabled}
-                        className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right tabular-nums"
-                        value={item.weight}
-                        onChange={(event) => updateScenarioWeight(item.symbol, event.target.value)}
-                      />
-                    </div>
-
-                    <p className="text-[11px] text-slate-500">
-                      Peso effettivo: <span className="font-semibold text-slate-700">{normalizedWeight.toFixed(2)}%</span>
-                    </p>
+          <div className="space-y-3">
+            {study.map((p) => (
+              <div key={p.id} className="rounded border border-slate-200 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <input className="input w-48" value={p.name} onChange={(e) => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                  <div className="flex gap-2">
+                    <button className="btn btn-secondary py-1" onClick={() => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, rows: [...x.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : x)))}>Riga</button>
+                    {study.length > 1 && <button className="btn py-1" onClick={() => setStudy((prev) => prev.filter((x) => x.id !== p.id))}>Rimuovi</button>}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+                {p.rows.map((row) => (
+                  <div key={row.id} className="grid grid-cols-[1fr,120px,40px] gap-2">
+                    <select className="input" value={row.label} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r) } : x))}>
+                      {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol} - {i.isin}</option>)}
+                    </select>
+                    <input className="input text-right" value={row.weight} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, weight: e.target.value } : r) } : x))} />
+                    <button className="btn" onClick={() => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.filter((r) => r.id !== row.id) } : x))}>X</button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Strumenti attivi</p>
-                  <p className="text-base font-semibold text-slate-900 mt-1">{activeScenarioCount}</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Rend. annuo</p>
-                  <p className="text-base font-semibold text-slate-900 mt-1">
-                    {simulatedMetrics ? formatPercent(simulatedMetrics.annualizedReturn) : 'N/A'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Volatilita annua</p>
-                  <p className="text-base font-semibold text-slate-900 mt-1">
-                    {simulatedMetrics ? formatPercent(simulatedMetrics.annualizedVolatility) : 'N/A'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Max drawdown</p>
-                  <p className="text-base font-semibold text-red-600 mt-1">
-                    {simulatedMetrics ? formatPercent(simulatedMetrics.maxDrawdown) : 'N/A'}
-                  </p>
-                </div>
+          {result && (
+            <div className="space-y-4">
+              <div className="rounded border border-slate-200 p-3">
+                <p className="text-xs text-slate-500">Ranking score</p>
+                <div className="flex flex-wrap gap-2 mt-2">{result.ranking.map((n, i) => <span key={n} className="text-xs rounded-full border px-2 py-1">#{i + 1} {n}</span>)}</div>
               </div>
 
-              {isSeriesLoading ? (
-                <div className="h-72 flex items-center justify-center text-slate-500">
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Caricamento serie storiche...
-                </div>
-              ) : seriesError ? (
-                <div className="h-72 flex items-center justify-center text-red-600 text-sm">
-                  {seriesError}
-                </div>
-              ) : chartData.length < 2 ? (
-                <div className="h-72 flex items-center justify-center text-slate-500 text-sm">
-                  Inserisci almeno 2 punti validi (portafoglio attuale o simulato) per visualizzare il grafico.
-                </div>
-              ) : (
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 8, right: 12, left: 8, bottom: 6 }}>
-                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="dateLabel"
-                        tick={{ fill: '#64748b', fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        minTickGap={20}
-                      />
-                      <YAxis
-                        tick={{ fill: '#64748b', fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        domain={['auto', 'auto']}
-                        tickFormatter={(value: number) => value.toFixed(0)}
-                        width={44}
-                      />
-                      <Tooltip
-                        cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }}
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const current = payload.find((entry) => entry.dataKey === 'current');
-                          const simulated = payload.find((entry) => entry.dataKey === 'simulated');
+              <div className="rounded border border-slate-200 p-3 overflow-x-auto">
+                <table className="min-w-[760px] text-sm w-full">
+                  <thead><tr className="text-left text-slate-500"><th>Portfolio</th><th className="text-right">Return</th><th className="text-right">Vol</th><th className="text-right">Sharpe</th><th className="text-right">Divers</th><th className="text-right">AvgCorr</th><th className="text-right">Score</th><th className="text-right">Mesi</th></tr></thead>
+                  <tbody>
+                    {result.portfolios.map((p) => (
+                      <tr key={p.name} className="border-t border-slate-100">
+                        <td className="py-1 font-medium">{p.name}</td><td className="text-right">{pct(p.metrics.annualizedReturn)}</td><td className="text-right">{pct(p.metrics.annualizedVolatility)}</td>
+                        <td className="text-right">{p.metrics.sharpe === null ? 'N/A' : p.metrics.sharpe.toFixed(3)}</td><td className="text-right">{p.metrics.divers.toFixed(3)}</td>
+                        <td className="text-right">{p.metrics.avgCorr === null ? 'N/A' : p.metrics.avgCorr.toFixed(3)}</td><td className="text-right">{p.metrics.score === null ? 'N/A' : p.metrics.score.toFixed(3)}</td><td className="text-right">{p.metrics.nMonths}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                              <p className="text-xs text-slate-500">{label}</p>
-                              {hasCurrentSeries && (
-                                <p className="text-sm font-semibold text-slate-700">
-                                  Attuale: {Number(current?.value ?? 0).toFixed(2)}
-                                </p>
-                              )}
-                              {hasSimulatedSeries && (
-                                <p className="text-sm font-semibold text-sky-600">
-                                  Simulato: {Number(simulated?.value ?? 0).toFixed(2)}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        }}
-                      />
-                      {hasCurrentSeries && (
-                        <Line
-                          type="monotone"
-                          dataKey="current"
-                          stroke="#64748b"
-                          strokeWidth={1.8}
-                          dot={false}
-                          name="Attuale"
-                        />
-                      )}
-                      {hasSimulatedSeries && (
-                        <Line
-                          type="monotone"
-                          dataKey="simulated"
-                          stroke="#0ea5e9"
-                          strokeWidth={2}
-                          dot={false}
-                          name="Simulato"
-                        />
-                      )}
-                    </LineChart>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="rounded border border-slate-200 p-3 h-72">
+                  <p className="text-sm font-semibold mb-2">Serie cumulative</p>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={cumulativeData}><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="dateLabel" /><YAxis /><Tooltip />{result.portfolios.map((p, i) => <Line key={p.name} type="monotone" dataKey={p.name} dot={false} stroke={COLORS[i % COLORS.length]} />)}</LineChart>
                   </ResponsiveContainer>
                 </div>
-              )}
+                <div className="rounded border border-slate-200 p-3 h-72">
+                  <p className="text-sm font-semibold mb-2">Scatter rischio/rendimento</p>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis type="number" dataKey="annualizedVolatility" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><YAxis type="number" dataKey="annualizedReturn" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><Tooltip /><Scatter data={result.scatter} fill="#0ea5e9" /></ScatterChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Confronto scenario: cumulato{' '}
-                <span className="font-semibold text-slate-800">
-                  {simulatedMetrics ? formatPercent(simulatedMetrics.cumulativeReturn) : 'N/A'}
-                </span>{' '}
-                vs attuale{' '}
-                <span className="font-semibold text-slate-800">
-                  {currentMetrics ? formatPercent(currentMetrics.cumulativeReturn) : 'N/A'}
-                </span>
-                .
+              <div className="rounded border border-slate-200 p-3 overflow-x-auto">
+                <p className="text-sm font-semibold mb-2">Correlazione tra portafogli</p>
+                <table className="text-xs min-w-[520px]"><thead><tr><th className="text-left p-1">Portfolio</th>{result.correlationBetweenPortfolios.labels.map((l) => <th key={l} className="text-right p-1">{l}</th>)}</tr></thead><tbody>{result.correlationBetweenPortfolios.labels.map((row, i) => <tr key={row}><td className="font-medium p-1">{row}</td>{result.correlationBetweenPortfolios.values[i].map((v, j) => <td key={`${row}-${j}`} className="text-right p-1" style={{ background: v === null ? 'rgba(148,163,184,0.12)' : `rgba(${v >= 0 ? '16,185,129' : '239,68,68'},${0.12 + Math.min(1, Math.abs(v)) * 0.35})` }}>{v === null ? 'N/A' : v.toFixed(2)}</td>)}</tr>)}</tbody></table>
               </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
-
-      {isAddInstrumentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={closeAddInstrumentModal} />
-
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">Nuovo strumento in portafoglio</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Registra ETF o obbligazioni e imposta il capitale investito.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeAddInstrumentModal}
-                className="p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                aria-label="Chiudi modale aggiungi strumento"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Tipo strumento</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['ETF', 'OBBLIGAZIONE'] as InstrumentInsertType[]).map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => {
-                        setInsertType(type);
-                        setInsertError(null);
-                      }}
-                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-                        insertType === type
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {availableInsertInstruments.length === 0 ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                  Nessun {insertType.toLowerCase()} disponibile da aggiungere.
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Strumento</label>
-                    <select
-                      value={insertSymbol}
-                      onChange={(event) => {
-                        setInsertSymbol(event.target.value);
-                        setInsertError(null);
-                      }}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
-                    >
-                      {availableInsertInstruments.map((instrument) => (
-                        <option key={instrument.symbol} value={instrument.symbol}>
-                          {instrument.symbol} - {instrument.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Capitale investito</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      value={insertAmount}
-                      onChange={(event) => {
-                        setInsertAmount(event.target.value);
-                        setInsertError(null);
-                      }}
-                      placeholder="Es. 5000"
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums"
-                    />
-                  </div>
-
-                  {selectedInsertInstrument && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-sm font-semibold text-slate-900">{selectedInsertInstrument.symbol}</p>
-                      <p className="text-xs text-slate-500">{selectedInsertInstrument.name}</p>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {insertError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {insertError}
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
-              <button type="button" className="btn btn-secondary text-sm" onClick={closeAddInstrumentModal}>
-                Annulla
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary text-sm"
-                onClick={addInvestedInstrument}
-                disabled={availableInsertInstruments.length === 0}
-              >
-                Conferma strumento
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
