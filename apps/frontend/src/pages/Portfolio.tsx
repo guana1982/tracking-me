@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { portfolioApi } from '../lib/api';
 import type {
@@ -113,8 +113,23 @@ export function Portfolio() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioCompareResponseDTO | null>(null);
+  const [isInvestedOpen, setIsInvestedOpen] = useState(true);
+  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
 
   const investedTotal = useMemo(() => invested.reduce((s, p) => s + Math.max(0, p.amount), 0), [invested]);
+  const investedSplit = useMemo(() => {
+    const equity = invested.reduce((sum, item) => {
+      const instrument = INSTRUMENTS.find((i) => i.symbol === item.symbol);
+      if (!instrument || instrument.assetClass !== 'AZIONARIO') return sum;
+      return sum + Math.max(0, item.amount);
+    }, 0);
+    const bond = invested.reduce((sum, item) => {
+      const instrument = INSTRUMENTS.find((i) => i.symbol === item.symbol);
+      if (!instrument || instrument.assetClass !== 'OBBLIGAZIONARIO') return sum;
+      return sum + Math.max(0, item.amount);
+    }, 0);
+    return { equity, bond };
+  }, [invested]);
   const universeByLabel = useMemo(() => INSTRUMENTS.reduce<Record<string, string>>((a, i) => ((a[i.symbol] = i.isin), a), {}), []);
 
   const cumulativeData = useMemo(() => {
@@ -185,131 +200,184 @@ export function Portfolio() {
     <div className="sm:ml-60 space-y-4">
       <div className="card">
         <h2 className="text-lg font-semibold">Portafoglio</h2>
-        <p className="text-sm text-slate-500">Confronto N portafogli di studio su dati justETF.</p>
+        <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        <section className="card xl:col-span-2 space-y-3">
-          <h3 className="font-semibold">Portafoglio Investito</h3>
-          <p className="text-sm text-slate-500">Totale: {formatCurrency(investedTotal)}</p>
-          <div className="flex gap-2">
-            <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} className="input">
-              {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
-            </select>
-            <input value={addAmount} onChange={(e) => setAddAmount(e.target.value)} className="input w-28" type="number" />
-            <button className="btn btn-secondary" onClick={addInvested}><Plus className="w-4 h-4" /></button>
+      <section className="card p-0 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setIsInvestedOpen((prev) => !prev)}
+          className="w-full px-4 py-3 border-b border-slate-200 flex items-center justify-between hover:bg-slate-50 transition-colors"
+        >
+          <div className="text-left">
+            <h3 className="font-semibold text-slate-900">Portafoglio Investito</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Sezione reale. Totale: {formatCurrency(investedTotal)}</p>
           </div>
-          <div className="space-y-2">
-            {invested.map((p) => (
-              <div key={p.symbol} className="rounded border border-slate-200 p-2 flex items-center justify-between">
-                <span className="text-sm font-medium">{p.symbol}</span>
-                <div className="flex items-center gap-2">
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isInvestedOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isInvestedOpen && (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Totale</p>
+                <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(investedTotal)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Azionario</p>
+                <p className="text-base font-semibold text-slate-900 mt-1">{investedTotal > 0 ? `${((investedSplit.equity / investedTotal) * 100).toFixed(1)}%` : '0.0%'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Obbligazionario</p>
+                <p className="text-base font-semibold text-slate-900 mt-1">{investedTotal > 0 ? `${((investedSplit.bond / investedTotal) * 100).toFixed(1)}%` : '0.0%'}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} className="input min-w-[220px]">
+                {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
+              </select>
+              <input value={addAmount} onChange={(e) => setAddAmount(e.target.value)} className="input w-32" type="number" />
+              <button className="btn btn-secondary" onClick={addInvested}><Plus className="w-4 h-4 mr-1" />Aggiungi</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {invested.map((p) => (
+                <div key={p.symbol} className="rounded border border-slate-200 p-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">{p.symbol}</span>
+                    <button className="p-1 text-slate-500 hover:text-red-600" onClick={() => setInvested((prev) => prev.filter((x) => x.symbol !== p.symbol))}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                   <input
                     type="number"
-                    className="input w-28 text-right"
+                    className="input w-full text-right"
                     value={p.amount}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       setInvested((prev) => prev.map((x) => (x.symbol === p.symbol ? { ...x, amount: Number.isFinite(v) ? Math.max(0, v) : 0 } : x)));
                     }}
                   />
-                  <button className="p-1 text-slate-500 hover:text-red-600" onClick={() => setInvested((prev) => prev.filter((x) => x.symbol !== p.symbol))}>
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="card xl:col-span-3 space-y-4">
-          <div className="flex flex-wrap gap-2 items-center">
-            <select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)} className="input">
-              <option value="1Y">1Y</option><option value="3Y">3Y</option><option value="5Y">5Y</option>
-            </select>
-            <select value={inputValue} onChange={(e) => setInputValue(e.target.value as PortfolioInputValueModeDTO)} className="input">
-              <option value="quote_with_dividends">quote_with_dividends</option>
-              <option value="quote">quote</option>
-            </select>
-            <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
-            <button className="btn btn-secondary" onClick={() => setStudy((prev) => [...prev, { id: mk('p'), name: `PORTFOLIO ${prev.length + 1}`, rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }] }])}>
-              <Plus className="w-4 h-4 mr-1" /> Nuovo
-            </button>
-            <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
-              {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
-            </button>
-          </div>
-
-          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-
-          <div className="space-y-3">
-            {study.map((p) => (
-              <div key={p.id} className="rounded border border-slate-200 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <input className="input w-48" value={p.name} onChange={(e) => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                  <div className="flex gap-2">
-                    <button className="btn btn-secondary py-1" onClick={() => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, rows: [...x.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : x)))}>Riga</button>
-                    {study.length > 1 && <button className="btn py-1" onClick={() => setStudy((prev) => prev.filter((x) => x.id !== p.id))}>Rimuovi</button>}
-                  </div>
-                </div>
-                {p.rows.map((row) => (
-                  <div key={row.id} className="grid grid-cols-[1fr,120px,40px] gap-2">
-                    <select className="input" value={row.label} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r) } : x))}>
-                      {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol} - {i.isin}</option>)}
-                    </select>
-                    <input className="input text-right" value={row.weight} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, weight: e.target.value } : r) } : x))} />
-                    <button className="btn" onClick={() => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.filter((r) => r.id !== row.id) } : x))}>X</button>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {result && (
-            <div className="space-y-4">
-              <div className="rounded border border-slate-200 p-3">
-                <p className="text-xs text-slate-500">Ranking score</p>
-                <div className="flex flex-wrap gap-2 mt-2">{result.ranking.map((n, i) => <span key={n} className="text-xs rounded-full border px-2 py-1">#{i + 1} {n}</span>)}</div>
-              </div>
-
-              <div className="rounded border border-slate-200 p-3 overflow-x-auto">
-                <table className="min-w-[760px] text-sm w-full">
-                  <thead><tr className="text-left text-slate-500"><th>Portfolio</th><th className="text-right">Return</th><th className="text-right">Vol</th><th className="text-right">Sharpe</th><th className="text-right">Divers</th><th className="text-right">AvgCorr</th><th className="text-right">Score</th><th className="text-right">Mesi</th></tr></thead>
-                  <tbody>
-                    {result.portfolios.map((p) => (
-                      <tr key={p.name} className="border-t border-slate-100">
-                        <td className="py-1 font-medium">{p.name}</td><td className="text-right">{pct(p.metrics.annualizedReturn)}</td><td className="text-right">{pct(p.metrics.annualizedVolatility)}</td>
-                        <td className="text-right">{p.metrics.sharpe === null ? 'N/A' : p.metrics.sharpe.toFixed(3)}</td><td className="text-right">{p.metrics.divers.toFixed(3)}</td>
-                        <td className="text-right">{p.metrics.avgCorr === null ? 'N/A' : p.metrics.avgCorr.toFixed(3)}</td><td className="text-right">{p.metrics.score === null ? 'N/A' : p.metrics.score.toFixed(3)}</td><td className="text-right">{p.metrics.nMonths}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="rounded border border-slate-200 p-3 h-72">
-                  <p className="text-sm font-semibold mb-2">Serie cumulative</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={cumulativeData}><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="dateLabel" /><YAxis /><Tooltip />{result.portfolios.map((p, i) => <Line key={p.name} type="monotone" dataKey={p.name} dot={false} stroke={COLORS[i % COLORS.length]} />)}</LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="rounded border border-slate-200 p-3 h-72">
-                  <p className="text-sm font-semibold mb-2">Scatter rischio/rendimento</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis type="number" dataKey="annualizedVolatility" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><YAxis type="number" dataKey="annualizedReturn" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><Tooltip /><Scatter data={result.scatter} fill="#0ea5e9" /></ScatterChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="rounded border border-slate-200 p-3 overflow-x-auto">
-                <p className="text-sm font-semibold mb-2">Correlazione tra portafogli</p>
-                <table className="text-xs min-w-[520px]"><thead><tr><th className="text-left p-1">Portfolio</th>{result.correlationBetweenPortfolios.labels.map((l) => <th key={l} className="text-right p-1">{l}</th>)}</tr></thead><tbody>{result.correlationBetweenPortfolios.labels.map((row, i) => <tr key={row}><td className="font-medium p-1">{row}</td>{result.correlationBetweenPortfolios.values[i].map((v, j) => <td key={`${row}-${j}`} className="text-right p-1" style={{ background: v === null ? 'rgba(148,163,184,0.12)' : `rgba(${v >= 0 ? '16,185,129' : '239,68,68'},${0.12 + Math.min(1, Math.abs(v)) * 0.35})` }}>{v === null ? 'N/A' : v.toFixed(2)}</td>)}</tr>)}</tbody></table>
-              </div>
+              ))}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        )}
+      </section>
+
+      <section className="card p-0 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setIsAnalysisOpen((prev) => !prev)}
+          className="w-full px-4 py-3 border-b border-slate-200 flex items-center justify-between hover:bg-slate-50 transition-colors"
+        >
+          <div className="text-left">
+            <h3 className="font-semibold text-slate-900">Laboratorio Strategico Portafogli</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Costruisci N portafogli, confronta metriche e correlazioni.</p>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isAnalysisOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isAnalysisOpen && (
+          <div className="p-4 space-y-4">
+            <div className="flex flex-wrap gap-2 items-center">
+              <select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)} className="input">
+                <option value="1Y">1Y</option><option value="3Y">3Y</option><option value="5Y">5Y</option>
+              </select>
+              <select value={inputValue} onChange={(e) => setInputValue(e.target.value as PortfolioInputValueModeDTO)} className="input">
+                <option value="quote_with_dividends">quote_with_dividends</option>
+                <option value="quote">quote</option>
+              </select>
+              <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
+              <button className="btn btn-secondary" onClick={() => setStudy((prev) => [...prev, { id: mk('p'), name: `PORTFOLIO ${prev.length + 1}`, rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }] }])}>
+                <Plus className="w-4 h-4 mr-1" /> Nuovo portafoglio
+              </button>
+              <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
+                {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
+              </button>
+            </div>
+
+            {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+              {study.map((p) => (
+                <div key={p.id} className="rounded border border-slate-200 p-3 space-y-2 bg-white">
+                  <div className="flex items-center justify-between gap-2">
+                    <input className="input w-44" value={p.name} onChange={(e) => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                    <div className="flex gap-2">
+                      <button className="btn btn-secondary py-1" onClick={() => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, rows: [...x.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : x)))}>Riga</button>
+                      {study.length > 1 && <button className="btn py-1" onClick={() => setStudy((prev) => prev.filter((x) => x.id !== p.id))}>Rimuovi</button>}
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-auto space-y-2 pr-1">
+                    {p.rows.map((row) => (
+                      <div key={row.id} className="grid grid-cols-[1fr,96px,36px] gap-2">
+                        <select className="input" value={row.label} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r) } : x))}>
+                          {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
+                        </select>
+                        <input className="input text-right" value={row.weight} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, weight: e.target.value } : r) } : x))} />
+                        <button className="btn px-0" onClick={() => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.filter((r) => r.id !== row.id) } : x))}>X</button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Peso totale inserito: {p.rows.reduce((sum, row) => {
+                      const n = Number(row.weight.replace(',', '.'));
+                      return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+                    }, 0).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {result && (
+              <div className="space-y-4">
+                <div className="rounded border border-slate-200 p-3">
+                  <p className="text-xs text-slate-500">Ranking score</p>
+                  <div className="flex flex-wrap gap-2 mt-2">{result.ranking.map((n, i) => <span key={n} className="text-xs rounded-full border px-2 py-1">#{i + 1} {n}</span>)}</div>
+                </div>
+
+                <div className="rounded border border-slate-200 p-3 overflow-x-auto">
+                  <p className="text-sm font-semibold mb-2">Portfolio</p>
+                  <table className="min-w-[760px] text-sm w-full">
+                    <thead><tr className="text-left text-slate-500"><th>Portfolio</th><th className="text-right">Return</th><th className="text-right">Vol</th><th className="text-right">Sharpe</th><th className="text-right">Divers</th><th className="text-right">AvgCorr</th><th className="text-right">Score</th><th className="text-right">Mesi</th></tr></thead>
+                    <tbody>
+                      {result.portfolios.map((p) => (
+                        <tr key={p.name} className="border-t border-slate-100">
+                          <td className="py-1 font-medium">{p.name}</td><td className="text-right">{pct(p.metrics.annualizedReturn)}</td><td className="text-right">{pct(p.metrics.annualizedVolatility)}</td>
+                          <td className="text-right">{p.metrics.sharpe === null ? 'N/A' : p.metrics.sharpe.toFixed(3)}</td><td className="text-right">{p.metrics.divers.toFixed(3)}</td>
+                          <td className="text-right">{p.metrics.avgCorr === null ? 'N/A' : p.metrics.avgCorr.toFixed(3)}</td><td className="text-right">{p.metrics.score === null ? 'N/A' : p.metrics.score.toFixed(3)}</td><td className="text-right">{p.metrics.nMonths}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="rounded border border-slate-200 p-3 h-72">
+                    <p className="text-sm font-semibold mb-2">Serie cumulative</p>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={cumulativeData}><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis dataKey="dateLabel" /><YAxis /><Tooltip />{result.portfolios.map((p, i) => <Line key={p.name} type="monotone" dataKey={p.name} dot={false} stroke={COLORS[i % COLORS.length]} />)}</LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="rounded border border-slate-200 p-3 h-72">
+                    <p className="text-sm font-semibold mb-2">Scatter rischio/rendimento</p>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis type="number" dataKey="annualizedVolatility" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><YAxis type="number" dataKey="annualizedReturn" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><Tooltip /><Scatter data={result.scatter} fill="#0ea5e9" /></ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 p-3 overflow-x-auto">
+                  <p className="text-sm font-semibold mb-2">Correlazione tra portafogli</p>
+                  <table className="text-xs min-w-[520px]"><thead><tr><th className="text-left p-1">Portfolio</th>{result.correlationBetweenPortfolios.labels.map((l) => <th key={l} className="text-right p-1">{l}</th>)}</tr></thead><tbody>{result.correlationBetweenPortfolios.labels.map((row, i) => <tr key={row}><td className="font-medium p-1">{row}</td>{result.correlationBetweenPortfolios.values[i].map((v, j) => <td key={`${row}-${j}`} className="text-right p-1" style={{ background: v === null ? 'rgba(148,163,184,0.12)' : `rgba(${v >= 0 ? '16,185,129' : '239,68,68'},${0.12 + Math.min(1, Math.abs(v)) * 0.35})` }}>{v === null ? 'N/A' : v.toFixed(2)}</td>)}</tr>)}</tbody></table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
