@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChevronDown, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ChevronRight, Loader2, Pencil, Plus, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { portfolioApi } from '../lib/api';
 import type {
@@ -24,6 +24,7 @@ type AssetClass = 'AZIONARIO' | 'OBBLIGAZIONARIO';
 type Horizon = PortfolioHistoryHorizonDTO;
 type Instrument = { symbol: string; isin: string; name: string; assetClass: AssetClass };
 type Invested = { symbol: string; amount: number };
+type InvestedDraft = { symbol: string; amount: string };
 type StudyRow = { id: string; label: string; weight: string };
 type StudyPortfolio = { id: string; name: string; rows: StudyRow[] };
 
@@ -104,8 +105,6 @@ export function Portfolio() {
     { symbol: 'EM_EX_CHINA', amount: 6000 },
     { symbol: 'XEON', amount: 5000 },
   ]);
-  const [addSymbol, setAddSymbol] = useState('WORLD');
-  const [addAmount, setAddAmount] = useState('1000');
   const [horizon, setHorizon] = useState<Horizon>('3Y');
   const [inputValue, setInputValue] = useState<PortfolioInputValueModeDTO>('quote_with_dividends');
   const [riskFreeAnnual, setRiskFreeAnnual] = useState('0.03');
@@ -115,6 +114,10 @@ export function Portfolio() {
   const [result, setResult] = useState<PortfolioCompareResponseDTO | null>(null);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
+  const [investedDraft, setInvestedDraft] = useState<InvestedDraft | null>(null);
+  const [editingInvestedSymbol, setEditingInvestedSymbol] = useState<string | null>(null);
+  const [investedDraftError, setInvestedDraftError] = useState<string | null>(null);
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [portfolioDraft, setPortfolioDraft] = useState<StudyPortfolio | null>(null);
   const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
@@ -159,16 +162,58 @@ export function Portfolio() {
     });
   }, [result]);
 
-  const addInvested = () => {
-    const amount = Number(addAmount.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) return;
+  const openCreateInvestedModal = () => {
+    setEditingInvestedSymbol(null);
+    setInvestedDraftError(null);
+    setInvestedDraft({ symbol: 'WORLD', amount: '1000' });
+    setIsInvestedModalOpen(true);
+  };
+
+  const openEditInvestedModal = (item: Invested) => {
+    setEditingInvestedSymbol(item.symbol);
+    setInvestedDraftError(null);
+    setInvestedDraft({ symbol: item.symbol, amount: String(item.amount) });
+    setIsInvestedModalOpen(true);
+  };
+
+  const closeInvestedModal = () => {
+    setIsInvestedModalOpen(false);
+    setInvestedDraft(null);
+    setEditingInvestedSymbol(null);
+    setInvestedDraftError(null);
+  };
+
+  const saveInvestedFromModal = () => {
+    if (!investedDraft) return;
+    const amount = Number(investedDraft.amount.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setInvestedDraftError('Inserisci un importo valido maggiore di 0');
+      return;
+    }
+
+    const symbol = investedDraft.symbol;
     setInvested((prev) => {
-      const idx = prev.findIndex((p) => p.symbol === addSymbol);
-      if (idx < 0) return [...prev, { symbol: addSymbol, amount }];
-      const next = [...prev];
-      next[idx] = { ...next[idx], amount: next[idx].amount + amount };
-      return next;
+      if (editingInvestedSymbol) {
+        const withoutEditing = prev.filter((p) => p.symbol !== editingInvestedSymbol);
+        const targetIndex = withoutEditing.findIndex((p) => p.symbol === symbol);
+        if (targetIndex >= 0) {
+          const next = [...withoutEditing];
+          next[targetIndex] = { symbol, amount: next[targetIndex].amount + amount };
+          return next;
+        }
+        return [...withoutEditing, { symbol, amount }];
+      }
+
+      const existingIndex = prev.findIndex((p) => p.symbol === symbol);
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = { symbol, amount: next[existingIndex].amount + amount };
+        return next;
+      }
+      return [...prev, { symbol, amount }];
     });
+
+    closeInvestedModal();
   };
 
   const openCreatePortfolioModal = () => {
@@ -263,21 +308,21 @@ export function Portfolio() {
         <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
       </div>
 
-      <section className="card p-0 overflow-hidden">
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
         <button
           type="button"
           onClick={() => setIsInvestedOpen((prev) => !prev)}
-          className="w-full px-4 py-3 border-b border-slate-200 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-slate-100/70 transition-colors"
         >
-          <div className="text-left">
-            <h3 className="font-semibold text-slate-900">Portafoglio Investito</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Sezione reale. Totale: {formatCurrency(investedTotal)}</p>
+          <div className="text-left flex items-center gap-2 min-w-0">
+            <ChevronRight className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform ${isInvestedOpen ? 'rotate-90' : ''}`} />
+            <h3 className="text-[15px] font-semibold text-slate-900 leading-none">Portafoglio Investito</h3>
+            <p className="text-sm text-slate-500 truncate leading-none">- Totale allocato: {formatCurrency(investedTotal)}</p>
           </div>
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isInvestedOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isInvestedOpen && (
-          <div className="p-4 space-y-4">
+          <div className="px-4 pb-4 pt-3.5 space-y-4 border-t border-slate-200 bg-white">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs text-slate-500 uppercase tracking-wide">Totale</p>
@@ -293,54 +338,134 @@ export function Portfolio() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} className="input min-w-[220px]">
-                {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
-              </select>
-              <input value={addAmount} onChange={(e) => setAddAmount(e.target.value)} className="input w-32" type="number" />
-              <button className="btn btn-secondary" onClick={addInvested}><Plus className="w-4 h-4 mr-1" />Aggiungi</button>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-slate-600">Gestione strumenti del portafoglio reale.</p>
+              <button className="btn btn-secondary" onClick={openCreateInvestedModal}>
+                <Plus className="w-4 h-4 mr-1" />
+                Nuovo strumento
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-              {invested.map((p) => (
-                <div key={p.symbol} className="rounded border border-slate-200 p-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">{p.symbol}</span>
-                    <button className="p-1 text-slate-500 hover:text-red-600" onClick={() => setInvested((prev) => prev.filter((x) => x.symbol !== p.symbol))}>
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    className="input w-full text-right"
-                    value={p.amount}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setInvested((prev) => prev.map((x) => (x.symbol === p.symbol ? { ...x, amount: Number.isFinite(v) ? Math.max(0, v) : 0 } : x)));
-                    }}
-                  />
-                </div>
-              ))}
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr className="text-left text-slate-500">
+                      <th className="px-3 py-2 font-medium">Strumento</th>
+                      <th className="px-3 py-2 font-medium">Nome</th>
+                      <th className="px-3 py-2 font-medium">ISIN</th>
+                      <th className="px-3 py-2 font-medium">Asset Class</th>
+                      <th className="px-3 py-2 font-medium text-right">Importo</th>
+                      <th className="px-3 py-2 font-medium text-right">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invested.map((position) => {
+                      const instrument = INSTRUMENTS.find((i) => i.symbol === position.symbol);
+                      return (
+                        <tr key={position.symbol} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-medium text-slate-800">{position.symbol}</td>
+                          <td className="px-3 py-2 text-slate-700">{instrument?.name ?? 'N/A'}</td>
+                          <td className="px-3 py-2 text-slate-600">{instrument?.isin ?? 'N/A'}</td>
+                          <td className="px-3 py-2 text-slate-600">{instrument?.assetClass ?? 'N/A'}</td>
+                          <td className="px-3 py-2 text-right text-slate-800 font-medium">{formatCurrency(position.amount)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-end gap-2">
+                              <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditInvestedModal(position)}>
+                                <Pencil className="w-3.5 h-3.5 mr-1" />
+                                Modifica
+                              </button>
+                              <button
+                                className="btn py-1 px-2 text-xs"
+                                onClick={() => setInvested((prev) => prev.filter((x) => x.symbol !== position.symbol))}
+                              >
+                                Rimuovi
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
       </section>
 
-      <section className="card p-0 overflow-hidden">
+      {isInvestedModalOpen && investedDraft && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeInvestedModal} />
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">{editingInvestedSymbol ? 'Modifica strumento' : 'Nuovo strumento'}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">Gestione allocazione del portafoglio investito.</p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeInvestedModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div>
+                <label className="label">Strumento</label>
+                <select
+                  className="input"
+                  value={investedDraft.symbol}
+                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, symbol: e.target.value } : prev))}
+                >
+                  {INSTRUMENTS.map((i) => (
+                    <option key={i.symbol} value={i.symbol}>
+                      {i.symbol} - {i.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Importo</label>
+                <input
+                  className="input"
+                  value={investedDraft.amount}
+                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, amount: e.target.value } : prev))}
+                  type="number"
+                />
+              </div>
+
+              {investedDraftError && (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{investedDraftError}</div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button type="button" className="btn" onClick={closeInvestedModal}>
+                Annulla
+              </button>
+              <button type="button" className="btn btn-primary" onClick={saveInvestedFromModal}>
+                Conferma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
         <button
           type="button"
           onClick={() => setIsAnalysisOpen((prev) => !prev)}
-          className="w-full px-4 py-3 border-b border-slate-200 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-slate-100/70 transition-colors"
         >
-          <div className="text-left">
-            <h3 className="font-semibold text-slate-900">Laboratorio Strategico Portafogli</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Costruisci N portafogli, confronta metriche e correlazioni.</p>
+          <div className="text-left flex items-center gap-2 min-w-0">
+            <ChevronRight className={`w-3.5 h-3.5 text-slate-500 shrink-0 transition-transform ${isAnalysisOpen ? 'rotate-90' : ''}`} />
+            <h3 className="text-[15px] font-semibold text-slate-900 leading-none">Laboratorio Strategico Portafogli</h3>
+            <p className="text-sm text-slate-500 truncate leading-none">- Portafogli in analisi: {study.length}</p>
           </div>
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isAnalysisOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isAnalysisOpen && (
-          <div className="p-4 space-y-4">
+          <div className="px-4 pb-4 pt-3.5 space-y-4 border-t border-slate-200 bg-white">
             <div className="flex flex-wrap gap-2 items-center">
               <select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)} className="input">
                 <option value="1Y">1Y</option><option value="3Y">3Y</option><option value="5Y">5Y</option>
