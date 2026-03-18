@@ -357,16 +357,15 @@ export function Portfolio() {
 
   useEffect(() => {
     if (justEtfDebugCallDoneRef.current) return;
-    const debugIsin = INSTRUMENTS[0]?.isin;
-    if (!debugIsin) return;
-
     justEtfDebugCallDoneRef.current = true;
 
     portfolioApi
-      .getJustEtfDebugRaw(debugIsin)
-      .then((payload) => {
+      .getJustEtfDebugRaw()
+      .then((response) => {
+        const usedIsin = response.isin;
+        const payload = response.payload;
         console.groupCollapsed('[Portfolio][justETF debug]');
-        console.log('ISIN', debugIsin);
+        console.log('ISIN', usedIsin);
         console.log('raw payload', payload);
         console.log('series length', Array.isArray(payload.series) ? payload.series.length : 0);
         console.log('first 5 series rows', Array.isArray(payload.series) ? payload.series.slice(0, 5) : []);

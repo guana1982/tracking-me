@@ -22,10 +22,9 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           isin: {
             type: 'string',
-            description: 'ISIN code (e.g. IE00B4L5Y983)',
+            description: 'Optional ISIN code (e.g. IE00B4L5Y983)',
           },
         },
-        required: ['isin'],
       },
       response: {
         200: {
@@ -38,9 +37,12 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     handler: async (request) => {
-      const isin = (request.query.isin || '').trim().toUpperCase();
-      const data = await portfolioService.getJustEtfRawChart(isin);
-      return { success: true, data };
+      const fallbackIsin = (process.env.PORTFOLIO_JUSTETF_DEBUG_ISIN || 'IE00B4L5Y983')
+        .trim()
+        .toUpperCase();
+      const isin = (request.query.isin || fallbackIsin).trim().toUpperCase();
+      const payload = await portfolioService.getJustEtfRawChart(isin);
+      return { success: true, data: { isin, payload } };
     },
   });
 
