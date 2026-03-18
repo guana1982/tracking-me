@@ -16,6 +16,7 @@ type InstrumentInsertType = 'ETF' | 'OBBLIGAZIONE';
 type InstrumentDefinition = {
   symbol: string;
   name: string;
+  isin: string;
   assetClass: AssetClass;
 };
 
@@ -45,41 +46,84 @@ type PerformanceMetrics = {
 
 const INSTRUMENTS: InstrumentDefinition[] = [
   {
-    symbol: 'VTI',
-    name: 'Vanguard Total Stock Market ETF',
+    symbol: 'WORLD',
+    name: 'iShares Core MSCI World UCITS ETF USD (Acc)',
+    isin: 'IE00B4L5Y983',
     assetClass: 'AZIONARIO',
   },
   {
-    symbol: 'VXUS',
-    name: 'Vanguard Total International Stock ETF',
+    symbol: 'PACIFIC_EXJP',
+    name: 'iShares Core MSCI Pacific ex Japan UCITS ETF',
+    isin: 'IE00B52MJY50',
     assetClass: 'AZIONARIO',
   },
   {
-    symbol: 'IEMG',
-    name: 'iShares Core MSCI Emerging Markets ETF',
+    symbol: 'EM_EX_CHINA',
+    name: 'iShares MSCI EM ex-China UCITS ETF',
+    isin: 'IE00BMG6Z448',
     assetClass: 'AZIONARIO',
   },
   {
-    symbol: 'BND',
-    name: 'Vanguard Total Bond Market ETF',
+    symbol: 'SWITZERLAND',
+    name: 'UBS MSCI Switzerland 20/35 UCITS ETF',
+    isin: 'LU0977261329',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'UK',
+    name: 'UBS MSCI United Kingdom UCITS ETF',
+    isin: 'LU0950670850',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'AI_BIGDATA',
+    name: 'Xtrackers AI & Big Data UCITS ETF 1C',
+    isin: 'IE00BGV5VN51',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'MSCI_SMALLCAP',
+    name: 'SPDR MSCI World Small Cap UCITS ETF',
+    isin: 'IE00BF4RFH31',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'S&P500',
+    name: 'iShares Core S&P 500 UCITS ETF',
+    isin: 'IE00B5BMR087',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'WORLD_EX_USA',
+    name: 'iShares MSCI World ex-USA UCITS ETF USD (Acc)',
+    isin: 'IE000R4ZNTN3',
+    assetClass: 'AZIONARIO',
+  },
+  {
+    symbol: 'XEON',
+    name: 'Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C',
+    isin: 'LU0290358497',
     assetClass: 'OBBLIGAZIONARIO',
   },
   {
-    symbol: 'AGG',
-    name: 'iShares Core U.S. Aggregate Bond ETF',
+    symbol: 'AMUNDI_SMART_OVN',
+    name: 'Amundi Smart Overnight Return UCITS ETF',
+    isin: 'LU1190417599',
     assetClass: 'OBBLIGAZIONARIO',
   },
   {
-    symbol: 'EMB',
-    name: 'iShares J.P. Morgan EM Bond',
+    symbol: 'USB_FOREIGN_BOND',
+    name: 'UBS Bloomberg US Liquid Corporates UCITS ETF (Dist)',
+    isin: 'LU0879397742',
     assetClass: 'OBBLIGAZIONARIO',
   },
 ];
 
 const DEFAULT_INVESTED_POSITIONS: InvestedPosition[] = [
-  { symbol: 'VTI', amount: 18500 },
-  { symbol: 'BND', amount: 9500 },
-  { symbol: 'AGG', amount: 6000 },
+  { symbol: 'WORLD', amount: 18000 },
+  { symbol: 'PACIFIC_EXJP', amount: 7500 },
+  { symbol: 'EM_EX_CHINA', amount: 6000 },
+  { symbol: 'XEON', amount: 5000 },
 ];
 
 function getInstrument(symbol: string): InstrumentDefinition | undefined {
@@ -255,24 +299,48 @@ export function Portfolio() {
     [studyConfig]
   );
 
-  const symbolsForSeries = useMemo(() => {
-    return Array.from(new Set([...Object.keys(investedWeightMap), ...Object.keys(scenarioWeightMap)]));
-  }, [investedWeightMap, scenarioWeightMap]);
+  const symbolToIsin = useMemo<Record<string, string>>(
+    () =>
+      INSTRUMENTS.reduce<Record<string, string>>((acc, instrument) => {
+        acc[instrument.symbol] = instrument.isin;
+        return acc;
+      }, {}),
+    []
+  );
+  const isinToSymbol = useMemo<Record<string, string>>(
+    () =>
+      INSTRUMENTS.reduce<Record<string, string>>((acc, instrument) => {
+        acc[instrument.isin] = instrument.symbol;
+        return acc;
+      }, {}),
+    []
+  );
+
+  const isinsForSeries = useMemo(() => {
+    const symbols = new Set([...Object.keys(investedWeightMap), ...Object.keys(scenarioWeightMap)]);
+    const isins = Array.from(symbols)
+      .map((symbol) => symbolToIsin[symbol])
+      .filter((isin): isin is string => Boolean(isin));
+    return Array.from(new Set(isins));
+  }, [investedWeightMap, scenarioWeightMap, symbolToIsin]);
+
   const {
     data: portfolioHistory,
     isLoading: isSeriesLoading,
     isError: isSeriesError,
     error: portfolioHistoryError,
-  } = usePortfolioHistory(symbolsForSeries, horizon, symbolsForSeries.length > 0);
+  } = usePortfolioHistory(isinsForSeries, horizon, isinsForSeries.length > 0);
 
   const seriesBySymbol = useMemo<SeriesBySymbol>(() => {
     if (!portfolioHistory?.series) return {};
 
     return portfolioHistory.series.reduce<SeriesBySymbol>((acc, item: PortfolioSymbolHistoryDTO) => {
-      acc[item.symbol] = item.points;
+      const mappedSymbol = isinToSymbol[item.symbol];
+      if (!mappedSymbol) return acc;
+      acc[mappedSymbol] = item.points;
       return acc;
     }, {});
-  }, [portfolioHistory]);
+  }, [portfolioHistory, isinToSymbol]);
 
   const seriesError = isSeriesError
     ? portfolioHistoryError instanceof Error
@@ -458,7 +526,7 @@ export function Portfolio() {
           </p>
         </div>
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-          Serie storiche mensili via Twelve Data (cache backend attiva per ridurre il consumo API).
+          Serie storiche mensili via justETF (provider backend su ISIN, cache attiva).
         </div>
       </div>
 

@@ -11,6 +11,30 @@ type CacheEntry = {
   points: PortfolioHistoryPointDTO[];
 };
 
+type JustEtfDataPoint = {
+  date?: string;
+  value?: { raw?: number } | number;
+};
+
+type JustEtfChartPayload = {
+  series?: JustEtfDataPoint[];
+  features?: {
+    DIVIDENDS?: JustEtfDataPoint[];
+  };
+};
+
+type InputValueMode = 'quote' | 'quote_with_dividends';
+
+const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
+const JUSTETF_CHART_DEFAULT_PARAMS = {
+  locale: 'en',
+  valuesType: 'MARKET_VALUE',
+  reduceData: 'false',
+  includeDividends: 'false',
+  features: 'DIVIDENDS',
+};
+const ISIN_REGEX = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+
 const HORIZON_OUTPUT_SIZE: Record<PortfolioHistoryHorizonDTO, number> = {
   '1Y': 13,
   '3Y': 37,
@@ -20,8 +44,6 @@ const HORIZON_OUTPUT_SIZE: Record<PortfolioHistoryHorizonDTO, number> = {
 export class PortfolioService {
   private cache = new Map<string, CacheEntry>();
   private inFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
-  private dailyUsage = { dayKey: '', count: 0 };
-  private minuteUsage = { minuteKey: '', count: 0 };
 
   async getHistory(
     symbols: string[],
@@ -87,119 +109,142 @@ export class PortfolioService {
     symbol: string,
     horizon: PortfolioHistoryHorizonDTO
   ): Promise<PortfolioHistoryPointDTO[]> {
-    const apiKey = (process.env.TWELVE_DATA_API_KEY || '').trim();
-    if (!apiKey) {
+    if (!ISIN_REGEX.test(symbol)) {
       throw new AppError(
-        'TWELVE_DATA_API_KEY is not configured',
-        500,
-        'PROVIDER_NOT_CONFIGURED'
+        `Invalid symbol '${symbol}'. justETF requires ISIN codes.`,
+        422,
+        'PROVIDER_SYMBOL_ERROR'
       );
     }
 
-    this.reserveQuota();
-
-    const outputSize = HORIZON_OUTPUT_SIZE[horizon];
     const params = new URLSearchParams({
-      symbol,
-      interval: '1month',
-      outputsize: String(outputSize),
-      order: 'ASC',
-      timezone: 'UTC',
-      format: 'JSON',
-      apikey: apiKey,
+      ...JUSTETF_CHART_DEFAULT_PARAMS,
+      currency: this.justEtfCurrency,
     });
 
-    let payload: unknown;
+    let payload: JustEtfChartPayload;
     try {
-      const response = await fetch(`https://api.twelvedata.com/time_series?${params.toString()}`);
-      payload = await response.json();
+      const response = await fetch(
+        `${JUSTETF_CHART_BASE_URL}/${encodeURIComponent(symbol)}/performance-chart?${params.toString()}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': this.userAgent,
+          },
+        }
+      );
 
       if (!response.ok) {
-        const message =
-          typeof payload === 'object' &&
-          payload !== null &&
-          'message' in payload &&
-          typeof (payload as { message?: unknown }).message === 'string'
-            ? (payload as { message: string }).message
-            : `Provider error (${response.status})`;
-
-        throw new AppError(message, 502, 'PROVIDER_ERROR');
+        if (response.status === 404) {
+          throw new AppError(
+            `ISIN '${symbol}' not found on justETF`,
+            422,
+            'PROVIDER_SYMBOL_ERROR'
+          );
+        }
+        throw new AppError(
+          `justETF provider error (${response.status})`,
+          502,
+          'PROVIDER_ERROR'
+        );
       }
+
+      payload = (await response.json()) as JustEtfChartPayload;
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError('Unable to reach market data provider', 502, 'PROVIDER_UNAVAILABLE');
+      throw new AppError('Unable to reach justETF provider', 502, 'PROVIDER_UNAVAILABLE');
     }
 
-    if (
-      typeof payload === 'object' &&
-      payload !== null &&
-      'status' in payload &&
-      (payload as { status?: unknown }).status === 'error'
-    ) {
-      const message =
-        'message' in payload && typeof (payload as { message?: unknown }).message === 'string'
-          ? (payload as { message: string }).message
-          : `Provider rejected symbol ${symbol}`;
-      throw new AppError(message, 422, 'PROVIDER_SYMBOL_ERROR');
+    const dailyQuoteSeries = this.parseDailyQuotes(payload);
+    if (dailyQuoteSeries.length < 2) {
+      throw new AppError(`Insufficient history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
     }
 
-    const values =
-      typeof payload === 'object' &&
-      payload !== null &&
-      'values' in payload &&
-      Array.isArray((payload as { values?: unknown }).values)
-        ? ((payload as { values: Array<{ datetime?: string; close?: string | number }> }).values ?? [])
-        : [];
+    const monthlyPoints = this.toMonthlySeries(
+      dailyQuoteSeries,
+      this.parseDividends(payload),
+      this.inputValueMode
+    );
 
-    const points = values
-      .map((item) => {
-        const rawDate = typeof item.datetime === 'string' ? item.datetime : '';
-        const date = rawDate.slice(0, 10);
-        const close = Number(item.close);
-        if (!date || !Number.isFinite(close)) return null;
-        return { date, close: Math.round(close * 100) / 100 };
-      })
-      .filter((point): point is PortfolioHistoryPointDTO => point !== null)
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    if (points.length < 2) {
-      throw new AppError(`Insufficient history for symbol ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
+    const outputSize = HORIZON_OUTPUT_SIZE[horizon];
+    const output = monthlyPoints.slice(-outputSize);
+    if (output.length < 2) {
+      throw new AppError(`Insufficient monthly history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
     }
-
-    return points.slice(-outputSize);
+    return output;
   }
 
-  private reserveQuota(): void {
-    const now = new Date();
+  private parseDailyQuotes(payload: JustEtfChartPayload): Array<{ date: string; close: number }> {
+    const series = Array.isArray(payload.series) ? payload.series : [];
 
-    const dayKey = now.toISOString().slice(0, 10);
-    if (this.dailyUsage.dayKey !== dayKey) {
-      this.dailyUsage = { dayKey, count: 0 };
-    }
+    return series
+      .map((sample) => {
+        const rawDate = typeof sample.date === 'string' ? sample.date.slice(0, 10) : '';
+        const rawValue =
+          typeof sample.value === 'number'
+            ? sample.value
+            : sample.value && typeof sample.value === 'object'
+              ? Number(sample.value.raw)
+              : Number.NaN;
 
-    const minuteKey = now.toISOString().slice(0, 16);
-    if (this.minuteUsage.minuteKey !== minuteKey) {
-      this.minuteUsage = { minuteKey, count: 0 };
-    }
+        if (!rawDate || !Number.isFinite(rawValue)) return null;
+        return {
+          date: rawDate,
+          close: this.roundToCents(rawValue),
+        };
+      })
+      .filter((point): point is { date: string; close: number } => point !== null)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
 
-    if (this.dailyUsage.count >= this.maxRequestsPerDay) {
-      throw new AppError(
-        `Daily provider quota reached (${this.maxRequestsPerDay} requests/day)`,
-        429,
-        'PROVIDER_DAILY_LIMIT'
-      );
-    }
+  private parseDividends(payload: JustEtfChartPayload): Map<string, number> {
+    const dividendsSeries = payload.features?.DIVIDENDS;
+    if (!Array.isArray(dividendsSeries)) return new Map();
 
-    if (this.minuteUsage.count >= this.maxRequestsPerMinute) {
-      throw new AppError(
-        `Provider minute quota reached (${this.maxRequestsPerMinute} requests/minute). Retry in a moment.`,
-        429,
-        'PROVIDER_MINUTE_LIMIT'
-      );
-    }
+    const map = new Map<string, number>();
+    dividendsSeries.forEach((sample) => {
+      const rawDate = typeof sample.date === 'string' ? sample.date.slice(0, 10) : '';
+      const rawValue =
+        typeof sample.value === 'number'
+          ? sample.value
+          : sample.value && typeof sample.value === 'object'
+            ? Number(sample.value.raw)
+            : Number.NaN;
 
-    this.dailyUsage.count += 1;
-    this.minuteUsage.count += 1;
+      if (!rawDate || !Number.isFinite(rawValue)) return;
+      map.set(rawDate, (map.get(rawDate) ?? 0) + rawValue);
+    });
+
+    return map;
+  }
+
+  private toMonthlySeries(
+    dailyQuoteSeries: Array<{ date: string; close: number }>,
+    dividendsByDate: Map<string, number>,
+    valueMode: InputValueMode
+  ): PortfolioHistoryPointDTO[] {
+    let cumulativeDividends = 0;
+    const pointsByMonth = new Map<string, PortfolioHistoryPointDTO>();
+
+    dailyQuoteSeries.forEach((point) => {
+      cumulativeDividends += dividendsByDate.get(point.date) ?? 0;
+      const close =
+        valueMode === 'quote'
+          ? point.close
+          : this.roundToCents(point.close + cumulativeDividends);
+
+      const monthKey = point.date.slice(0, 7);
+      const existing = pointsByMonth.get(monthKey);
+      if (!existing || point.date > existing.date) {
+        pointsByMonth.set(monthKey, { date: point.date, close });
+      }
+    });
+
+    return Array.from(pointsByMonth.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  private roundToCents(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 
   private get cacheTtlMs(): number {
@@ -208,18 +253,23 @@ export class PortfolioService {
     return minutes * 60 * 1000;
   }
 
-  private get maxRequestsPerDay(): number {
-    const value = Number(process.env.TWELVE_DATA_MAX_REQUESTS_PER_DAY ?? '700');
-    if (!Number.isFinite(value) || value <= 0) return 700;
-    return Math.floor(value);
+  private get inputValueMode(): InputValueMode {
+    return (process.env.PORTFOLIO_JUSTETF_INPUT_VALUE || 'quote_with_dividends') === 'quote'
+      ? 'quote'
+      : 'quote_with_dividends';
   }
 
-  private get maxRequestsPerMinute(): number {
-    const value = Number(process.env.TWELVE_DATA_MAX_REQUESTS_PER_MINUTE ?? '7');
-    if (!Number.isFinite(value) || value <= 0) return 7;
-    return Math.floor(value);
+  private get justEtfCurrency(): string {
+    const currency = (process.env.PORTFOLIO_JUSTETF_CURRENCY || 'EUR').trim().toUpperCase();
+    return currency || 'EUR';
+  }
+
+  private get userAgent(): string {
+    return (
+      process.env.PORTFOLIO_JUSTETF_USER_AGENT ||
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+    );
   }
 }
 
 export const portfolioService = new PortfolioService();
-

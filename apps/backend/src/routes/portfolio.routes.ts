@@ -12,13 +12,13 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: PortfolioHistoryQuery }>('/history', {
     schema: {
       tags: ['Portfolio'],
-      summary: 'Get historical monthly series for portfolio symbols',
+      summary: 'Get historical monthly series for portfolio instruments (ISIN)',
       querystring: {
         type: 'object',
         properties: {
           symbols: {
             type: 'string',
-            description: 'Comma-separated symbols (e.g. VTI,BND,EMB)',
+            description: 'Comma-separated ISIN codes (e.g. IE00B4L5Y983,LU0290358497)',
           },
           horizon: {
             type: 'string',
@@ -54,4 +54,3 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 };
-
