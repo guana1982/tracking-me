@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -282,6 +282,8 @@ export function CashFlow() {
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [columnsModalTab, setColumnsModalTab] = useState<'columns' | 'classifications'>('columns');
+  const [isCompactTable, setIsCompactTable] = useState(false);
   const [form, setForm] = useState<FormState>({ checkLabel: '', date: today, notes: '', values: {} });
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const tableDragActiveRef = useRef(false);
@@ -707,13 +709,26 @@ export function CashFlow() {
         </div>
         <div className="card !p-3">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Ultimo Tot Attuale</p>
-          <p className="text-lg font-bold text-slate-900 tabular-nums">
-            {latestRow ? formatCurrency(latestRow.total) : formatCurrency(0)}
-          </p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-lg font-bold text-slate-900 tabular-nums">
+              {latestRow ? formatCurrency(latestRow.total) : formatCurrency(0)}
+            </p>
+            {latestRow?.diffTotal !== null && latestRow?.diffTotal !== undefined && (
+              <span className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${latestRow.diffTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {latestRow.diffTotal >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {latestRow.diffTotal >= 0 ? '+' : ''}{((latestRow.diffTotal / (latestRow.total - latestRow.diffTotal)) * 100).toFixed(1)}%
+              </span>
+            )}
+          </div>
         </div>
         <div className="card !p-3">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Check in crescita</p>
-          <p className="text-lg font-bold text-emerald-600 tabular-nums">{positiveDiffCount}</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-lg font-bold text-emerald-600 tabular-nums">{positiveDiffCount}</p>
+            {rowsWithMetrics.length > 1 && (
+              <span className="text-xs text-slate-400 tabular-nums">/ {rowsWithMetrics.length - 1}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -789,6 +804,7 @@ export function CashFlow() {
                     key={`group-${group.key}`}
                     className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
                   >
+                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                     <span className="text-[10px] font-semibold text-slate-700">{group.label}</span>
                     <span className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</span>
                     <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</span>
@@ -837,16 +853,17 @@ export function CashFlow() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-sm font-bold text-slate-700">{formatCurrency(latestRow?.total ?? 0)}</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <p className="text-[10px] text-slate-400 leading-none">Totale</p>
+                  <p className="text-base font-bold text-slate-700 mt-0.5">{formatCurrency(latestRow?.total ?? 0)}</p>
                 </div>
               </div>
             </div>
               )}
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
-          <div className="flex flex-wrap items-center justify-end gap-1.5 mb-2">
-            <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
+          <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1 scrollbar-thin">
+            <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
               <button
@@ -862,7 +879,7 @@ export function CashFlow() {
               const color = getTrendColor(col.key, idx);
               const isOn = visibleTrendKeys.has(col.key);
               return (
-                <label key={col.key} className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5">
+                <label key={col.key} className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
                   <span className="text-[10px] text-slate-600">{getPieShortLabel(col)}</span>
                   <button
@@ -934,19 +951,76 @@ export function CashFlow() {
       <div className="card !p-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900">Storico Check</h3>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+            onClick={() => setIsCompactTable((prev) => !prev)}
+          >
+            {isCompactTable ? <Columns3 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+            {isCompactTable ? 'Espandi' : 'Compatto'}
+          </button>
         </div>
         {rowsWithMetrics.length === 0 ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
         ) : (
+          <>
+          {/* Mobile card view */}
+          <div className="md:hidden space-y-2 overflow-y-auto">
+            {rowsWithMetrics.map((row) => (
+              <div key={`mobile-${row.id}`} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{row.checkLabel}</p>
+                    <p className="text-xs text-slate-500">{formatDate(row.date)}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button type="button" className="p-1.5 rounded-lg text-sky-600 hover:bg-sky-50 transition-colors" onClick={() => openEditModal(row)}><Pencil className="w-4 h-4" /></button>
+                    {deletingRowId === row.id ? (
+                      <>
+                        <button type="button" className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors" onClick={() => { deleteCheck.mutate(row.id); setDeletingRowId(null); }}><Check className="w-4 h-4" /></button>
+                        <button type="button" className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" onClick={() => setDeletingRowId(null)}><X className="w-4 h-4" /></button>
+                      </>
+                    ) : (
+                      <button type="button" className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors" onClick={() => setDeletingRowId(row.id)}><Trash2 className="w-4 h-4" /></button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="text-xs uppercase tracking-wide text-slate-500">Totale</span>
+                  <span className="text-base font-bold text-slate-900 tabular-nums">{formatCurrency(row.total)}</span>
+                </div>
+                {row.diffTotal !== null && (
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-xs uppercase tracking-wide text-slate-500">Variazione</span>
+                    <span className={`text-sm font-medium tabular-nums ${diffClass(row.diffTotal)}`}>{diffDisplay(row.diffTotal)}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-slate-200">
+                  {activeColumns.map((column) => (
+                    <div key={column.key} className="flex items-baseline justify-between">
+                      <span className="text-[10px] text-slate-500 truncate mr-1">{column.label}</span>
+                      <span className="text-xs tabular-nums text-slate-700">{formatCurrency(getRowValue(row, column.key))}</span>
+                    </div>
+                  ))}
+                </div>
+                {row.notes && (
+                  <p className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200 truncate" title={row.notes}>{row.notes}</p>
+                )}
+              </div>
+            ))}
+          </div>
+          {/* Desktop table view */}
+          <div className="relative md:flex-1 md:min-h-0 hidden md:block">
+            <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none z-10 bg-gradient-to-l from-white to-transparent" />
           <div
             ref={tableScrollRef}
-            className={`overflow-auto md:flex-1 md:min-h-0 ${isTableDragScrolling ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+            className={`overflow-auto h-full ${isTableDragScrolling ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
             onMouseDown={handleTableMouseDown}
             onMouseMove={handleTableMouseMove}
             onMouseUp={stopTableDragScroll}
             onMouseLeave={stopTableDragScroll}
           >
-            <table className="w-full text-sm" style={{ minWidth: `${900 + activeColumns.length * 260}px` }}>
+            <table className="w-full text-sm" style={{ minWidth: `${900 + activeColumns.length * (isCompactTable ? 130 : 260)}px` }}>
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="text-left py-2 pl-2 pr-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur w-[76px] min-w-[76px]">Azioni</th>
@@ -954,11 +1028,11 @@ export function CashFlow() {
                   <th className="text-left py-2 pr-3 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">Data</th>
                   {activeColumns.flatMap((column) => [
                     <th key={`${column.key}-value`} className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-emerald-50/95">{column.label}</th>,
-                    <th key={`${column.key}-diff`} className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">{getDiffHeaderLabel(column)}</th>,
+                    ...(!isCompactTable ? [<th key={`${column.key}-diff`} className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">{getDiffHeaderLabel(column)}</th>] : []),
                   ])}
                   <th className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-emerald-200/80">Totale</th>
-                  <th className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">Diff Tot</th>
-                  <th className="text-left py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur w-[260px] min-w-[260px] max-w-[260px]">Note</th>
+                  {!isCompactTable && <th className="text-right py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">Diff Tot</th>}
+                  {!isCompactTable && <th className="text-left py-2 px-2 sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur w-[260px] min-w-[260px] max-w-[260px]">Note</th>}
                 </tr>
               </thead>
               <tbody>
@@ -983,22 +1057,26 @@ export function CashFlow() {
                       <td key={`${row.id}-${column.key}-value`} className="py-2 px-2 text-right tabular-nums bg-emerald-50/40">
                         {formatCurrency(getRowValue(row, column.key))}
                       </td>,
-                      <td key={`${row.id}-${column.key}-diff`} className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffByColumn[column.key] ?? null)}`}>
+                      ...(!isCompactTable ? [<td key={`${row.id}-${column.key}-diff`} className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffByColumn[column.key] ?? null)}`}>
                         {diffDisplay(row.diffByColumn[column.key] ?? null)}
-                      </td>,
+                      </td>] : []),
                     ])}
                     <td className="py-2 px-2 text-right tabular-nums font-semibold bg-emerald-100/90">{formatCurrency(row.total)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTotal)}`}>{diffDisplay(row.diffTotal)}</td>
-                    <td className="py-2 px-2 text-slate-600 w-[260px] min-w-[260px] max-w-[260px]">
-                      <span className="block truncate" title={row.notes || '-'}>
-                        {row.notes || '-'}
-                      </span>
-                    </td>
+                    {!isCompactTable && <td className={`py-2 px-2 text-right tabular-nums ${diffClass(row.diffTotal)}`}>{diffDisplay(row.diffTotal)}</td>}
+                    {!isCompactTable && (
+                      <td className="py-2 px-2 text-slate-600 w-[260px] min-w-[260px] max-w-[260px]">
+                        <span className="block truncate" title={row.notes || '-'}>
+                          {row.notes || '-'}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          </div>
+          </>
         )}
       </div>
 
@@ -1006,8 +1084,25 @@ export function CashFlow() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40" />
           <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h3 className="text-base font-semibold text-slate-900">Gestione Colonne</h3>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setColumnsModalTab('columns')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${columnsModalTab === 'columns' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <Columns3 className="w-3.5 h-3.5" />
+                  Colonne
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setColumnsModalTab('classifications')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${columnsModalTab === 'classifications' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <Tags className="w-3.5 h-3.5" />
+                  Classificazioni
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1022,6 +1117,7 @@ export function CashFlow() {
             </div>
 
             <div className="px-5 py-4 overflow-y-auto space-y-3">
+              {columnsModalTab === 'columns' && <>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   className="input sm:max-w-sm"
@@ -1185,9 +1281,10 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
+              </>}
 
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3">Classificazioni</h4>
+              {columnsModalTab === 'classifications' && <>
+              <div>
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     className="input sm:max-w-sm"
@@ -1317,6 +1414,7 @@ export function CashFlow() {
                   </div>
                 )}
               </div>
+              </>}
             </div>
           </div>
         </div>
