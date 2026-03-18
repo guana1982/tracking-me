@@ -77,8 +77,8 @@ type AllocationGroupDraft = {
 const CLASSIFICATION_COLORS = ['#10B981', '#0EA5E9', '#F59E0B', '#94A3B8', '#14B8A6', '#38BDF8', '#FBBF24', '#CBD5E1'];
 const UNCLASSIFIED_GROUP_KEY = '__unclassified';
 const PIE_LABEL_MIN_GAP = 12;
-const PIE_LABEL_OUTER_OFFSET = 10;
-const PIE_LABEL_SIDE_OFFSET = 18;
+const PIE_LABEL_OUTER_OFFSET = 12;
+const PIE_LABEL_SIDE_OFFSET = 20;
 const TREND_LINE_COLORS: Record<string, string> = {
   bbva: '#38bdf8',
   tradeRepublic: '#f59e0b',
@@ -811,17 +811,17 @@ export function CashFlow() {
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 h-56 max-w-[420px] mx-auto relative">
+              <div className="min-w-0 h-60 max-w-[440px] mx-auto relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 12, right: 24, bottom: 12, left: 24 }}>
+                  <PieChart margin={{ top: 12, right: 28, bottom: 12, left: 28 }}>
                     <Pie
                       data={allocationChart.columns}
                       dataKey="value"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
-                      innerRadius={42}
-                      outerRadius={68}
+                      innerRadius={46}
+                      outerRadius={72}
                       minAngle={2}
                       paddingAngle={1}
                       startAngle={90}
