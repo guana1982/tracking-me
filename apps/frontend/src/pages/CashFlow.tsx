@@ -804,7 +804,6 @@ export function CashFlow() {
                     key={`group-${group.key}`}
                     className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
                   >
-                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                     <span className="text-[10px] font-semibold text-slate-700">{group.label}</span>
                     <span className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</span>
                     <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</span>
