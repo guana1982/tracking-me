@@ -20,5 +20,8 @@
       "Bash(cat *.env)",
       "Bash(curl *)"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
   }
 }
