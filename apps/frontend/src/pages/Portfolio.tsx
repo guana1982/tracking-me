@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Cell,
   CartesianGrid,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -36,11 +39,26 @@ type InvestedDraft = {
 };
 type StudyRow = { id: string; label: string; weight: string };
 type StudyPortfolio = { id: string; name: string; rows: StudyRow[] };
+type InvestedAssetClassSlice = {
+  key: string;
+  label: string;
+  value: number;
+  percentage: number;
+  color: string;
+};
 
 const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'];
+const INVESTED_ASSET_CLASS_COLORS = ['#94A3B8', '#38BDF8', '#F59E0B', '#10B981', '#14B8A6', '#6366F1', '#EF4444', '#CBD5E1'];
+const INVESTED_PIE_LABEL_MIN_GAP = 12;
+const INVESTED_PIE_LABEL_OUTER_OFFSET = 12;
+const INVESTED_PIE_LABEL_SIDE_OFFSET = 20;
 const mk = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const pct = (v: number | null | undefined) => (!Number.isFinite(v ?? NaN) ? 'N/A' : `${((v as number) * 100).toFixed(2)}%`);
 const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 function normalizeInvestedForSave(positions: Invested[]): Invested[] {
   const bySymbol = new Map<string, number>();
@@ -137,6 +155,118 @@ export function Portfolio() {
     }, 0);
     return { equity, bond };
   }, [invested, instrumentBySymbol]);
+  const investedAssetClassChart = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    invested.forEach((item) => {
+      const amount = Math.max(0, item.amount);
+      if (!amount) return;
+      const className = instrumentBySymbol.get(item.symbol.toUpperCase())?.assetClassName?.trim().toUpperCase() || 'NON CLASSIFICATO';
+      totals.set(className, (totals.get(className) ?? 0) + amount);
+    });
+
+    const preferredOrder = ['AZIONARIO', 'OBBLIGAZIONARIO', 'COMMODITIES', 'MONETARIO'];
+    const orderedKeys = [
+      ...preferredOrder.filter((assetClass) => totals.has(assetClass)),
+      ...Array.from(totals.keys())
+        .filter((assetClass) => !preferredOrder.includes(assetClass))
+        .sort((a, b) => a.localeCompare(b)),
+    ];
+
+    const total = orderedKeys.reduce((sum, key) => sum + (totals.get(key) ?? 0), 0);
+    const slices: InvestedAssetClassSlice[] = orderedKeys.map((key, index) => {
+      const value = totals.get(key) ?? 0;
+      return {
+        key,
+        label: key,
+        value,
+        percentage: total > 0 ? (value / total) * 100 : 0,
+        color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+      };
+    });
+
+    return { total, slices };
+  }, [invested, instrumentBySymbol]);
+
+  const renderInvestedPieLabel = useMemo(() => {
+    const slotsBySide: Record<'left' | 'right', Array<{ index: number; y: number }>> = {
+      left: [],
+      right: [],
+    };
+
+    const reserveY = (side: 'left' | 'right', index: number, desiredY: number, yMin: number, yMax: number): number => {
+      const slots = slotsBySide[side];
+      slots.push({ index, y: clamp(desiredY, yMin, yMax) });
+      slots.sort((a, b) => a.y - b.y);
+
+      for (let i = 1; i < slots.length; i += 1) {
+        if (slots[i].y - slots[i - 1].y < INVESTED_PIE_LABEL_MIN_GAP) {
+          slots[i].y = slots[i - 1].y + INVESTED_PIE_LABEL_MIN_GAP;
+        }
+      }
+
+      if (slots.length > 0 && slots[slots.length - 1].y > yMax) {
+        slots[slots.length - 1].y = yMax;
+        for (let i = slots.length - 2; i >= 0; i -= 1) {
+          if (slots[i + 1].y - slots[i].y < INVESTED_PIE_LABEL_MIN_GAP) {
+            slots[i].y = slots[i + 1].y - INVESTED_PIE_LABEL_MIN_GAP;
+          }
+        }
+      }
+
+      if (slots.length > 0 && slots[0].y < yMin) {
+        const shift = yMin - slots[0].y;
+        slots.forEach((slot) => {
+          slot.y = clamp(slot.y + shift, yMin, yMax);
+        });
+      }
+
+      return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, yMin, yMax);
+    };
+
+    return (props: { cx: number; cy: number; midAngle: number; outerRadius: number; index: number }) => {
+      const point = investedAssetClassChart.slices[props.index];
+      if (!point) return null;
+
+      const angle = (-props.midAngle * Math.PI) / 180;
+      const isRightSide = Math.cos(angle) >= 0;
+      const side: 'left' | 'right' = isRightSide ? 'right' : 'left';
+      const yMin = props.cy - (props.outerRadius + 18);
+      const yMax = props.cy + (props.outerRadius + 18);
+      const desiredY = props.cy + Math.sin(angle) * (props.outerRadius + INVESTED_PIE_LABEL_OUTER_OFFSET);
+      const y = reserveY(side, props.index, desiredY, yMin, yMax);
+      const startX = props.cx + Math.cos(angle) * (props.outerRadius + 1);
+      const startY = props.cy + Math.sin(angle) * (props.outerRadius + 1);
+      const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 8);
+      const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + INVESTED_PIE_LABEL_SIDE_OFFSET);
+      const anchor = isRightSide ? 'start' : 'end';
+      const text = `${point.label} ${point.percentage.toFixed(1)}%`;
+
+      return (
+        <g>
+          <path
+            d={`M ${startX} ${startY}
+               L ${elbowX} ${y}
+               L ${labelX} ${y}`}
+            fill="none"
+            stroke="#cbd5e1"
+            strokeWidth={1}
+          />
+          <text
+            x={labelX + (isRightSide ? 2 : -2)}
+            y={y}
+            textAnchor={anchor}
+            dominantBaseline="central"
+            fontSize={8.5}
+            fontWeight={600}
+            fill="#334155"
+          >
+            {text}
+          </text>
+        </g>
+      );
+    };
+  }, [investedAssetClassChart.slices]);
   const universeByLabel = useMemo(
     () =>
       instruments.reduce<Record<string, string>>((acc, instrument) => {
@@ -495,9 +625,79 @@ export function Portfolio() {
 
   return (
     <div className="sm:ml-60 space-y-4">
-      <div className="card">
-        <h2 className="text-lg font-semibold">Portafoglio</h2>
-        <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
+      <div className="card !p-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="w-full lg:w-[420px] h-[220px] relative shrink-0">
+            {investedAssetClassChart.slices.length === 0 ? (
+              <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                Nessun dato disponibile per il grafico.
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                    <Pie
+                      data={investedAssetClassChart.slices}
+                      dataKey="value"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={46}
+                      outerRadius={62}
+                      minAngle={2}
+                      paddingAngle={1}
+                      startAngle={90}
+                      endAngle={-270}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      labelLine={false}
+                      label={renderInvestedPieLabel}
+                    >
+                      {investedAssetClassChart.slices.map((slice) => (
+                        <Cell key={slice.key} fill={slice.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
+                        if (!point) return null;
+
+                        return (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                            <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                            <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                            <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                          </div>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                  <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(investedAssetClassChart.total)}</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">Portafoglio</h2>
+            <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {investedAssetClassChart.slices.map((slice) => (
+                <div
+                  key={`asset-class-${slice.key}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
+                >
+                  <span className="text-[10px] font-semibold text-slate-700">{slice.label}</span>
+                  <span className="text-[10px] text-slate-500">{slice.percentage.toFixed(1)}%</span>
+                  <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(slice.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
