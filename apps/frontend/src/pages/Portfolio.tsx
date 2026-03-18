@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { portfolioApi } from '../lib/api';
 import type {
@@ -115,6 +115,10 @@ export function Portfolio() {
   const [result, setResult] = useState<PortfolioCompareResponseDTO | null>(null);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
+  const [portfolioDraft, setPortfolioDraft] = useState<StudyPortfolio | null>(null);
+  const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
+  const [portfolioDraftError, setPortfolioDraftError] = useState<string | null>(null);
 
   const investedTotal = useMemo(() => invested.reduce((s, p) => s + Math.max(0, p.amount), 0), [invested]);
   const investedSplit = useMemo(() => {
@@ -165,6 +169,62 @@ export function Portfolio() {
       next[idx] = { ...next[idx], amount: next[idx].amount + amount };
       return next;
     });
+  };
+
+  const openCreatePortfolioModal = () => {
+    setEditingPortfolioId(null);
+    setPortfolioDraftError(null);
+    setPortfolioDraft({
+      id: mk('p'),
+      name: `PORTFOLIO ${study.length + 1}`,
+      rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }],
+    });
+    setIsPortfolioModalOpen(true);
+  };
+
+  const openEditPortfolioModal = (portfolio: StudyPortfolio) => {
+    setEditingPortfolioId(portfolio.id);
+    setPortfolioDraftError(null);
+    setPortfolioDraft({
+      id: portfolio.id,
+      name: portfolio.name,
+      rows: portfolio.rows.map((row) => ({ id: mk('r'), label: row.label, weight: row.weight })),
+    });
+    setIsPortfolioModalOpen(true);
+  };
+
+  const closePortfolioModal = () => {
+    setIsPortfolioModalOpen(false);
+    setPortfolioDraft(null);
+    setEditingPortfolioId(null);
+    setPortfolioDraftError(null);
+  };
+
+  const savePortfolioFromModal = () => {
+    if (!portfolioDraft) return;
+    const nextName = portfolioDraft.name.trim() || `PORTFOLIO ${study.length + 1}`;
+    const nextRows = portfolioDraft.rows
+      .map((row) => ({
+        label: row.label.trim(),
+        weight: row.weight.replace(',', '.').trim(),
+      }))
+      .filter((row) => {
+        const weight = Number(row.weight);
+        return row.label.length > 0 && Number.isFinite(weight) && weight > 0;
+      })
+      .map((row) => ({ id: mk('r'), label: row.label, weight: row.weight }));
+
+    if (!nextRows.length) {
+      setPortfolioDraftError('Inserisci almeno uno strumento con peso maggiore di 0');
+      return;
+    }
+
+    if (editingPortfolioId) {
+      setStudy((prev) => prev.map((p) => (p.id === editingPortfolioId ? { ...p, name: nextName, rows: nextRows } : p)));
+    } else {
+      setStudy((prev) => [...prev, { id: mk('p'), name: nextName, rows: nextRows }]);
+    }
+    closePortfolioModal();
   };
 
   const runCompare = async () => {
@@ -290,7 +350,7 @@ export function Portfolio() {
                 <option value="quote">quote</option>
               </select>
               <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
-              <button className="btn btn-secondary" onClick={() => setStudy((prev) => [...prev, { id: mk('p'), name: `PORTFOLIO ${prev.length + 1}`, rows: [{ id: mk('r'), label: 'WORLD', weight: '10' }] }])}>
+              <button className="btn btn-secondary" onClick={openCreatePortfolioModal}>
                 <Plus className="w-4 h-4 mr-1" /> Nuovo portafoglio
               </button>
               <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
@@ -300,36 +360,186 @@ export function Portfolio() {
 
             {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               {study.map((p) => (
-                <div key={p.id} className="rounded border border-slate-200 p-3 space-y-2 bg-white">
-                  <div className="flex items-center justify-between gap-2">
-                    <input className="input w-44" value={p.name} onChange={(e) => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                <div key={p.id} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                      <p className="text-xs text-slate-500">
+                        Strumenti: {p.rows.length} - Peso totale:{' '}
+                        {p.rows
+                          .reduce((sum, row) => {
+                            const n = Number(row.weight.replace(',', '.'));
+                            return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+                          }, 0)
+                          .toFixed(2)}
+                      </p>
+                    </div>
                     <div className="flex gap-2">
-                      <button className="btn btn-secondary py-1" onClick={() => setStudy((prev) => prev.map((x) => (x.id === p.id ? { ...x, rows: [...x.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : x)))}>Riga</button>
-                      {study.length > 1 && <button className="btn py-1" onClick={() => setStudy((prev) => prev.filter((x) => x.id !== p.id))}>Rimuovi</button>}
+                      <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditPortfolioModal(p)}>
+                        <Pencil className="w-3.5 h-3.5 mr-1" />
+                        Modifica
+                      </button>
+                      {study.length > 1 && (
+                        <button className="btn py-1 px-2 text-xs" onClick={() => setStudy((prev) => prev.filter((x) => x.id !== p.id))}>
+                          Rimuovi
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="max-h-56 overflow-auto space-y-2 pr-1">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[440px] w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-slate-500">
+                          <th className="px-3 py-2 font-medium">Strumento</th>
+                          <th className="px-3 py-2 font-medium">ISIN</th>
+                          <th className="px-3 py-2 font-medium text-right">Peso</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                     {p.rows.map((row) => (
-                      <div key={row.id} className="grid grid-cols-[1fr,96px,36px] gap-2">
-                        <select className="input" value={row.label} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r) } : x))}>
-                          {INSTRUMENTS.map((i) => <option key={i.symbol} value={i.symbol}>{i.symbol}</option>)}
-                        </select>
-                        <input className="input text-right" value={row.weight} onChange={(e) => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.map((r) => r.id === row.id ? { ...r, weight: e.target.value } : r) } : x))} />
-                        <button className="btn px-0" onClick={() => setStudy((prev) => prev.map((x) => x.id === p.id ? { ...x, rows: x.rows.filter((r) => r.id !== row.id) } : x))}>X</button>
-                      </div>
+                      <tr key={row.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-medium text-slate-800">{row.label}</td>
+                        <td className="px-3 py-2 text-slate-600">{universeByLabel[row.label] ?? 'N/A'}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{row.weight}%</td>
+                      </tr>
                     ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    Peso totale inserito: {p.rows.reduce((sum, row) => {
-                      const n = Number(row.weight.replace(',', '.'));
-                      return sum + (Number.isFinite(n) && n > 0 ? n : 0);
-                    }, 0).toFixed(2)}
-                  </p>
                 </div>
               ))}
             </div>
+
+            {isPortfolioModalOpen && portfolioDraft && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+                <div className="absolute inset-0 bg-black/50" onClick={closePortfolioModal} />
+                <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+                  <div className="flex items-center justify-between p-4 border-b border-slate-200">
+                    <div>
+                      <h4 className="text-lg font-semibold text-slate-900">
+                        {editingPortfolioId ? 'Modifica portafoglio' : 'Nuovo portafoglio'}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Inserisci nome e strumenti da confrontare.</p>
+                    </div>
+                    <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closePortfolioModal}>
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-4 space-y-3 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                      <input
+                        className="input"
+                        value={portfolioDraft.name}
+                        onChange={(e) => setPortfolioDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                        placeholder="Nome portafoglio"
+                      />
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() =>
+                          setPortfolioDraft((prev) =>
+                            prev ? { ...prev, rows: [...prev.rows, { id: mk('r'), label: 'WORLD', weight: '10' }] } : prev,
+                          )
+                        }
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Strumento
+                      </button>
+                    </div>
+
+                    {portfolioDraftError && (
+                      <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{portfolioDraftError}</div>
+                    )}
+
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[620px] w-full text-sm">
+                          <thead className="bg-slate-50 border-b border-slate-200">
+                            <tr className="text-left text-slate-500">
+                              <th className="px-3 py-2 font-medium">Strumento</th>
+                              <th className="px-3 py-2 font-medium">ISIN</th>
+                              <th className="px-3 py-2 font-medium text-right">Peso %</th>
+                              <th className="px-3 py-2 font-medium text-right">Azione</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {portfolioDraft.rows.map((row) => (
+                              <tr key={row.id} className="border-t border-slate-100">
+                                <td className="px-3 py-2">
+                                  <select
+                                    className="input"
+                                    value={row.label}
+                                    onChange={(e) =>
+                                      setPortfolioDraft((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)),
+                                            }
+                                          : prev,
+                                      )
+                                    }
+                                  >
+                                    {INSTRUMENTS.map((i) => (
+                                      <option key={i.symbol} value={i.symbol}>
+                                        {i.symbol} - {i.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">{universeByLabel[row.label] ?? 'N/A'}</td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    className="input text-right"
+                                    value={row.weight}
+                                    onChange={(e) =>
+                                      setPortfolioDraft((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              rows: prev.rows.map((r) => (r.id === row.id ? { ...r, weight: e.target.value } : r)),
+                                            }
+                                          : prev,
+                                      )
+                                    }
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <button
+                                    className="btn py-1 px-2 text-xs"
+                                    type="button"
+                                    disabled={portfolioDraft.rows.length <= 1}
+                                    onClick={() =>
+                                      setPortfolioDraft((prev) =>
+                                        prev ? { ...prev, rows: prev.rows.filter((r) => r.id !== row.id) } : prev,
+                                      )
+                                    }
+                                  >
+                                    Rimuovi
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
+                    <button type="button" className="btn" onClick={closePortfolioModal}>
+                      Annulla
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={savePortfolioFromModal}>
+                      Conferma portafoglio
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {result && (
               <div className="space-y-4">
