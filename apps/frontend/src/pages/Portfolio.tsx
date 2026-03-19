@@ -725,10 +725,10 @@ export function Portfolio() {
                         nameKey="label"
                         cx="50%"
                         cy="50%"
-                        innerRadius={46}
-                        outerRadius={62}
+                        innerRadius={42}
+                        outerRadius={68}
                         minAngle={2}
-                        paddingAngle={1}
+                        paddingAngle={2}
                         startAngle={90}
                         endAngle={-270}
                         stroke="#ffffff"
@@ -758,7 +758,7 @@ export function Portfolio() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                    <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(investedAssetClassChart.total)}</p>
+                    <p className="text-sm font-bold text-slate-700">{formatCurrency(investedAssetClassChart.total)}</p>
                   </div>
                 </>
               )}
@@ -788,10 +788,10 @@ export function Portfolio() {
                         nameKey="label"
                         cx="50%"
                         cy="50%"
-                        innerRadius={46}
-                        outerRadius={62}
+                        innerRadius={42}
+                        outerRadius={68}
                         minAngle={2}
-                        paddingAngle={1}
+                        paddingAngle={2}
                         startAngle={90}
                         endAngle={-270}
                         stroke="#ffffff"
@@ -820,7 +820,7 @@ export function Portfolio() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                    <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(geographicExposureChart.total)}</p>
+                    <p className="text-sm font-bold text-slate-700">{formatCurrency(geographicExposureChart.total)}</p>
                   </div>
                 </>
               )}
@@ -839,18 +839,6 @@ export function Portfolio() {
                 Dettaglio ripartizione geografica
               </button>
             )}
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {investedAssetClassChart.slices.map((slice) => (
-                <div
-                  key={`asset-class-${slice.key}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
-                >
-                  <span className="text-[10px] font-semibold text-slate-700">{slice.label}</span>
-                  <span className="text-[10px] text-slate-500">{slice.percentage.toFixed(1)}%</span>
-                  <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(slice.value)}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>
