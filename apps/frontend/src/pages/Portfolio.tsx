@@ -216,6 +216,13 @@ export function Portfolio() {
   const [geographicExposureLoading, setGeographicExposureLoading] = useState(false);
   const [geographicExposureError, setGeographicExposureError] = useState<string | null>(null);
   const [isGeographicModalOpen, setIsGeographicModalOpen] = useState(false);
+  const [studyGeographicExposure, setStudyGeographicExposure] = useState<PortfolioGeographicExposureResponseDTO | null>(null);
+  const [studyGeographicExposureLoading, setStudyGeographicExposureLoading] = useState(false);
+  const [studyGeographicExposureError, setStudyGeographicExposureError] = useState<string | null>(null);
+  const [isStudyGeographicModalOpen, setIsStudyGeographicModalOpen] = useState(false);
+  const [studyGeographicPortfolioName, setStudyGeographicPortfolioName] = useState('');
+  const [studyGeographicActivePortfolioId, setStudyGeographicActivePortfolioId] = useState<string | null>(null);
+  const [studyGeographicBaseAmount, setStudyGeographicBaseAmount] = useState(0);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
@@ -308,6 +315,20 @@ export function Portfolio() {
       slices,
     };
   }, [geographicExposure]);
+  const studyGeographicExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (studyGeographicExposure?.countries ?? []).map((country, index) => ({
+      key: country.country,
+      label: country.country,
+      value: country.amount,
+      percentage: country.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: studyGeographicExposure?.totalAmount ?? 0,
+      slices,
+    };
+  }, [studyGeographicExposure]);
 
   const renderInvestedPieLabel = useMemo(
     () => createPieLabelRenderer(investedAssetClassChart.slices),
@@ -671,6 +692,67 @@ export function Portfolio() {
       setStudy((prev) => [...prev, { id: mk('p'), name: nextName, rows: nextRows }]);
     }
     closePortfolioModal();
+  };
+
+  const closeStudyGeographicModal = () => {
+    setIsStudyGeographicModalOpen(false);
+    setStudyGeographicActivePortfolioId(null);
+  };
+
+  const openStudyGeographicModal = async (portfolio: StudyPortfolio) => {
+    setStudyGeographicPortfolioName(portfolio.name.trim() || 'Portafoglio di studio');
+    setStudyGeographicExposure(null);
+    setStudyGeographicExposureError(null);
+    setStudyGeographicExposureLoading(true);
+    setStudyGeographicActivePortfolioId(portfolio.id);
+    setIsStudyGeographicModalOpen(true);
+
+    const weightedRows = portfolio.rows
+      .map((row) => {
+        const symbol = row.label.trim().toUpperCase();
+        const weight = Number(row.weight.replace(',', '.'));
+        const isin = instrumentBySymbol.get(symbol)?.isin?.trim().toUpperCase() ?? '';
+        return { isin, weight };
+      })
+      .filter((row) => row.isin.length > 0 && Number.isFinite(row.weight) && row.weight > 0);
+
+    const totalWeight = weightedRows.reduce((sum, row) => sum + row.weight, 0);
+    if (weightedRows.length === 0 || totalWeight <= 0) {
+      setStudyGeographicExposureError('Nessuno strumento valido con ISIN e peso > 0 nel portafoglio di studio');
+      setStudyGeographicExposureLoading(false);
+      setStudyGeographicActivePortfolioId(null);
+      return;
+    }
+
+    const baseAmount = investedTotal > 0 ? investedTotal : totalWeight;
+    setStudyGeographicBaseAmount(baseAmount);
+
+    const positionsByIsin = new Map<string, number>();
+    weightedRows.forEach((row) => {
+      const amount = (row.weight / totalWeight) * baseAmount;
+      positionsByIsin.set(row.isin, (positionsByIsin.get(row.isin) ?? 0) + amount);
+    });
+
+    const positions = Array.from(positionsByIsin.entries())
+      .map(([isin, amount]) => ({ isin, amount }))
+      .filter((position) => Number.isFinite(position.amount) && position.amount > 0);
+
+    if (positions.length === 0) {
+      setStudyGeographicExposureError('Impossibile costruire le posizioni geografiche per questo portafoglio di studio');
+      setStudyGeographicExposureLoading(false);
+      setStudyGeographicActivePortfolioId(null);
+      return;
+    }
+
+    try {
+      const response = await portfolioApi.getGeographicExposure({ positions });
+      setStudyGeographicExposure(response);
+    } catch (err) {
+      setStudyGeographicExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione geografica');
+    } finally {
+      setStudyGeographicExposureLoading(false);
+      setStudyGeographicActivePortfolioId(null);
+    }
   };
 
   const runCompare = async () => {
@@ -1119,6 +1201,92 @@ export function Portfolio() {
         </div>
       )}
 
+      {isStudyGeographicModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeStudyGeographicModal} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione geografica - {studyGeographicPortfolioName}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per paese calcolate al click sul portafoglio di studio.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeStudyGeographicModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              {studyGeographicExposureLoading ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 py-10 flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Calcolo ripartizione geografica in corso...
+                </div>
+              ) : studyGeographicExposureError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {studyGeographicExposureError}
+                </div>
+              ) : studyGeographicExposureChart.slices.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Nessun dato geografico disponibile per questo portafoglio di studio.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                      <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(studyGeographicExposureChart.total)}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">
+                        {studyGeographicExposure?.generatedAt
+                          ? new Date(studyGeographicExposure.generatedAt).toLocaleString('it-IT')
+                          : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500">
+                    Base calcolo: {formatCurrency(studyGeographicBaseAmount)} (ricalcolata al click, senza salvataggio su DB).
+                  </p>
+
+                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[560px] w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr className="text-left text-slate-500">
+                            <th className="px-3 py-2 font-medium">Paese</th>
+                            <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                            <th className="px-3 py-2 font-medium text-right">Importo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studyGeographicExposureChart.slices.map((slice) => (
+                            <tr key={`study-geo-row-${slice.key}`} className="border-t border-slate-100">
+                              <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
+                              <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
+                              <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={closeStudyGeographicModal}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
         <button
           type="button"
@@ -1170,6 +1338,16 @@ export function Portfolio() {
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      <button
+                        className="btn btn-secondary py-1 px-2 text-xs"
+                        onClick={() => void openStudyGeographicModal(p)}
+                        disabled={studyGeographicExposureLoading && studyGeographicActivePortfolioId === p.id}
+                      >
+                        {studyGeographicExposureLoading && studyGeographicActivePortfolioId === p.id && (
+                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        )}
+                        Ripartizione geo
+                      </button>
                       <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditPortfolioModal(p)}>
                         <Pencil className="w-3.5 h-3.5 mr-1" />
                         Modifica
