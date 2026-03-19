@@ -155,6 +155,7 @@ export class PortfolioService {
   private cache = new Map<string, CacheEntry>();
   private inFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
   private geographicExposureCache = new Map<string, GeographicExposureCacheEntry>();
+  private geographicExposureCacheVersion = 'v2';
 
   async getHistory(
     symbols: string[],
@@ -324,8 +325,10 @@ export class PortfolioService {
       countries.forEach((country) => {
         const ratio = this.normalizeCountryRatio(country.percentage);
         if (ratio <= 0) return;
+        const countryName = this.normalizeCountryName(country.country);
+        if (!countryName) return;
         coveredRatio += ratio;
-        countryRatioByName.set(country.country, (countryRatioByName.get(country.country) ?? 0) + ratio * etfPortfolioWeight);
+        countryRatioByName.set(countryName, (countryRatioByName.get(countryName) ?? 0) + ratio * etfPortfolioWeight);
       });
 
       if (coveredRatio < 1) {
@@ -1016,7 +1019,8 @@ export class PortfolioService {
   }
 
   private async fetchCountryAllocationsByIsin(isin: string): Promise<JustEtfCountryAllocation[]> {
-    const cached = this.geographicExposureCache.get(isin);
+    const cacheKey = `${this.geographicExposureCacheVersion}:${isin}`;
+    const cached = this.geographicExposureCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.countries;
     }
@@ -1038,7 +1042,7 @@ export class PortfolioService {
 
     const best = this.pickBestCountryAllocation(baseCountries, expandedCountries);
 
-    this.geographicExposureCache.set(isin, {
+    this.geographicExposureCache.set(cacheKey, {
       countries: best,
       expiresAt: Date.now() + this.cacheTtlMs,
     });
@@ -1180,10 +1184,25 @@ export class PortfolioService {
   private normalizeCountryName(country: string): string {
     if (!country) return '';
 
-    return country
-      .replace(/\s*\d+(?:[.,]\d+)?%\s*$/g, '')
+    const cleaned = country
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+
+    const normalizedKey = cleaned
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    if (normalizedKey === 'uk' || normalizedKey === 'u.k.' || normalizedKey === 'united kingdom of great britain and northern ireland') {
+      return 'United Kingdom';
+    }
+    if (normalizedKey === 'usa' || normalizedKey === 'u.s.a.' || normalizedKey === 'united states of america') {
+      return 'United States';
+    }
+
+    return cleaned;
   }
 
   private async getSymbolHistory(
