@@ -758,6 +758,45 @@ export function Portfolio() {
     closePortfolioModal();
   };
 
+  const importInvestedAsStudyPortfolio = () => {
+    setError(null);
+
+    const validPositions = invested
+      .map((position) => ({
+        symbol: position.symbol.trim().toUpperCase(),
+        amount: Number(position.amount),
+      }))
+      .filter((position) => position.symbol.length > 0 && Number.isFinite(position.amount) && position.amount > 0)
+      .filter((position) => instrumentBySymbol.has(position.symbol));
+
+    const totalAmount = validPositions.reduce((sum, position) => sum + position.amount, 0);
+    if (validPositions.length === 0 || totalAmount <= 0) {
+      setError('Impossibile importare: nessuno strumento valido nel portafoglio investito');
+      return;
+    }
+
+    const importedRows = validPositions.map((position) => ({
+      id: mk('r'),
+      label: position.symbol,
+      weight: ((position.amount / totalAmount) * 100).toFixed(2),
+    }));
+
+    const importedName = 'portafoglio investito';
+
+    setStudy((prev) => {
+      const existingIndex = prev.findIndex((portfolio) => portfolio.name.trim().toLowerCase() === importedName);
+      if (existingIndex < 0) {
+        return [...prev, { id: mk('p'), name: importedName, rows: importedRows }];
+      }
+
+      return prev.map((portfolio, index) =>
+        index === existingIndex
+          ? { ...portfolio, name: importedName, rows: importedRows }
+          : portfolio
+      );
+    });
+  };
+
   const closeStudyGeographicModal = () => {
     setIsStudyGeographicModalOpen(false);
     setStudyGeographicActivePortfolioId(null);
@@ -1385,6 +1424,13 @@ export function Portfolio() {
               <input value={riskFreeAnnual} onChange={(e) => setRiskFreeAnnual(e.target.value)} className="input w-28" />
               <button className="btn btn-secondary" onClick={openCreatePortfolioModal} disabled={catalogLoading || instruments.length === 0}>
                 <Plus className="w-4 h-4 mr-1" /> Nuovo portafoglio
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={importInvestedAsStudyPortfolio}
+                disabled={catalogLoading || investedTotal <= 0}
+              >
+                Importa portafoglio investito
               </button>
               <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
                 {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
