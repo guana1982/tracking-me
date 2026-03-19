@@ -120,9 +120,28 @@ function createPieLabelRenderer(points: PieLabelPoint[]) {
     const startX = props.cx + Math.cos(angle) * (props.outerRadius + 1);
     const startY = props.cy + Math.sin(angle) * (props.outerRadius + 1);
     const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 8);
-    const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + INVESTED_PIE_LABEL_SIDE_OFFSET);
-    const anchor = isRightSide ? 'start' : 'end';
     const text = `${point.label} ${point.percentage.toFixed(1)}%`;
+    const chartWidth = props.cx * 2;
+    const estimatedTextWidth = text.length * 5.1;
+
+    let labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + INVESTED_PIE_LABEL_SIDE_OFFSET);
+    let anchor: 'start' | 'end' = isRightSide ? 'start' : 'end';
+
+    if (!isRightSide) {
+      const minXForEndAnchor = estimatedTextWidth + 6;
+      if (labelX < minXForEndAnchor) {
+        labelX = 6;
+        anchor = 'start';
+      }
+    } else {
+      const maxXForStartAnchor = chartWidth - estimatedTextWidth - 6;
+      if (labelX > maxXForStartAnchor) {
+        labelX = chartWidth - 6;
+        anchor = 'end';
+      }
+    }
+
+    const textX = anchor === 'start' ? labelX + 2 : labelX - 2;
 
     return (
       <g>
@@ -135,7 +154,7 @@ function createPieLabelRenderer(points: PieLabelPoint[]) {
           strokeWidth={1}
         />
         <text
-          x={labelX + (isRightSide ? 2 : -2)}
+          x={textX}
           y={y}
           textAnchor={anchor}
           dominantBaseline="central"
