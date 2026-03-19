@@ -1122,7 +1122,9 @@ export class PortfolioService {
       const nameMatch = /data-testid="[^"]*countries_value_name"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
       const percentageMatch = /data-testid="[^"]*countries_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
 
-      const country = this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim();
+      const country = this.normalizeCountryName(
+        this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim()
+      );
       const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
       const percentage = Number(
         percentageText
@@ -1173,6 +1175,15 @@ export class PortfolioService {
   private normalizeCountryRatio(percentage: number): number {
     if (!Number.isFinite(percentage) || percentage <= 0) return 0;
     return percentage > 1 ? percentage / 100 : percentage;
+  }
+
+  private normalizeCountryName(country: string): string {
+    if (!country) return '';
+
+    return country
+      .replace(/\s*\d+(?:[.,]\d+)?%\s*$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   private async getSymbolHistory(
