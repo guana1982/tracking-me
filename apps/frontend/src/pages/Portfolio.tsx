@@ -215,6 +215,7 @@ export function Portfolio() {
   const [geographicExposure, setGeographicExposure] = useState<PortfolioGeographicExposureResponseDTO | null>(null);
   const [geographicExposureLoading, setGeographicExposureLoading] = useState(false);
   const [geographicExposureError, setGeographicExposureError] = useState<string | null>(null);
+  const [isGeographicModalOpen, setIsGeographicModalOpen] = useState(false);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
@@ -311,10 +312,6 @@ export function Portfolio() {
   const renderInvestedPieLabel = useMemo(
     () => createPieLabelRenderer(investedAssetClassChart.slices),
     [investedAssetClassChart.slices],
-  );
-  const renderGeographicPieLabel = useMemo(
-    () => createPieLabelRenderer(geographicExposureChart.slices),
-    [geographicExposureChart.slices],
   );
   const universeByLabel = useMemo(
     () =>
@@ -800,7 +797,6 @@ export function Portfolio() {
                         stroke="#ffffff"
                         strokeWidth={2}
                         labelLine={false}
-                        label={renderGeographicPieLabel}
                       >
                         {geographicExposureChart.slices.map((slice) => (
                           <Cell key={slice.key} fill={slice.color} />
@@ -834,6 +830,15 @@ export function Portfolio() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Portafoglio</h2>
             <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
+            {geographicExposureChart.slices.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsGeographicModalOpen(true)}
+                className="mt-2 inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
+              >
+                Dettaglio ripartizione geografica
+              </button>
+            )}
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {investedAssetClassChart.slices.map((slice) => (
                 <div
@@ -846,20 +851,6 @@ export function Portfolio() {
                 </div>
               ))}
             </div>
-            {geographicExposureChart.slices.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                {geographicExposureChart.slices.slice(0, 6).map((slice) => (
-                  <div
-                    key={`geo-${slice.key}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
-                  >
-                    <span className="text-[10px] font-semibold text-slate-700">{slice.label}</span>
-                    <span className="text-[10px] text-slate-500">{slice.percentage.toFixed(1)}%</span>
-                    <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(slice.value)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1069,6 +1060,71 @@ export function Portfolio() {
               <button type="button" className="btn btn-primary" onClick={saveInvestedFromModal} disabled={savingInvestedDraft}>
                 {savingInvestedDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                 Conferma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isGeographicModalOpen && geographicExposureChart.slices.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsGeographicModalOpen(false)} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione geografica</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per paese calcolate sul portafoglio investito.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => setIsGeographicModalOpen(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(geographicExposureChart.total)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {geographicExposure?.generatedAt
+                      ? new Date(geographicExposure.generatedAt).toLocaleString('it-IT')
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[560px] w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-left text-slate-500">
+                        <th className="px-3 py-2 font-medium">Paese</th>
+                        <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                        <th className="px-3 py-2 font-medium text-right">Importo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {geographicExposureChart.slices.map((slice) => (
+                        <tr key={`geo-row-${slice.key}`} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
+                          <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={() => setIsGeographicModalOpen(false)}>
+                Chiudi
               </button>
             </div>
           </div>
