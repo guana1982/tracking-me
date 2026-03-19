@@ -20,6 +20,7 @@ import type {
   PortfolioAssetClassDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
+  PortfolioGeographicExposureResponseDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioInstrumentDTO,
   PortfolioInputValueModeDTO,
@@ -46,6 +47,15 @@ type InvestedAssetClassSlice = {
   percentage: number;
   color: string;
 };
+type InvestedGeographicSlice = {
+  key: string;
+  label: string;
+  value: number;
+  percentage: number;
+  color: string;
+};
+type PieLabelPoint = { label: string; percentage: number };
+type PieLabelRendererProps = { cx: number; cy: number; midAngle: number; outerRadius: number; index: number };
 
 const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#14b8a6'];
 const INVESTED_ASSET_CLASS_COLORS = ['#94A3B8', '#38BDF8', '#F59E0B', '#10B981', '#14B8A6', '#6366F1', '#EF4444', '#CBD5E1'];
@@ -58,6 +68,86 @@ const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 's
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function createPieLabelRenderer(points: PieLabelPoint[]) {
+  const slotsBySide: Record<'left' | 'right', Array<{ index: number; y: number }>> = {
+    left: [],
+    right: [],
+  };
+
+  const reserveY = (side: 'left' | 'right', index: number, desiredY: number, yMin: number, yMax: number): number => {
+    const slots = slotsBySide[side];
+    slots.push({ index, y: clamp(desiredY, yMin, yMax) });
+    slots.sort((a, b) => a.y - b.y);
+
+    for (let i = 1; i < slots.length; i += 1) {
+      if (slots[i].y - slots[i - 1].y < INVESTED_PIE_LABEL_MIN_GAP) {
+        slots[i].y = slots[i - 1].y + INVESTED_PIE_LABEL_MIN_GAP;
+      }
+    }
+
+    if (slots.length > 0 && slots[slots.length - 1].y > yMax) {
+      slots[slots.length - 1].y = yMax;
+      for (let i = slots.length - 2; i >= 0; i -= 1) {
+        if (slots[i + 1].y - slots[i].y < INVESTED_PIE_LABEL_MIN_GAP) {
+          slots[i].y = slots[i + 1].y - INVESTED_PIE_LABEL_MIN_GAP;
+        }
+      }
+    }
+
+    if (slots.length > 0 && slots[0].y < yMin) {
+      const shift = yMin - slots[0].y;
+      slots.forEach((slot) => {
+        slot.y = clamp(slot.y + shift, yMin, yMax);
+      });
+    }
+
+    return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, yMin, yMax);
+  };
+
+  return (props: PieLabelRendererProps) => {
+    const point = points[props.index];
+    if (!point) return null;
+
+    const angle = (-props.midAngle * Math.PI) / 180;
+    const isRightSide = Math.cos(angle) >= 0;
+    const side: 'left' | 'right' = isRightSide ? 'right' : 'left';
+    const yMin = props.cy - (props.outerRadius + 18);
+    const yMax = props.cy + (props.outerRadius + 18);
+    const desiredY = props.cy + Math.sin(angle) * (props.outerRadius + INVESTED_PIE_LABEL_OUTER_OFFSET);
+    const y = reserveY(side, props.index, desiredY, yMin, yMax);
+    const startX = props.cx + Math.cos(angle) * (props.outerRadius + 1);
+    const startY = props.cy + Math.sin(angle) * (props.outerRadius + 1);
+    const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 8);
+    const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + INVESTED_PIE_LABEL_SIDE_OFFSET);
+    const anchor = isRightSide ? 'start' : 'end';
+    const text = `${point.label} ${point.percentage.toFixed(1)}%`;
+
+    return (
+      <g>
+        <path
+          d={`M ${startX} ${startY}
+               L ${elbowX} ${y}
+               L ${labelX} ${y}`}
+          fill="none"
+          stroke="#cbd5e1"
+          strokeWidth={1}
+        />
+        <text
+          x={labelX + (isRightSide ? 2 : -2)}
+          y={y}
+          textAnchor={anchor}
+          dominantBaseline="central"
+          fontSize={8.5}
+          fontWeight={600}
+          fill="#334155"
+        >
+          {text}
+        </text>
+      </g>
+    );
+  };
 }
 
 function normalizeInvestedForSave(positions: Invested[]): Invested[] {
@@ -122,6 +212,9 @@ export function Portfolio() {
   const [instruments, setInstruments] = useState<PortfolioInstrumentDTO[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [geographicExposure, setGeographicExposure] = useState<PortfolioGeographicExposureResponseDTO | null>(null);
+  const [geographicExposureLoading, setGeographicExposureLoading] = useState(false);
+  const [geographicExposureError, setGeographicExposureError] = useState<string | null>(null);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
@@ -187,86 +280,42 @@ export function Portfolio() {
 
     return { total, slices };
   }, [invested, instrumentBySymbol]);
+  const investedEtfPositions = useMemo(() => {
+    const byIsin = new Map<string, number>();
+    invested.forEach((position) => {
+      const instrument = instrumentBySymbol.get(position.symbol.toUpperCase());
+      const isin = instrument?.isin?.trim().toUpperCase() ?? '';
+      const amount = Math.max(0, Number(position.amount));
 
-  const renderInvestedPieLabel = useMemo(() => {
-    const slotsBySide: Record<'left' | 'right', Array<{ index: number; y: number }>> = {
-      left: [],
-      right: [],
+      if (!isin || !amount) return;
+      byIsin.set(isin, (byIsin.get(isin) ?? 0) + amount);
+    });
+
+    return Array.from(byIsin.entries()).map(([isin, amount]) => ({ isin, amount }));
+  }, [invested, instrumentBySymbol]);
+  const geographicExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (geographicExposure?.countries ?? []).map((country, index) => ({
+      key: country.country,
+      label: country.country,
+      value: country.amount,
+      percentage: country.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: geographicExposure?.totalAmount ?? 0,
+      slices,
     };
+  }, [geographicExposure]);
 
-    const reserveY = (side: 'left' | 'right', index: number, desiredY: number, yMin: number, yMax: number): number => {
-      const slots = slotsBySide[side];
-      slots.push({ index, y: clamp(desiredY, yMin, yMax) });
-      slots.sort((a, b) => a.y - b.y);
-
-      for (let i = 1; i < slots.length; i += 1) {
-        if (slots[i].y - slots[i - 1].y < INVESTED_PIE_LABEL_MIN_GAP) {
-          slots[i].y = slots[i - 1].y + INVESTED_PIE_LABEL_MIN_GAP;
-        }
-      }
-
-      if (slots.length > 0 && slots[slots.length - 1].y > yMax) {
-        slots[slots.length - 1].y = yMax;
-        for (let i = slots.length - 2; i >= 0; i -= 1) {
-          if (slots[i + 1].y - slots[i].y < INVESTED_PIE_LABEL_MIN_GAP) {
-            slots[i].y = slots[i + 1].y - INVESTED_PIE_LABEL_MIN_GAP;
-          }
-        }
-      }
-
-      if (slots.length > 0 && slots[0].y < yMin) {
-        const shift = yMin - slots[0].y;
-        slots.forEach((slot) => {
-          slot.y = clamp(slot.y + shift, yMin, yMax);
-        });
-      }
-
-      return slots.find((slot) => slot.index === index)?.y ?? clamp(desiredY, yMin, yMax);
-    };
-
-    return (props: { cx: number; cy: number; midAngle: number; outerRadius: number; index: number }) => {
-      const point = investedAssetClassChart.slices[props.index];
-      if (!point) return null;
-
-      const angle = (-props.midAngle * Math.PI) / 180;
-      const isRightSide = Math.cos(angle) >= 0;
-      const side: 'left' | 'right' = isRightSide ? 'right' : 'left';
-      const yMin = props.cy - (props.outerRadius + 18);
-      const yMax = props.cy + (props.outerRadius + 18);
-      const desiredY = props.cy + Math.sin(angle) * (props.outerRadius + INVESTED_PIE_LABEL_OUTER_OFFSET);
-      const y = reserveY(side, props.index, desiredY, yMin, yMax);
-      const startX = props.cx + Math.cos(angle) * (props.outerRadius + 1);
-      const startY = props.cy + Math.sin(angle) * (props.outerRadius + 1);
-      const elbowX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + 8);
-      const labelX = props.cx + (isRightSide ? 1 : -1) * (props.outerRadius + INVESTED_PIE_LABEL_SIDE_OFFSET);
-      const anchor = isRightSide ? 'start' : 'end';
-      const text = `${point.label} ${point.percentage.toFixed(1)}%`;
-
-      return (
-        <g>
-          <path
-            d={`M ${startX} ${startY}
-               L ${elbowX} ${y}
-               L ${labelX} ${y}`}
-            fill="none"
-            stroke="#cbd5e1"
-            strokeWidth={1}
-          />
-          <text
-            x={labelX + (isRightSide ? 2 : -2)}
-            y={y}
-            textAnchor={anchor}
-            dominantBaseline="central"
-            fontSize={8.5}
-            fontWeight={600}
-            fill="#334155"
-          >
-            {text}
-          </text>
-        </g>
-      );
-    };
-  }, [investedAssetClassChart.slices]);
+  const renderInvestedPieLabel = useMemo(
+    () => createPieLabelRenderer(investedAssetClassChart.slices),
+    [investedAssetClassChart.slices],
+  );
+  const renderGeographicPieLabel = useMemo(
+    () => createPieLabelRenderer(geographicExposureChart.slices),
+    [geographicExposureChart.slices],
+  );
   const universeByLabel = useMemo(
     () =>
       instruments.reduce<Record<string, string>>((acc, instrument) => {
@@ -368,6 +417,42 @@ export function Portfolio() {
 
     return () => clearTimeout(timer);
   }, [invested, isInvestedLoaded]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadGeographicExposure = async () => {
+      if (investedEtfPositions.length === 0) {
+        setGeographicExposure(null);
+        setGeographicExposureError(null);
+        setGeographicExposureLoading(false);
+        return;
+      }
+
+      try {
+        setGeographicExposureLoading(true);
+        setGeographicExposureError(null);
+
+        const response = await portfolioApi.getGeographicExposure({ positions: investedEtfPositions });
+        if (isCancelled) return;
+        setGeographicExposure(response);
+      } catch (err) {
+        if (isCancelled) return;
+        setGeographicExposure(null);
+        setGeographicExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione geografica');
+      } finally {
+        if (!isCancelled) {
+          setGeographicExposureLoading(false);
+        }
+      }
+    };
+
+    void loadGeographicExposure();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [investedEtfPositions]);
 
   const firstAssetClassId = assetClasses[0]?.id ?? '';
   const firstInstrument = instruments[0] ?? null;
@@ -626,59 +711,124 @@ export function Portfolio() {
   return (
     <div className="sm:ml-60 space-y-4">
       <div className="card !p-3">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div className="w-full lg:w-[420px] h-[220px] relative shrink-0">
-            {investedAssetClassChart.slices.length === 0 ? (
-              <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                Nessun dato disponibile per il grafico.
-              </div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
-                    <Pie
-                      data={investedAssetClassChart.slices}
-                      dataKey="value"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={46}
-                      outerRadius={62}
-                      minAngle={2}
-                      paddingAngle={1}
-                      startAngle={90}
-                      endAngle={-270}
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                      labelLine={false}
-                      label={renderInvestedPieLabel}
-                    >
-                      {investedAssetClassChart.slices.map((slice) => (
-                        <Cell key={slice.key} fill={slice.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload || payload.length === 0) return null;
-                        const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
-                        if (!point) return null;
-
-                        return (
-                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                            <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                            <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
-                            <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
-                          </div>
-                        );
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                  <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(investedAssetClassChart.total)}</p>
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="w-full xl:w-[760px] shrink-0 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="h-[220px] relative">
+              {investedAssetClassChart.slices.length === 0 ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                  Nessun dato disponibile per il grafico.
                 </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                      <Pie
+                        data={investedAssetClassChart.slices}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={46}
+                        outerRadius={62}
+                        minAngle={2}
+                        paddingAngle={1}
+                        startAngle={90}
+                        endAngle={-270}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        labelLine={false}
+                        label={renderInvestedPieLabel}
+                      >
+                        {investedAssetClassChart.slices.map((slice) => (
+                          <Cell key={slice.key} fill={slice.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
+                          if (!point) return null;
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                            </div>
+                          );
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                    <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(investedAssetClassChart.total)}</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="h-[220px] relative">
+              {geographicExposureLoading ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Caricamento esposizione geografica...
+                </div>
+              ) : geographicExposureError ? (
+                <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
+                  {geographicExposureError}
+                </div>
+              ) : geographicExposureChart.slices.length === 0 ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                  Nessun dato geografico disponibile.
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                      <Pie
+                        data={geographicExposureChart.slices}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={46}
+                        outerRadius={62}
+                        minAngle={2}
+                        paddingAngle={1}
+                        startAngle={90}
+                        endAngle={-270}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        labelLine={false}
+                        label={renderGeographicPieLabel}
+                      >
+                        {geographicExposureChart.slices.map((slice) => (
+                          <Cell key={slice.key} fill={slice.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
+                          if (!point) return null;
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                            </div>
+                          );
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                    <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">{formatCurrency(geographicExposureChart.total)}</p>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="min-w-0">
@@ -696,6 +846,20 @@ export function Portfolio() {
                 </div>
               ))}
             </div>
+            {geographicExposureChart.slices.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {geographicExposureChart.slices.slice(0, 6).map((slice) => (
+                  <div
+                    key={`geo-${slice.key}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
+                  >
+                    <span className="text-[10px] font-semibold text-slate-700">{slice.label}</span>
+                    <span className="text-[10px] text-slate-500">{slice.percentage.toFixed(1)}%</span>
+                    <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(slice.value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

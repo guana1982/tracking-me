@@ -4,6 +4,7 @@ import {
   createPortfolioAssetClassSchema,
   createPortfolioInstrumentSchema,
   portfolioCompareRequestSchema,
+  portfolioGeographicExposureRequestSchema,
   portfolioHistoryQuerySchema,
   updatePortfolioAssetClassSchema,
   updatePortfolioInstrumentSchema,
@@ -13,6 +14,7 @@ import type {
   CreatePortfolioAssetClassDTO,
   CreatePortfolioInstrumentDTO,
   PortfolioCompareRequestDTO,
+  PortfolioGeographicExposureRequestDTO,
   PortfolioHistoryHorizonDTO,
   UpdatePortfolioAssetClassDTO,
   UpdatePortfolioInstrumentDTO,
@@ -251,6 +253,31 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const parsed = portfolioCompareRequestSchema.parse(request.body);
       const data = await portfolioService.comparePortfolios(parsed);
+      return { success: true, data };
+    },
+  });
+
+  fastify.post<{ Body: PortfolioGeographicExposureRequestDTO }>('/geographic-exposure', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Compute aggregated geographic exposure by country for invested ETF positions',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = portfolioGeographicExposureRequestSchema.parse(request.body);
+      const data = await portfolioService.getGeographicExposure(parsed);
       return { success: true, data };
     },
   });

@@ -430,6 +430,27 @@ export interface UpdatePortfolioInvestedStateDTO {
   positions: PortfolioInvestedPositionDTO[];
 }
 
+export interface PortfolioGeographicExposureInputPositionDTO {
+  isin: string;
+  amount: number;
+}
+
+export interface PortfolioGeographicExposureRequestDTO {
+  positions: PortfolioGeographicExposureInputPositionDTO[];
+}
+
+export interface PortfolioGeographicExposureCountryDTO {
+  country: string;
+  amount: number;
+  percentage: number;
+}
+
+export interface PortfolioGeographicExposureResponseDTO {
+  generatedAt: string;
+  totalAmount: number;
+  countries: PortfolioGeographicExposureCountryDTO[];
+}
+
 export interface PortfolioAssetClassDTO {
   id: string;
   name: string;

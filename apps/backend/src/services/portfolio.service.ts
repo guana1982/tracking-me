@@ -5,6 +5,8 @@ import type {
   PortfolioCompareResponseDTO,
   PortfolioComparisonResultDTO,
   PortfolioAssetClassDTO,
+  PortfolioGeographicExposureRequestDTO,
+  PortfolioGeographicExposureResponseDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
   PortfolioHistoryResponseDTO,
@@ -51,6 +53,16 @@ type JustEtfOverviewPayload = {
   data?: JustEtfOverviewItem[];
 };
 
+type JustEtfCountryAllocation = {
+  country: string;
+  percentage: number;
+};
+
+type GeographicExposureCacheEntry = {
+  expiresAt: number;
+  countries: JustEtfCountryAllocation[];
+};
+
 type InvestedPositionJson = {
   symbol?: unknown;
   amount?: unknown;
@@ -65,6 +77,8 @@ type DefaultInstrumentSeed = {
 
 const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
 const JUSTETF_OVERVIEW_URL = 'https://www.justetf.com/en/search-api/etfs';
+const JUSTETF_PROFILE_URL = 'https://www.justetf.com/en/etf-profile.html';
+const JUSTETF_COUNTRIES_LOAD_MORE_PATH = '0-1.0-holdingsSection-countries-loadMoreCountries';
 const JUSTETF_OVERVIEW_STRATEGIES = ['epg-longOnly', 'epg-activeEtfs', 'epg-shortAndLeveraged'] as const;
 const JUSTETF_CHART_DEFAULT_PARAMS = {
   locale: 'en',
@@ -140,6 +154,7 @@ const DEFAULT_INSTRUMENT_SEEDS: DefaultInstrumentSeed[] = [
 export class PortfolioService {
   private cache = new Map<string, CacheEntry>();
   private inFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
+  private geographicExposureCache = new Map<string, GeographicExposureCacheEntry>();
 
   async getHistory(
     symbols: string[],
@@ -274,6 +289,75 @@ export class PortfolioService {
       ranking,
       correlationBetweenPortfolios,
       scatter,
+    };
+  }
+
+  async getGeographicExposure(
+    input: PortfolioGeographicExposureRequestDTO
+  ): Promise<PortfolioGeographicExposureResponseDTO> {
+    const positionsByIsin = new Map<string, number>();
+    input.positions.forEach((position) => {
+      const isin = position.isin.trim().toUpperCase();
+      const amount = Number(position.amount);
+      if (!ISIN_REGEX.test(isin) || !Number.isFinite(amount) || amount <= 0) return;
+      positionsByIsin.set(isin, (positionsByIsin.get(isin) ?? 0) + amount);
+    });
+
+    if (positionsByIsin.size === 0) {
+      throw new AppError('At least one valid ETF position is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const totalAmount = Array.from(positionsByIsin.values()).reduce((sum, value) => sum + value, 0);
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      throw new AppError('Invalid total amount for geographic exposure', 400, 'VALIDATION_ERROR');
+    }
+
+    const countryRatioByName = new Map<string, number>();
+
+    for (const [isin, amount] of positionsByIsin.entries()) {
+      const countries = await this.fetchCountryAllocationsByIsin(isin);
+      if (countries.length === 0) continue;
+
+      const etfPortfolioWeight = amount / totalAmount;
+      let coveredRatio = 0;
+
+      countries.forEach((country) => {
+        const ratio = this.normalizeCountryRatio(country.percentage);
+        if (ratio <= 0) return;
+        coveredRatio += ratio;
+        countryRatioByName.set(country.country, (countryRatioByName.get(country.country) ?? 0) + ratio * etfPortfolioWeight);
+      });
+
+      if (coveredRatio < 1) {
+        countryRatioByName.set('Altro', (countryRatioByName.get('Altro') ?? 0) + (1 - coveredRatio) * etfPortfolioWeight);
+      }
+    }
+
+    if (countryRatioByName.size === 0) {
+      throw new AppError('Unable to resolve country allocations from justETF', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const ratioTotal = Array.from(countryRatioByName.values()).reduce((sum, value) => sum + value, 0);
+    if (ratioTotal < 1) {
+      countryRatioByName.set('Altro', (countryRatioByName.get('Altro') ?? 0) + (1 - ratioTotal));
+    }
+
+    const countries = Array.from(countryRatioByName.entries())
+      .map(([country, ratio]) => {
+        const safeRatio = Math.max(0, ratio);
+        return {
+          country,
+          percentage: this.round6(safeRatio),
+          amount: this.roundToCents(safeRatio * totalAmount),
+        };
+      })
+      .filter((row) => row.percentage > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      totalAmount: this.roundToCents(totalAmount),
+      countries,
     };
   }
 
@@ -929,6 +1013,166 @@ export class PortfolioService {
     }
 
     return (await response.json()) as JustEtfOverviewPayload;
+  }
+
+  private async fetchCountryAllocationsByIsin(isin: string): Promise<JustEtfCountryAllocation[]> {
+    const cached = this.geographicExposureCache.get(isin);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.countries;
+    }
+
+    let profileHtml = '';
+    let cookieHeader = '';
+
+    try {
+      const profile = await this.fetchProfileHtml(isin);
+      profileHtml = profile.html;
+      cookieHeader = profile.cookieHeader;
+    } catch {
+      // If profile fetch fails we still try to return from cache or empty data.
+    }
+
+    const baseCountries = this.parseCountryAllocationsFromMarkup(profileHtml);
+    const expandedMarkup = await this.fetchLoadMoreCountriesMarkup(isin, cookieHeader);
+    const expandedCountries = this.parseCountryAllocationsFromMarkup(expandedMarkup);
+
+    const best = this.pickBestCountryAllocation(baseCountries, expandedCountries);
+
+    this.geographicExposureCache.set(isin, {
+      countries: best,
+      expiresAt: Date.now() + this.cacheTtlMs,
+    });
+
+    return best;
+  }
+
+  private async fetchProfileHtml(isin: string): Promise<{ html: string; cookieHeader: string }> {
+    const profileUrl = `${JUSTETF_PROFILE_URL}?isin=${encodeURIComponent(isin)}`;
+    const response = await fetch(profileUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en',
+        'User-Agent': this.userAgent,
+      },
+    });
+
+    if (!response.ok) {
+      throw new AppError(`justETF profile provider error (${response.status})`, 502, 'PROVIDER_ERROR');
+    }
+
+    const html = await response.text();
+    const cookieHeader = response.headers.get('set-cookie') ?? '';
+    return { html, cookieHeader };
+  }
+
+  private async fetchLoadMoreCountriesMarkup(isin: string, cookieHeader: string): Promise<string> {
+    const requestUrl = `${JUSTETF_PROFILE_URL}?${JUSTETF_COUNTRIES_LOAD_MORE_PATH}&isin=${encodeURIComponent(isin)}&_wicket=1`;
+    const baseUrl = `en/etf-profile.html?isin=${isin}`;
+
+    const headers: Record<string, string> = {
+      Accept: 'text/xml; charset=UTF-8',
+      'Accept-Language': 'en',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Referer: `${JUSTETF_PROFILE_URL}?isin=${isin}`,
+      'User-Agent': this.userAgent,
+      'Wicket-Ajax': 'true',
+      'Wicket-Ajax-BaseURL': baseUrl,
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    const cleanCookie = this.toCookieHeader(cookieHeader);
+    if (cleanCookie) {
+      headers.Cookie = cleanCookie;
+    }
+
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers,
+      });
+      if (!response.ok) return '';
+      return await response.text();
+    } catch {
+      return '';
+    }
+  }
+
+  private pickBestCountryAllocation(
+    baseCountries: JustEtfCountryAllocation[],
+    expandedCountries: JustEtfCountryAllocation[],
+  ): JustEtfCountryAllocation[] {
+    if (expandedCountries.length === 0) return baseCountries;
+    if (baseCountries.length === 0) return expandedCountries;
+
+    const baseScore = baseCountries.reduce((sum, row) => sum + this.normalizeCountryRatio(row.percentage), 0);
+    const expandedScore = expandedCountries.reduce((sum, row) => sum + this.normalizeCountryRatio(row.percentage), 0);
+
+    return expandedScore >= baseScore ? expandedCountries : baseCountries;
+  }
+
+  private parseCountryAllocationsFromMarkup(markup: string): JustEtfCountryAllocation[] {
+    if (!markup) return [];
+
+    const byCountry = new Map<string, number>();
+    const rowRegex = /<tr[^>]*data-testid="[^"]*countries[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+
+    let rowMatch: RegExpExecArray | null = rowRegex.exec(markup);
+    while (rowMatch) {
+      const rowHtml = rowMatch[1];
+      const nameMatch = /data-testid="[^"]*countries_value_name"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+      const percentageMatch = /data-testid="[^"]*countries_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+
+      const country = this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim();
+      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
+      const percentage = Number(
+        percentageText
+          .replace('%', '')
+          .replace(',', '.')
+          .replace(/[^\d.-]/g, '')
+      );
+
+      if (country && Number.isFinite(percentage) && percentage > 0) {
+        byCountry.set(country, (byCountry.get(country) ?? 0) + percentage);
+      }
+
+      rowMatch = rowRegex.exec(markup);
+    }
+
+    return Array.from(byCountry.entries())
+      .map(([country, percentage]) => ({ country, percentage }))
+      .sort((a, b) => b.percentage - a.percentage);
+  }
+
+  private stripHtmlTags(value: string): string {
+    return value.replace(/<[^>]*>/g, ' ');
+  }
+
+  private decodeHtmlEntities(value: string): string {
+    return value
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private toCookieHeader(rawCookieHeader: string): string {
+    if (!rawCookieHeader) return '';
+    return rawCookieHeader
+      .split(',')
+      .flatMap((chunk) => chunk.split(';'))
+      .map((token) => token.trim())
+      .filter((token) => token.includes('=') && !token.toLowerCase().startsWith('path=') && !token.toLowerCase().startsWith('expires=') && !token.toLowerCase().startsWith('max-age=') && !token.toLowerCase().startsWith('domain=') && !token.toLowerCase().startsWith('secure') && !token.toLowerCase().startsWith('httponly') && !token.toLowerCase().startsWith('samesite='))
+      .join('; ');
+  }
+
+  private normalizeCountryRatio(percentage: number): number {
+    if (!Number.isFinite(percentage) || percentage <= 0) return 0;
+    return percentage > 1 ? percentage / 100 : percentage;
   }
 
   private async getSymbolHistory(
