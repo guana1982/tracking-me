@@ -249,6 +249,8 @@ export function Portfolio() {
   const [editingInvestedSymbol, setEditingInvestedSymbol] = useState<string | null>(null);
   const [investedDraftError, setInvestedDraftError] = useState<string | null>(null);
   const [savingInvestedDraft, setSavingInvestedDraft] = useState(false);
+  const [instrumentModalMode, setInstrumentModalMode] = useState<'invested' | 'portfolio'>('invested');
+  const [portfolioDraftTargetRowId, setPortfolioDraftTargetRowId] = useState<string | null>(null);
   const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false);
   const [portfolioDraft, setPortfolioDraft] = useState<StudyPortfolio | null>(null);
   const [editingPortfolioId, setEditingPortfolioId] = useState<string | null>(null);
@@ -493,8 +495,11 @@ export function Portfolio() {
 
   const firstAssetClassId = assetClasses[0]?.id ?? '';
   const firstInstrument = instruments[0] ?? null;
+  const isInstrumentCatalogMode = instrumentModalMode === 'portfolio';
 
   const openCreateInvestedModal = () => {
+    setInstrumentModalMode('invested');
+    setPortfolioDraftTargetRowId(null);
     setEditingInvestedSymbol(null);
     setInvestedDraftError(null);
     setInvestedDraft({
@@ -504,6 +509,24 @@ export function Portfolio() {
       name: firstInstrument?.name ?? '',
       isin: firstInstrument?.isin ?? '',
       assetClassId: firstInstrument?.assetClassId ?? firstAssetClassId,
+      newAssetClassName: '',
+      renameAssetClassName: '',
+    });
+    setIsInvestedModalOpen(true);
+  };
+
+  const openCreateInstrumentForPortfolioDraft = (rowId: string) => {
+    setInstrumentModalMode('portfolio');
+    setPortfolioDraftTargetRowId(rowId);
+    setEditingInvestedSymbol(null);
+    setInvestedDraftError(null);
+    setInvestedDraft({
+      amount: '1000',
+      instrumentId: null,
+      symbol: '',
+      name: '',
+      isin: '',
+      assetClassId: firstAssetClassId,
       newAssetClassName: '',
       renameAssetClassName: '',
     });
@@ -533,6 +556,8 @@ export function Portfolio() {
     setEditingInvestedSymbol(null);
     setInvestedDraftError(null);
     setSavingInvestedDraft(false);
+    setInstrumentModalMode('invested');
+    setPortfolioDraftTargetRowId(null);
   };
 
   const onDraftInstrumentSelect = (instrumentId: string) => {
@@ -562,8 +587,9 @@ export function Portfolio() {
 
   const saveInvestedFromModal = async () => {
     if (!investedDraft) return;
+    const isCatalogMode = instrumentModalMode === 'portfolio';
     const amount = Number(investedDraft.amount.replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!isCatalogMode && (!Number.isFinite(amount) || amount <= 0)) {
       setInvestedDraftError('Inserisci un importo valido maggiore di 0');
       return;
     }
@@ -626,6 +652,25 @@ export function Portfolio() {
           : [...prev, savedInstrument];
         return next.sort((a, b) => a.symbol.localeCompare(b.symbol));
       });
+
+      if (isCatalogMode) {
+        if (portfolioDraftTargetRowId) {
+          setPortfolioDraft((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  rows: prev.rows.map((row) =>
+                    row.id === portfolioDraftTargetRowId
+                      ? { ...row, label: savedInstrument.symbol }
+                      : row
+                  ),
+                }
+              : prev,
+          );
+        }
+        closeInvestedModal();
+        return;
+      }
 
       setInvested((prev) => {
         const savedSymbol = savedInstrument.symbol.toUpperCase();
@@ -1032,13 +1077,19 @@ export function Portfolio() {
       </section>
 
       {isInvestedModalOpen && investedDraft && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeInvestedModal} />
           <div className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <div>
-                <h4 className="text-lg font-semibold text-slate-900">{editingInvestedSymbol ? 'Modifica strumento' : 'Nuovo strumento'}</h4>
-                <p className="text-xs text-slate-500 mt-0.5">Puoi usare uno strumento censito o crearne/modificarne uno nuovo.</p>
+                <h4 className="text-lg font-semibold text-slate-900">
+                  {editingInvestedSymbol && !isInstrumentCatalogMode ? 'Modifica strumento' : 'Nuovo strumento'}
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {isInstrumentCatalogMode
+                    ? 'Puoi censire un nuovo strumento (ISIN) da usare nel portafoglio di studio.'
+                    : 'Puoi usare uno strumento censito o crearne/modificarne uno nuovo.'}
+                </p>
               </div>
               <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeInvestedModal}>
                 <X className="w-5 h-5" />
@@ -1127,15 +1178,17 @@ export function Portfolio() {
                 />
               </div>
 
-              <div>
-                <label className="label">Importo</label>
-                <input
-                  className="input"
-                  value={investedDraft.amount}
-                  onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, amount: e.target.value } : prev))}
-                  type="number"
-                />
-              </div>
+              {!isInstrumentCatalogMode && (
+                <div>
+                  <label className="label">Importo</label>
+                  <input
+                    className="input"
+                    value={investedDraft.amount}
+                    onChange={(e) => setInvestedDraft((prev) => (prev ? { ...prev, amount: e.target.value } : prev))}
+                    type="number"
+                  />
+                </div>
+              )}
 
               {investedDraftError && (
                 <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{investedDraftError}</div>
@@ -1148,7 +1201,7 @@ export function Portfolio() {
               </button>
               <button type="button" className="btn btn-primary" onClick={saveInvestedFromModal} disabled={savingInvestedDraft}>
                 {savingInvestedDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                Conferma
+                {isInstrumentCatalogMode ? 'Crea strumento' : 'Conferma'}
               </button>
             </div>
           </div>
@@ -1463,16 +1516,19 @@ export function Portfolio() {
                                     className="input"
                                     value={row.label}
                                     onChange={(e) =>
-                                      setPortfolioDraft((prev) =>
-                                        prev
-                                          ? {
-                                              ...prev,
-                                              rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)),
-                                            }
-                                          : prev,
-                                      )
+                                      e.target.value === '__new__'
+                                        ? openCreateInstrumentForPortfolioDraft(row.id)
+                                        : setPortfolioDraft((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)),
+                                                }
+                                              : prev,
+                                          )
                                     }
                                   >
+                                    <option value="__new__">+ Nuovo strumento</option>
                                     {instruments.map((item) => (
                                       <option key={item.id} value={item.symbol}>
                                         {item.symbol} - {item.name}
