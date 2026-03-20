@@ -127,7 +127,7 @@ export function InvestedPortfolioPerformanceChart({
         <div>
           <p className="text-sm font-semibold text-slate-900">{title}</p>
           <p className="text-xs text-slate-500">
-            Curva storica aggregata a pesi iniziali fissi, senza ribilanciamento.
+            Curva aggregata a pesi iniziali fissi, ribasata a 0% alla data iniziale.
           </p>
         </div>
         <select
@@ -203,4 +203,3 @@ export function InvestedPortfolioPerformanceChart({
     </div>
   );
 }
-

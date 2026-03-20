@@ -577,7 +577,7 @@ export class PortfolioService {
       );
     }
 
-    const points = sortedCommonDates.map((date) => {
+    const rawPoints = sortedCommonDates.map((date) => {
       let aggregated = 0;
       seriesByEtf.forEach((item) => {
         const value = item.valueByDate.get(date);
@@ -589,9 +589,21 @@ export class PortfolioService {
 
       return {
         date,
-        value: this.round6(aggregated),
+        value: aggregated,
       };
     });
+
+    const baseLevel = 1 + rawPoints[0].value;
+    if (!Number.isFinite(baseLevel) || baseLevel <= 0) {
+      throw new AppError('Invalid base level for rebasing static portfolio series', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    // Rebase portfolio curve to 0% on the first common date so the final return
+    // directly represents the gain/loss over the displayed interval.
+    const points = rawPoints.map((point) => ({
+      date: point.date,
+      value: this.round6((1 + point.value) / baseLevel - 1),
+    }));
 
     const startDate = points[0].date;
     const endDate = points[points.length - 1].date;
