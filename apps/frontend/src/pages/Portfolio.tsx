@@ -21,6 +21,7 @@ import {
   InvestedPortfolioPerformanceChart,
   PORTFOLIO_PERFORMANCE_METRIC_OPTIONS,
 } from '../components/InvestedPortfolioPerformanceChart';
+import { StudyPortfoliosOverlayPerformanceChart } from '../components/StudyPortfoliosOverlayPerformanceChart';
 import type {
   PortfolioAssetClassDTO,
   PortfolioCompareRequestDTO,
@@ -263,6 +264,7 @@ export function Portfolio() {
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isStudyPerformanceModalOpen, setIsStudyPerformanceModalOpen] = useState(false);
+  const [isStudyPerformanceOverlayModalOpen, setIsStudyPerformanceOverlayModalOpen] = useState(false);
   const [studyPerformanceMetric, setStudyPerformanceMetric] = useState<PortfolioStaticPerformanceMetricDTO>('relative');
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
   const [investedDraft, setInvestedDraft] = useState<InvestedDraft | null>(null);
@@ -978,6 +980,16 @@ export function Portfolio() {
     if (count <= 4) return 'grid grid-cols-1 md:grid-cols-2 gap-3';
     return 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
   }, [studyPerformanceCards.length]);
+
+  const hasStudyPerformanceOverlayData = useMemo(
+    () => studyPerformanceCards.some((card) => !card.error && card.positions.length > 0),
+    [studyPerformanceCards],
+  );
+
+  const closeStudyPerformanceModal = () => {
+    setIsStudyPerformanceOverlayModalOpen(false);
+    setIsStudyPerformanceModalOpen(false);
+  };
 
   const closeStudyGeographicModal = () => {
     setIsStudyGeographicModalOpen(false);
@@ -1834,7 +1846,7 @@ export function Portfolio() {
 
       {isStudyPerformanceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIsStudyPerformanceModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={closeStudyPerformanceModal} />
           <div className="relative w-full sm:max-w-7xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <div>
@@ -1846,7 +1858,7 @@ export function Portfolio() {
               <button
                 type="button"
                 className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                onClick={() => setIsStudyPerformanceModalOpen(false)}
+                onClick={closeStudyPerformanceModal}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1858,6 +1870,14 @@ export function Portfolio() {
                   Portafogli: {studyPerformanceCards.length}. Layout automatico: max 3 grafici per riga.
                 </p>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-xs"
+                    onClick={() => setIsStudyPerformanceOverlayModalOpen(true)}
+                    disabled={!hasStudyPerformanceOverlayData}
+                  >
+                    Curve sovrapposte
+                  </button>
                   <label className="text-xs text-slate-500">Metrica</label>
                   <select
                     className="input text-xs min-w-[220px]"
@@ -1902,8 +1922,51 @@ export function Portfolio() {
             </div>
 
             <div className="p-4 border-t border-slate-200 flex items-center justify-end">
-              <button type="button" className="btn btn-primary" onClick={() => setIsStudyPerformanceModalOpen(false)}>
+              <button type="button" className="btn btn-primary" onClick={closeStudyPerformanceModal}>
                 Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isStudyPerformanceModalOpen && isStudyPerformanceOverlayModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setIsStudyPerformanceOverlayModalOpen(false)} />
+          <div className="relative w-full sm:max-w-7xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[94vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Curve Sovrapposte Portafogli</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Unico grafico con tutte le curve in overlay, colore dedicato per portafoglio.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+                onClick={() => setIsStudyPerformanceOverlayModalOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto">
+              <StudyPortfoliosOverlayPerformanceChart
+                portfolios={studyPerformanceCards}
+                metric={studyPerformanceMetric}
+                showMetricSelector={false}
+                title="Andamento storico sovrapposto"
+                height={480}
+              />
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsStudyPerformanceOverlayModalOpen(false)}
+              >
+                Chiudi overlay
               </button>
             </div>
           </div>
