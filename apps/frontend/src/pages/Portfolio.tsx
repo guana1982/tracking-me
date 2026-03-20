@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Cell,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   Pie,
@@ -1666,7 +1667,30 @@ export function Portfolio() {
                   <div className="rounded border border-slate-200 p-3 h-72">
                     <p className="text-sm font-semibold mb-2">Scatter rischio/rendimento</p>
                     <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart><CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" /><XAxis type="number" dataKey="annualizedVolatility" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><YAxis type="number" dataKey="annualizedReturn" tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`} /><Tooltip /><Scatter data={result.scatter} fill="#0ea5e9" /></ScatterChart>
+                      <ScatterChart margin={{ top: 18, right: 12, bottom: 8, left: 8 }}>
+                        <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                        <XAxis
+                          type="number"
+                          dataKey="annualizedVolatility"
+                          tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`}
+                        />
+                        <YAxis
+                          type="number"
+                          dataKey="annualizedReturn"
+                          tickFormatter={(v) => `${(Number(v) * 100).toFixed(1)}%`}
+                        />
+                        <Tooltip />
+                        <Scatter data={result.scatter} fill="#0ea5e9">
+                          <LabelList
+                            dataKey="name"
+                            position="top"
+                            offset={8}
+                            fill="#334155"
+                            fontSize={11}
+                            fontWeight={600}
+                          />
+                        </Scatter>
+                      </ScatterChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
