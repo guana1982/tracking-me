@@ -1080,7 +1080,7 @@ export function Portfolio() {
   };
 
   return (
-    <div className="sm:ml-60 space-y-4">
+    <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 space-y-3 xl:space-y-4">
       <div className="card !p-3">
         <div className="space-y-3">
           <div className="min-w-0">

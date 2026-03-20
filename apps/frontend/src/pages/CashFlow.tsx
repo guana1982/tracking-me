@@ -666,7 +666,7 @@ export function CashFlow() {
 
   if (isLoadingChecks || isLoadingColumns || isLoadingSettings) {
     return (
-      <div className="sm:ml-60 flex items-center justify-center h-64">
+      <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
       </div>
     );
@@ -674,14 +674,14 @@ export function CashFlow() {
 
   if (isErrorChecks || isErrorColumns) {
     return (
-      <div className="sm:ml-60 flex items-center justify-center h-64">
+      <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 flex items-center justify-center h-64">
         <p className="text-red-600">Errore nel caricamento dei dati CashFlow.</p>
       </div>
     );
   }
 
   return (
-    <div className="sm:ml-60 space-y-2 md:h-full md:flex md:flex-col md:space-y-2">
+    <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 space-y-2 md:h-full md:flex md:flex-col md:space-y-2">
       <div className="card !p-3 flex-shrink-0 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Cash Flow Patrimonio</h2>

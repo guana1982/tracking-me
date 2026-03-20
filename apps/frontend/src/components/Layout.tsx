@@ -45,15 +45,15 @@ export function Layout() {
     <div className="min-h-screen bg-slate-50 md:h-screen md:overflow-hidden md:flex md:flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="px-4 sm:px-6 lg:px-8 sm:ml-60">
-          <div className="flex items-center justify-between h-16">
+        <div className="px-3 sm:px-4 lg:px-6 xl:px-8 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
+          <div className="flex items-center justify-between h-14 xl:h-16">
             {/* Logo, Budget Rule & Period Selector */}
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">
+            <div className="flex items-center gap-3 xl:gap-4">
+              <h1 className="text-lg xl:text-xl font-bold bg-gradient-to-r from-sky-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">
                 {appTitle}
               </h1>
               {showBudgetContext && (
-                <span className="text-xl font-bold text-slate-900">
+                <span className="text-lg xl:text-xl font-bold text-slate-900">
                   {budgetRule.needsPct}/{budgetRule.wantsPct}/{budgetRule.savingsPct}
                 </span>
               )}
@@ -63,7 +63,7 @@ export function Layout() {
                 <div className="relative">
                   <button
                     onClick={() => setIsPeriodSelectorOpen(!isPeriodSelectorOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                    className="flex items-center gap-2 px-2.5 xl:px-3 py-1.5 text-xs xl:text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
                   >
                     <span className="capitalize">{formatPeriodKey(periodKey)}</span>
                     <ChevronDown className="w-4 h-4" />
@@ -114,7 +114,7 @@ export function Layout() {
               )}
 
               {/* Today's Date */}
-              <div className="text-sm text-slate-500">
+              <div className="text-xs xl:text-sm text-slate-500">
                 <span className="hidden sm:inline">Oggi: </span>
                 <span className="font-medium text-slate-700">
                   {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -122,12 +122,12 @@ export function Layout() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 xl:gap-3">
               {/* Quick Add Button (Desktop) */}
               {showBudgetContext && (
                 <button
                   onClick={() => setIsQuickAddOpen(true)}
-                  className="hidden sm:flex items-center gap-2 btn btn-primary"
+                  className="hidden sm:flex items-center gap-2 btn btn-primary text-xs xl:text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Aggiungi spesa</span>
@@ -144,10 +144,10 @@ export function Layout() {
                     <img
                       src={user.picture}
                       alt={user.name || 'User'}
-                      className="w-8 h-8 rounded-full"
+                      className="w-7 h-7 xl:w-8 xl:h-8 rounded-full"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                    <div className="w-7 h-7 xl:w-8 xl:h-8 rounded-full bg-slate-200 flex items-center justify-center">
                       <User className="w-4 h-4 text-slate-500" />
                     </div>
                   )}
@@ -186,7 +186,7 @@ export function Layout() {
       </header>
 
       {/* Main Content */}
-      <main className="px-4 sm:px-6 lg:px-8 py-6 pb-24 sm:pb-6 md:flex-1 md:overflow-auto">
+      <main className="px-3 sm:px-4 lg:px-6 xl:px-8 py-4 lg:py-5 pb-24 sm:pb-6 md:flex-1 md:overflow-auto">
         <Outlet />
       </main>
 
@@ -212,19 +212,19 @@ export function Layout() {
       </nav>
 
       {/* Desktop Navigation */}
-      <nav className="hidden sm:flex fixed left-0 top-16 bottom-0 w-60 flex-col bg-slate-50 border-r border-slate-200 px-3 py-4">
-        <div className="px-3 pb-4 border-b border-slate-200/80">
-          <p className="text-[28px] leading-none font-bold text-slate-900">Q</p>
-          <p className="mt-2 text-lg font-semibold text-slate-900 truncate">{user?.name || 'Utente'}</p>
+      <nav className="hidden sm:flex fixed left-0 top-14 xl:top-16 bottom-0 sm:w-44 md:w-48 lg:w-52 2xl:w-56 flex-col bg-slate-50 border-r border-slate-200 px-2.5 lg:px-3 py-3 lg:py-4">
+        <div className="px-2.5 lg:px-3 pb-3 lg:pb-4 border-b border-slate-200/80">
+          <p className="text-2xl lg:text-[26px] leading-none font-bold text-slate-900">Q</p>
+          <p className="mt-2 text-base lg:text-lg font-semibold text-slate-900 truncate">{user?.name || 'Utente'}</p>
         </div>
-        <div className="mt-4 flex-1 space-y-1.5">
+        <div className="mt-3 lg:mt-4 flex-1 space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                  'group flex items-center gap-2.5 rounded-xl px-2.5 lg:px-3 py-2 text-[13px] lg:text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-blue-50 text-blue-600 border border-blue-100'
                     : 'text-slate-500 hover:bg-white hover:text-slate-700'
@@ -233,7 +233,7 @@ export function Layout() {
             >
               {({ isActive }) => (
                 <>
-                  <item.icon className={cn('w-5 h-5', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600')} />
+                  <item.icon className={cn('w-4 h-4 lg:w-5 lg:h-5', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600')} />
                   <span className="truncate">{item.label}</span>
                 </>
               )}
