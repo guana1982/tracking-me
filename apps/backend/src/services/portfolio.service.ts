@@ -483,44 +483,67 @@ export class PortfolioService {
 
     type EtfSeries = {
       isin: string;
+      amount: number;
       weight: number;
       startDate: string;
       endDate: string;
       valueByDate: Map<string, number>;
     };
 
-    const seriesByEtf: EtfSeries[] = [];
+    const rawSeriesByEtf: Array<Omit<EtfSeries, 'weight'>> = [];
 
     for (const [isin, amount] of positionsByIsin.entries()) {
-      const monthlySeries = await this.getSymbolFullHistory(isin, valueMode);
-      if (monthlySeries.length < 2) {
-        throw new AppError(`Insufficient history for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+      try {
+        const monthlySeries = await this.getSymbolFullHistory(isin, valueMode);
+        if (monthlySeries.length < 2) {
+          throw new AppError(`Insufficient history for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+        }
+
+        const base = monthlySeries[0].close;
+        if (!Number.isFinite(base) || base <= 0) {
+          throw new AppError(`Invalid base value for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+        }
+
+        const valueByDate = new Map<string, number>();
+        monthlySeries.forEach((point) => {
+          if (!point.date || !Number.isFinite(point.close)) return;
+          valueByDate.set(point.date, (point.close / base) - 1);
+        });
+
+        if (valueByDate.size < 2) {
+          throw new AppError(`Insufficient valid points for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+        }
+
+        const orderedDates = Array.from(valueByDate.keys()).sort((a, b) => a.localeCompare(b));
+        rawSeriesByEtf.push({
+          isin,
+          amount,
+          startDate: orderedDates[0],
+          endDate: orderedDates[orderedDates.length - 1],
+          valueByDate,
+        });
+      } catch (error) {
+        if (error instanceof AppError && error.code === 'PROVIDER_SYMBOL_ERROR') {
+          // Ignore non-justETF instruments (e.g. bonds/BTP) for static ETF portfolio chart.
+          continue;
+        }
+        throw error;
       }
-
-      const base = monthlySeries[0].close;
-      if (!Number.isFinite(base) || base <= 0) {
-        throw new AppError(`Invalid base value for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
-      }
-
-      const valueByDate = new Map<string, number>();
-      monthlySeries.forEach((point) => {
-        if (!point.date || !Number.isFinite(point.close)) return;
-        valueByDate.set(point.date, (point.close / base) - 1);
-      });
-
-      if (valueByDate.size < 2) {
-        throw new AppError(`Insufficient valid points for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
-      }
-
-      const orderedDates = Array.from(valueByDate.keys()).sort((a, b) => a.localeCompare(b));
-      seriesByEtf.push({
-        isin,
-        weight: amount / totalAmount,
-        startDate: orderedDates[0],
-        endDate: orderedDates[orderedDates.length - 1],
-        valueByDate,
-      });
     }
+
+    if (rawSeriesByEtf.length === 0) {
+      throw new AppError('No justETF-compatible ETF positions available for historical chart', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const includedTotalAmount = rawSeriesByEtf.reduce((sum, item) => sum + item.amount, 0);
+    if (!Number.isFinite(includedTotalAmount) || includedTotalAmount <= 0) {
+      throw new AppError('Invalid total amount for supported ETF positions', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const seriesByEtf: EtfSeries[] = rawSeriesByEtf.map((item) => ({
+      ...item,
+      weight: item.amount / includedTotalAmount,
+    }));
 
     const commonStartDate = seriesByEtf
       .map((item) => item.startDate)
