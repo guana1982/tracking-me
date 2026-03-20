@@ -28,9 +28,25 @@ type InvestedPortfolioPerformanceChartProps = {
   showMetricSelector?: boolean;
 };
 
+type RangeKey = '1G' | '1M' | '3M' | '6M' | '1A' | '2A' | '3A' | '4A' | '5A' | '6A' | 'MAX';
+
 export const PORTFOLIO_PERFORMANCE_METRIC_OPTIONS: Array<{ value: PortfolioStaticPerformanceMetricDTO; label: string }> = [
   { value: 'relative', label: 'relative' },
   { value: 'relative_with_reinvested_dividends', label: 'relative_with_reinvested_dividends' },
+];
+
+const RANGE_OPTIONS: Array<{ key: RangeKey; label: string }> = [
+  { key: '1G', label: '1G' },
+  { key: '1M', label: '1M' },
+  { key: '3M', label: '3M' },
+  { key: '6M', label: '6M' },
+  { key: '1A', label: '1A' },
+  { key: '2A', label: '2A' },
+  { key: '3A', label: '3A' },
+  { key: '4A', label: '4A' },
+  { key: '5A', label: '5A' },
+  { key: '6A', label: '6A' },
+  { key: 'MAX', label: 'MAX' },
 ];
 
 function formatPercent(value: number, digits = 2): string {
@@ -45,6 +61,51 @@ function formatDateFull(date: string): string {
   return new Date(date).toLocaleDateString('it-IT');
 }
 
+function parseIsoDate(date: string): Date {
+  return new Date(`${date}T00:00:00Z`);
+}
+
+function getRangeStartDate(endDate: Date, range: RangeKey): Date | null {
+  if (range === 'MAX') return null;
+
+  const start = new Date(endDate.getTime());
+
+  switch (range) {
+    case '1G':
+      start.setUTCDate(start.getUTCDate() - 1);
+      return start;
+    case '1M':
+      start.setUTCMonth(start.getUTCMonth() - 1);
+      return start;
+    case '3M':
+      start.setUTCMonth(start.getUTCMonth() - 3);
+      return start;
+    case '6M':
+      start.setUTCMonth(start.getUTCMonth() - 6);
+      return start;
+    case '1A':
+      start.setUTCFullYear(start.getUTCFullYear() - 1);
+      return start;
+    case '2A':
+      start.setUTCFullYear(start.getUTCFullYear() - 2);
+      return start;
+    case '3A':
+      start.setUTCFullYear(start.getUTCFullYear() - 3);
+      return start;
+    case '4A':
+      start.setUTCFullYear(start.getUTCFullYear() - 4);
+      return start;
+    case '5A':
+      start.setUTCFullYear(start.getUTCFullYear() - 5);
+      return start;
+    case '6A':
+      start.setUTCFullYear(start.getUTCFullYear() - 6);
+      return start;
+    default:
+      return null;
+  }
+}
+
 export function InvestedPortfolioPerformanceChart({
   positions,
   metric = 'relative',
@@ -53,6 +114,7 @@ export function InvestedPortfolioPerformanceChart({
   showMetricSelector = true,
 }: InvestedPortfolioPerformanceChartProps) {
   const [selectedMetric, setSelectedMetric] = useState<PortfolioStaticPerformanceMetricDTO>(metric);
+  const [selectedRange, setSelectedRange] = useState<RangeKey>('MAX');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioStaticPerformanceResponseDTO | null>(null);
@@ -123,6 +185,75 @@ export function InvestedPortfolioPerformanceChart({
     [result?.points],
   );
 
+  const rangeDataMap = useMemo(() => {
+    const map = new Map<RangeKey, Array<{ date: string; dateLabel: string; value: number }>>();
+    if (chartData.length < 2) {
+      RANGE_OPTIONS.forEach((range) => map.set(range.key, []));
+      return map;
+    }
+
+    const endDate = parseIsoDate(chartData[chartData.length - 1].date);
+
+    RANGE_OPTIONS.forEach((range) => {
+      const startDate = getRangeStartDate(endDate, range.key);
+      const filtered = startDate
+        ? chartData.filter((point) => parseIsoDate(point.date).getTime() >= startDate.getTime())
+        : chartData;
+
+      if (filtered.length < 2) {
+        map.set(range.key, []);
+        return;
+      }
+
+      const baseLevel = 1 + filtered[0].value;
+      if (!Number.isFinite(baseLevel) || baseLevel <= 0) {
+        map.set(range.key, []);
+        return;
+      }
+
+      map.set(
+        range.key,
+        filtered.map((point) => ({
+          ...point,
+          value: ((1 + point.value) / baseLevel) - 1,
+        })),
+      );
+    });
+
+    return map;
+  }, [chartData]);
+
+  const availableRangeMap = useMemo(() => {
+    const availability: Record<RangeKey, boolean> = {
+      '1G': false,
+      '1M': false,
+      '3M': false,
+      '6M': false,
+      '1A': false,
+      '2A': false,
+      '3A': false,
+      '4A': false,
+      '5A': false,
+      '6A': false,
+      MAX: false,
+    };
+    RANGE_OPTIONS.forEach((range) => {
+      availability[range.key] = (rangeDataMap.get(range.key)?.length ?? 0) >= 2;
+    });
+    return availability;
+  }, [rangeDataMap]);
+
+  useEffect(() => {
+    if (availableRangeMap[selectedRange]) return;
+    const fallback = RANGE_OPTIONS.find((range) => availableRangeMap[range.key])?.key ?? 'MAX';
+    setSelectedRange(fallback);
+  }, [availableRangeMap, selectedRange]);
+
+  const displayedData = useMemo(() => rangeDataMap.get(selectedRange) ?? [], [rangeDataMap, selectedRange]);
+  const displayedStartDate = displayedData[0]?.date ?? null;
+  const displayedEndDate = displayedData[displayedData.length - 1]?.date ?? null;
+  const displayedFinalReturn = displayedData[displayedData.length - 1]?.value ?? null;
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -156,15 +287,15 @@ export function InvestedPortfolioPerformanceChart({
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
-      ) : chartData.length === 0 || !result ? (
+      ) : displayedData.length === 0 || !result ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-          Nessun dato storico disponibile.
+          Nessun dato storico disponibile per il periodo selezionato.
         </div>
       ) : (
         <>
           <div style={{ height }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 8, right: 10, bottom: 6, left: 6 }}>
+              <LineChart data={displayedData} margin={{ top: 8, right: 10, bottom: 6, left: 6 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                 <XAxis dataKey="dateLabel" minTickGap={28} />
                 <YAxis tickFormatter={(value) => formatPercent(Number(value), 1)} />
@@ -184,6 +315,31 @@ export function InvestedPortfolioPerformanceChart({
             </ResponsiveContainer>
           </div>
 
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {RANGE_OPTIONS.map((range) => {
+              const isActive = selectedRange === range.key;
+              const isAvailable = availableRangeMap[range.key];
+              return (
+                <button
+                  key={range.key}
+                  type="button"
+                  disabled={!isAvailable}
+                  title={isAvailable ? `Visualizza ${range.label}` : `Periodo ${range.label} non disponibile`}
+                  onClick={() => setSelectedRange(range.key)}
+                  className={`px-2.5 py-1.5 text-xs rounded border transition-colors ${
+                    isActive
+                      ? 'border-sky-500 bg-sky-500 text-white'
+                      : isAvailable
+                        ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  {range.label}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">
               <p className="text-slate-500">ETF</p>
@@ -191,15 +347,17 @@ export function InvestedPortfolioPerformanceChart({
             </div>
             <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">
               <p className="text-slate-500">Rendimento finale</p>
-              <p className="font-semibold text-slate-800">{formatPercent(result.finalReturn)}</p>
+              <p className="font-semibold text-slate-800">
+                {displayedFinalReturn === null ? 'N/A' : formatPercent(displayedFinalReturn)}
+              </p>
             </div>
             <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">
               <p className="text-slate-500">Inizio serie</p>
-              <p className="font-semibold text-slate-800">{formatDateFull(result.startDate)}</p>
+              <p className="font-semibold text-slate-800">{displayedStartDate ? formatDateFull(displayedStartDate) : 'N/A'}</p>
             </div>
             <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">
               <p className="text-slate-500">Fine serie</p>
-              <p className="font-semibold text-slate-800">{formatDateFull(result.endDate)}</p>
+              <p className="font-semibold text-slate-800">{displayedEndDate ? formatDateFull(displayedEndDate) : 'N/A'}</p>
             </div>
           </div>
         </>
