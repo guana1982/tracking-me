@@ -1018,208 +1018,218 @@ export function Portfolio() {
   return (
     <div className="sm:ml-60 space-y-4">
       <div className="card !p-3">
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="w-full xl:w-[760px] shrink-0 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="h-[220px] relative">
-              {investedAssetClassChart.slices.length === 0 ? (
-                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                  Nessun dato disponibile per il grafico.
-                </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
-                      <Pie
-                        data={investedAssetClassChart.slices}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={42}
-                        outerRadius={68}
-                        minAngle={2}
-                        paddingAngle={2}
-                        startAngle={90}
-                        endAngle={-270}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                        labelLine={false}
-                        label={renderInvestedPieLabel}
-                      >
-                        {investedAssetClassChart.slices.map((slice) => (
-                          <Cell key={slice.key} fill={slice.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
-                          if (!point) return null;
-
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
-                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                    <p className="text-sm font-bold text-slate-700">{formatCurrency(investedAssetClassChart.total)}</p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="h-[220px] relative">
-              {geographicExposureLoading ? (
-                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Caricamento esposizione geografica...
-                </div>
-              ) : geographicExposureError ? (
-                <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
-                  {geographicExposureError}
-                </div>
-              ) : geographicExposureChart.slices.length === 0 ? (
-                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                  Nessun dato geografico disponibile.
-                </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
-                      <Pie
-                        data={geographicExposureChart.slices}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={42}
-                        outerRadius={68}
-                        minAngle={2}
-                        paddingAngle={2}
-                        startAngle={90}
-                        endAngle={-270}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                        labelLine={false}
-                      >
-                        {geographicExposureChart.slices.map((slice) => (
-                          <Cell key={slice.key} fill={slice.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
-                          if (!point) return null;
-
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
-                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                    <p className="text-sm font-bold text-slate-700">{formatCurrency(geographicExposureChart.total)}</p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="h-[220px] relative">
-              {sectorExposureLoading ? (
-                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Caricamento esposizione settoriale...
-                </div>
-              ) : sectorExposureError ? (
-                <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
-                  {sectorExposureError}
-                </div>
-              ) : sectorExposureChart.slices.length === 0 ? (
-                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
-                  Nessun dato settoriale disponibile.
-                </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
-                      <Pie
-                        data={sectorExposureChart.slices}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={42}
-                        outerRadius={68}
-                        minAngle={2}
-                        paddingAngle={2}
-                        startAngle={90}
-                        endAngle={-270}
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                        labelLine={false}
-                      >
-                        {sectorExposureChart.slices.map((slice) => (
-                          <Cell key={slice.key} fill={slice.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
-                          if (!point) return null;
-
-                          return (
-                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
-                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
-                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                    <p className="text-sm font-bold text-slate-700">{formatCurrency(sectorExposureChart.total)}</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
+        <div className="space-y-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Portafoglio</h2>
             <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
-            {geographicExposureChart.slices.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsGeographicModalOpen(true)}
-                className="mt-2 inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
-              >
-                Dettaglio ripartizione geografica
-              </button>
-            )}
-            {sectorExposureChart.slices.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsSectorModalOpen(true)}
-                className="mt-2 ml-3 inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
-              >
-                Dettaglio ripartizione settoriale
-              </button>
-            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+            <div className="flex flex-col">
+              <div className="h-[220px] relative">
+                {investedAssetClassChart.slices.length === 0 ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    Nessun dato disponibile per il grafico.
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                        <Pie
+                          data={investedAssetClassChart.slices}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={68}
+                          minAngle={2}
+                          paddingAngle={2}
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          labelLine={false}
+                          label={renderInvestedPieLabel}
+                        >
+                          {investedAssetClassChart.slices.map((slice) => (
+                            <Cell key={slice.key} fill={slice.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
+                            if (!point) return null;
+
+                            return (
+                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                                <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                                <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                                <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                              </div>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-sm font-bold text-slate-700">{formatCurrency(investedAssetClassChart.total)}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <div className="h-[220px] relative">
+                {geographicExposureLoading ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Caricamento esposizione geografica...
+                  </div>
+                ) : geographicExposureError ? (
+                  <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
+                    {geographicExposureError}
+                  </div>
+                ) : geographicExposureChart.slices.length === 0 ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    Nessun dato geografico disponibile.
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                        <Pie
+                          data={geographicExposureChart.slices}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={68}
+                          minAngle={2}
+                          paddingAngle={2}
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          labelLine={false}
+                        >
+                          {geographicExposureChart.slices.map((slice) => (
+                            <Cell key={slice.key} fill={slice.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
+                            if (!point) return null;
+
+                            return (
+                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                                <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                                <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                                <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                              </div>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-sm font-bold text-slate-700">{formatCurrency(geographicExposureChart.total)}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="mt-2 min-h-5 flex justify-center">
+                {geographicExposureChart.slices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsGeographicModalOpen(true)}
+                    className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
+                  >
+                    Dettaglio ripartizione geografica
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <div className="h-[220px] relative">
+                {sectorExposureLoading ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Caricamento esposizione settoriale...
+                  </div>
+                ) : sectorExposureError ? (
+                  <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
+                    {sectorExposureError}
+                  </div>
+                ) : sectorExposureChart.slices.length === 0 ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    Nessun dato settoriale disponibile.
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                        <Pie
+                          data={sectorExposureChart.slices}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={68}
+                          minAngle={2}
+                          paddingAngle={2}
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          labelLine={false}
+                        >
+                          {sectorExposureChart.slices.map((slice) => (
+                            <Cell key={slice.key} fill={slice.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
+                            if (!point) return null;
+
+                            return (
+                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                                <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                                <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                                <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                              </div>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-sm font-bold text-slate-700">{formatCurrency(sectorExposureChart.total)}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="mt-2 min-h-5 flex justify-center">
+                {sectorExposureChart.slices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSectorModalOpen(true)}
+                    className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
+                  >
+                    Dettaglio ripartizione settoriale
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
