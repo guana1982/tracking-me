@@ -472,6 +472,33 @@ export interface PortfolioSectorExposureResponseDTO {
   sectors: PortfolioSectorExposureSectorDTO[];
 }
 
+export type PortfolioStaticPerformanceMetricDTO = 'relative' | 'relative_with_reinvested_dividends';
+
+export interface PortfolioStaticPerformancePositionDTO {
+  isin: string;
+  amount: number;
+}
+
+export interface PortfolioStaticPerformanceRequestDTO {
+  positions: PortfolioStaticPerformancePositionDTO[];
+  metric?: PortfolioStaticPerformanceMetricDTO;
+}
+
+export interface PortfolioStaticPerformancePointDTO {
+  date: string;
+  value: number;
+}
+
+export interface PortfolioStaticPerformanceResponseDTO {
+  generatedAt: string;
+  metric: PortfolioStaticPerformanceMetricDTO;
+  etfCount: number;
+  startDate: string;
+  endDate: string;
+  finalReturn: number;
+  points: PortfolioStaticPerformancePointDTO[];
+}
+
 export interface PortfolioAssetClassDTO {
   id: string;
   name: string;

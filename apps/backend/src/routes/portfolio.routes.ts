@@ -6,6 +6,7 @@ import {
   portfolioCompareRequestSchema,
   portfolioGeographicExposureRequestSchema,
   portfolioSectorExposureRequestSchema,
+  portfolioStaticPerformanceRequestSchema,
   portfolioHistoryQuerySchema,
   updatePortfolioAssetClassSchema,
   updatePortfolioInstrumentSchema,
@@ -17,6 +18,7 @@ import type {
   PortfolioCompareRequestDTO,
   PortfolioGeographicExposureRequestDTO,
   PortfolioSectorExposureRequestDTO,
+  PortfolioStaticPerformanceRequestDTO,
   PortfolioHistoryHorizonDTO,
   UpdatePortfolioAssetClassDTO,
   UpdatePortfolioInstrumentDTO,
@@ -305,6 +307,31 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const parsed = portfolioSectorExposureRequestSchema.parse(request.body);
       const data = await portfolioService.getSectorExposure(parsed);
+      return { success: true, data };
+    },
+  });
+
+  fastify.post<{ Body: PortfolioStaticPerformanceRequestDTO }>('/invested-performance', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Compute static weighted historical performance for invested ETF positions',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = portfolioStaticPerformanceRequestSchema.parse(request.body);
+      const data = await portfolioService.getInvestedStaticPerformance(parsed);
       return { success: true, data };
     },
   });

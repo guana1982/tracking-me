@@ -16,6 +16,9 @@ import type {
   PortfolioInvestedPositionDTO,
   PortfolioInvestedStateDTO,
   PortfolioInputValueModeDTO,
+  PortfolioStaticPerformanceMetricDTO,
+  PortfolioStaticPerformanceRequestDTO,
+  PortfolioStaticPerformanceResponseDTO,
   PortfolioSymbolHistoryDTO,
   UpdatePortfolioAssetClassDTO,
   UpdatePortfolioInstrumentDTO,
@@ -167,6 +170,8 @@ const DEFAULT_INSTRUMENT_SEEDS: DefaultInstrumentSeed[] = [
 export class PortfolioService {
   private cache = new Map<string, CacheEntry>();
   private inFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
+  private fullHistoryCache = new Map<string, CacheEntry>();
+  private fullHistoryInFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
   private geographicExposureCache = new Map<string, GeographicExposureCacheEntry>();
   private geographicExposureCacheVersion = 'v2';
   private sectorExposureCache = new Map<string, SectorExposureCacheEntry>();
@@ -447,6 +452,136 @@ export class PortfolioService {
       generatedAt: new Date().toISOString(),
       totalAmount: this.roundToCents(totalAmount),
       sectors,
+    };
+  }
+
+  async getInvestedStaticPerformance(
+    input: PortfolioStaticPerformanceRequestDTO
+  ): Promise<PortfolioStaticPerformanceResponseDTO> {
+    const positionsByIsin = new Map<string, number>();
+    input.positions.forEach((position) => {
+      const isin = position.isin.trim().toUpperCase();
+      const amount = Number(position.amount);
+      if (!ISIN_REGEX.test(isin) || !Number.isFinite(amount) || amount <= 0) return;
+      positionsByIsin.set(isin, (positionsByIsin.get(isin) ?? 0) + amount);
+    });
+
+    if (positionsByIsin.size === 0) {
+      throw new AppError('At least one valid ETF position is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const totalAmount = Array.from(positionsByIsin.values()).reduce((sum, value) => sum + value, 0);
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      throw new AppError('Total portfolio amount must be greater than zero', 400, 'VALIDATION_ERROR');
+    }
+
+    // Strategy choice: no silent fallback across metrics.
+    // If requested metric cannot be computed consistently, we fail with a clear error
+    // to avoid mixing heterogeneous return definitions in one portfolio curve.
+    const metric = input.metric ?? 'relative';
+    const valueMode = this.metricToInputValueMode(metric);
+
+    type EtfSeries = {
+      isin: string;
+      weight: number;
+      startDate: string;
+      endDate: string;
+      valueByDate: Map<string, number>;
+    };
+
+    const seriesByEtf: EtfSeries[] = [];
+
+    for (const [isin, amount] of positionsByIsin.entries()) {
+      const monthlySeries = await this.getSymbolFullHistory(isin, valueMode);
+      if (monthlySeries.length < 2) {
+        throw new AppError(`Insufficient history for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+      }
+
+      const base = monthlySeries[0].close;
+      if (!Number.isFinite(base) || base <= 0) {
+        throw new AppError(`Invalid base value for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+      }
+
+      const valueByDate = new Map<string, number>();
+      monthlySeries.forEach((point) => {
+        if (!point.date || !Number.isFinite(point.close)) return;
+        valueByDate.set(point.date, (point.close / base) - 1);
+      });
+
+      if (valueByDate.size < 2) {
+        throw new AppError(`Insufficient valid points for ISIN ${isin}`, 422, 'INSUFFICIENT_HISTORY');
+      }
+
+      const orderedDates = Array.from(valueByDate.keys()).sort((a, b) => a.localeCompare(b));
+      seriesByEtf.push({
+        isin,
+        weight: amount / totalAmount,
+        startDate: orderedDates[0],
+        endDate: orderedDates[orderedDates.length - 1],
+        valueByDate,
+      });
+    }
+
+    const commonStartDate = seriesByEtf
+      .map((item) => item.startDate)
+      .sort((a, b) => b.localeCompare(a))[0];
+    const commonEndDate = seriesByEtf
+      .map((item) => item.endDate)
+      .sort((a, b) => a.localeCompare(b))[0];
+
+    if (!commonStartDate || !commonEndDate || commonStartDate > commonEndDate) {
+      throw new AppError('No overlapping time window found across ETF histories', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    let commonDates: string[] | null = null;
+    seriesByEtf.forEach((item) => {
+      const availableDates = Array.from(item.valueByDate.keys()).filter(
+        (date) => date >= commonStartDate && date <= commonEndDate
+      );
+      const availableDateSet = new Set(availableDates);
+      commonDates = commonDates
+        ? commonDates.filter((date) => availableDateSet.has(date))
+        : availableDates;
+    });
+
+    const sortedCommonDates: string[] = commonDates ? [...commonDates] : [];
+    sortedCommonDates.sort((a, b) => a.localeCompare(b));
+    if (sortedCommonDates.length === 0) {
+      throw new AppError(
+        'No common dates found across ETF histories after applying overlap window',
+        422,
+        'INSUFFICIENT_HISTORY'
+      );
+    }
+
+    const points = sortedCommonDates.map((date) => {
+      let aggregated = 0;
+      seriesByEtf.forEach((item) => {
+        const value = item.valueByDate.get(date);
+        if (!Number.isFinite(value)) {
+          throw new AppError(`Missing metric value for ISIN ${item.isin} on ${date}`, 422, 'INSUFFICIENT_HISTORY');
+        }
+        aggregated += item.weight * (value as number);
+      });
+
+      return {
+        date,
+        value: this.round6(aggregated),
+      };
+    });
+
+    const startDate = points[0].date;
+    const endDate = points[points.length - 1].date;
+    const finalReturn = points[points.length - 1].value;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      metric,
+      etfCount: seriesByEtf.length,
+      startDate,
+      endDate,
+      finalReturn: this.round6(finalReturn),
+      points,
     };
   }
 
@@ -1416,6 +1551,35 @@ export class PortfolioService {
       .trim();
   }
 
+  private metricToInputValueMode(metric: PortfolioStaticPerformanceMetricDTO): PortfolioInputValueModeDTO {
+    return metric === 'relative_with_reinvested_dividends' ? 'quote_with_dividends' : 'quote';
+  }
+
+  private async getSymbolFullHistory(
+    symbol: string,
+    valueMode: PortfolioInputValueModeDTO
+  ): Promise<PortfolioHistoryPointDTO[]> {
+    const cacheKey = `${symbol}|FULL|${valueMode}`;
+    const cached = this.fullHistoryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.points;
+
+    const existingPromise = this.fullHistoryInFlight.get(cacheKey);
+    if (existingPromise) return existingPromise;
+
+    const nextPromise = this.fetchFullFromProvider(symbol, valueMode)
+      .then((points) => {
+        this.fullHistoryCache.set(cacheKey, {
+          points,
+          expiresAt: Date.now() + this.cacheTtlMs,
+        });
+        return points;
+      })
+      .finally(() => this.fullHistoryInFlight.delete(cacheKey));
+
+    this.fullHistoryInFlight.set(cacheKey, nextPromise);
+    return nextPromise;
+  }
+
   private async getSymbolHistory(
     symbol: string,
     horizon: PortfolioHistoryHorizonDTO,
@@ -1440,6 +1604,37 @@ export class PortfolioService {
 
     this.inFlight.set(cacheKey, nextPromise);
     return nextPromise;
+  }
+
+  private async fetchFullFromProvider(
+    symbol: string,
+    valueMode: PortfolioInputValueModeDTO
+  ): Promise<PortfolioHistoryPointDTO[]> {
+    if (!ISIN_REGEX.test(symbol)) {
+      throw new AppError(
+        `Invalid symbol '${symbol}'. justETF requires ISIN codes.`,
+        422,
+        'PROVIDER_SYMBOL_ERROR'
+      );
+    }
+
+    const payload = await this.fetchJustEtfChartPayload(symbol);
+    const dailyQuoteSeries = this.parseDailyQuotes(payload);
+    if (dailyQuoteSeries.length < 2) {
+      throw new AppError(`Insufficient history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const monthlyPoints = this.toMonthlySeries(
+      dailyQuoteSeries,
+      this.parseDividends(payload),
+      valueMode
+    );
+
+    if (monthlyPoints.length < 2) {
+      throw new AppError(`Insufficient monthly history for ISIN ${symbol}`, 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    return monthlyPoints;
   }
 
   private async fetchFromProvider(

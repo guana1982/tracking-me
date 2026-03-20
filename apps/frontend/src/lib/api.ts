@@ -48,6 +48,8 @@ import type {
   PortfolioGeographicExposureResponseDTO,
   PortfolioSectorExposureRequestDTO,
   PortfolioSectorExposureResponseDTO,
+  PortfolioStaticPerformanceRequestDTO,
+  PortfolioStaticPerformanceResponseDTO,
   UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
@@ -404,6 +406,12 @@ export const portfolioApi = {
 
   getSectorExposure: (data: PortfolioSectorExposureRequestDTO) =>
     fetchApi<PortfolioSectorExposureResponseDTO>('/portfolio/sector-exposure', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getInvestedStaticPerformance: (data: PortfolioStaticPerformanceRequestDTO) =>
+    fetchApi<PortfolioStaticPerformanceResponseDTO>('/portfolio/invested-performance', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
