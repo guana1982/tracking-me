@@ -1274,18 +1274,18 @@ export function Portfolio() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-3 items-start">
-              <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+              <div className="min-w-0 rounded-lg border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="min-w-[700px] w-full text-sm">
+                  <table className="min-w-[620px] w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr className="text-left text-slate-500">
-                        <th className="px-3 py-2 font-medium">Strumento</th>
-                        <th className="px-3 py-2 font-medium">Nome</th>
-                        <th className="px-3 py-2 font-medium">ISIN</th>
-                        <th className="px-3 py-2 font-medium">Asset Class</th>
-                        <th className="px-3 py-2 font-medium text-right">Importo</th>
-                        <th className="px-3 py-2 font-medium text-right">Azioni</th>
+                        <th className="px-2.5 py-2 font-medium">Strumento</th>
+                        <th className="px-2.5 py-2 font-medium">Nome</th>
+                        <th className="px-2.5 py-2 font-medium">ISIN</th>
+                        <th className="px-2.5 py-2 font-medium">Asset Class</th>
+                        <th className="px-2.5 py-2 font-medium text-right">Importo</th>
+                        <th className="px-2.5 py-2 font-medium text-right">Azioni</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1293,12 +1293,12 @@ export function Portfolio() {
                         const instrument = instrumentBySymbol.get(position.symbol.toUpperCase());
                         return (
                           <tr key={position.symbol} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-medium text-slate-800">{position.symbol}</td>
-                            <td className="px-3 py-2 text-slate-700">{instrument?.name ?? 'N/A'}</td>
-                            <td className="px-3 py-2 text-slate-600">{instrument?.isin ?? 'N/A'}</td>
-                            <td className="px-3 py-2 text-slate-600">{instrument?.assetClassName ?? 'N/A'}</td>
-                            <td className="px-3 py-2 text-right text-slate-800 font-medium">{formatCurrency(position.amount)}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-2.5 py-2 font-medium text-slate-800">{position.symbol}</td>
+                            <td className="px-2.5 py-2 text-slate-700">{instrument?.name ?? 'N/A'}</td>
+                            <td className="px-2.5 py-2 text-slate-600">{instrument?.isin ?? 'N/A'}</td>
+                            <td className="px-2.5 py-2 text-slate-600">{instrument?.assetClassName ?? 'N/A'}</td>
+                            <td className="px-2.5 py-2 text-right text-slate-800 font-medium">{formatCurrency(position.amount)}</td>
+                            <td className="px-2.5 py-2">
                               <div className="flex items-center justify-end gap-2">
                                 <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditInvestedModal(position)}>
                                   <Pencil className="w-3.5 h-3.5 mr-1" />
@@ -1320,11 +1320,13 @@ export function Portfolio() {
                 </div>
               </div>
 
+              <div className="min-w-0">
               <InvestedPortfolioPerformanceChart
                 positions={investedEtfPositions}
                 title="Andamento Storico Portafoglio Investito"
-                height={330}
+                height={360}
               />
+              </div>
             </div>
           </div>
         )}
