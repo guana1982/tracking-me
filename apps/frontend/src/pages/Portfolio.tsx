@@ -1865,31 +1865,33 @@ export function Portfolio() {
             </div>
 
             <div className="p-4 space-y-3 overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-2">
                 <p className="text-xs text-slate-500">
                   Portafogli: {studyPerformanceCards.length}. Layout automatico: max 3 grafici per riga.
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
-                    className="btn btn-secondary text-xs"
+                    className="btn btn-primary text-xs whitespace-nowrap min-w-[180px] justify-center"
                     onClick={() => setIsStudyPerformanceOverlayModalOpen(true)}
                     disabled={!hasStudyPerformanceOverlayData}
                   >
                     Curve sovrapposte
                   </button>
-                  <label className="text-xs text-slate-500">Metrica</label>
-                  <select
-                    className="input text-xs min-w-[220px]"
-                    value={studyPerformanceMetric}
-                    onChange={(event) => setStudyPerformanceMetric(event.target.value as PortfolioStaticPerformanceMetricDTO)}
-                  >
-                    {PORTFOLIO_PERFORMANCE_METRIC_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500">Metrica</label>
+                    <select
+                      className="input text-xs min-w-[220px]"
+                      value={studyPerformanceMetric}
+                      onChange={(event) => setStudyPerformanceMetric(event.target.value as PortfolioStaticPerformanceMetricDTO)}
+                    >
+                      {PORTFOLIO_PERFORMANCE_METRIC_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -1988,7 +1990,8 @@ export function Portfolio() {
 
         {isAnalysisOpen && (
           <div className="px-4 pb-4 pt-3.5 space-y-4 border-t border-slate-200 bg-white">
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2 items-center">
               <select value={horizon} onChange={(e) => setHorizon(e.target.value as Horizon)} className="input">
                 <option value="1Y">1Y</option><option value="3Y">3Y</option><option value="5Y">5Y</option>
               </select>
@@ -2007,16 +2010,20 @@ export function Portfolio() {
               >
                 Importa portafoglio investito
               </button>
-              <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
-                {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
-              </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button className="btn btn-primary whitespace-nowrap min-w-[130px] justify-center" onClick={runCompare} disabled={loading}>
+                  {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
+                </button>
               <button
-                className="btn btn-secondary"
+                className="btn btn-primary whitespace-nowrap min-w-[190px] justify-center"
                 onClick={() => setIsStudyPerformanceModalOpen(true)}
                 disabled={study.length === 0}
               >
                 Confronta Rendimenti
               </button>
+              </div>
             </div>
 
             {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
