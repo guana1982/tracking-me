@@ -1121,6 +1121,7 @@ export function Portfolio() {
                           ))}
                         </Pie>
                         <Tooltip
+                          wrapperStyle={{ zIndex: 40, pointerEvents: 'none' }}
                           content={({ active, payload }) => {
                             if (!active || !payload || payload.length === 0) return null;
                             const point = payload[0]?.payload as InvestedAssetClassSlice | undefined;
@@ -1137,8 +1138,8 @@ export function Portfolio() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                      <p className="text-sm font-bold text-slate-700">{formatCurrency(investedAssetClassChart.total)}</p>
+                    <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-xs font-semibold text-slate-700">{formatCurrency(investedAssetClassChart.total)}</p>
                     </div>
                   </>
                 )}
@@ -1185,6 +1186,7 @@ export function Portfolio() {
                           ))}
                         </Pie>
                         <Tooltip
+                          wrapperStyle={{ zIndex: 40, pointerEvents: 'none' }}
                           content={({ active, payload }) => {
                             if (!active || !payload || payload.length === 0) return null;
                             const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
@@ -1201,8 +1203,8 @@ export function Portfolio() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                      <p className="text-sm font-bold text-slate-700">{formatCurrency(geographicExposureChart.total)}</p>
+                    <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-xs font-semibold text-slate-700">{formatCurrency(geographicExposureChart.total)}</p>
                     </div>
                   </>
                 )}
@@ -1260,6 +1262,7 @@ export function Portfolio() {
                           ))}
                         </Pie>
                         <Tooltip
+                          wrapperStyle={{ zIndex: 40, pointerEvents: 'none' }}
                           content={({ active, payload }) => {
                             if (!active || !payload || payload.length === 0) return null;
                             const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
@@ -1276,8 +1279,8 @@ export function Portfolio() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
-                      <p className="text-sm font-bold text-slate-700">{formatCurrency(sectorExposureChart.total)}</p>
+                    <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-xs font-semibold text-slate-700">{formatCurrency(sectorExposureChart.total)}</p>
                     </div>
                   </>
                 )}
