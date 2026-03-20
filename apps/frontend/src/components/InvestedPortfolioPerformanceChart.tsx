@@ -29,6 +29,7 @@ type InvestedPortfolioPerformanceChartProps = {
 };
 
 type RangeKey = '1G' | '1M' | '3M' | '6M' | '1A' | '2A' | '3A' | '4A' | '5A' | '6A' | 'MAX';
+type RangeMode = 'preset' | 'custom';
 
 export const PORTFOLIO_PERFORMANCE_METRIC_OPTIONS: Array<{ value: PortfolioStaticPerformanceMetricDTO; label: string }> = [
   { value: 'relative', label: 'relative' },
@@ -63,6 +64,28 @@ function formatDateFull(date: string): string {
 
 function parseIsoDate(date: string): Date {
   return new Date(`${date}T00:00:00Z`);
+}
+
+function buildRebasedSubset(
+  points: Array<{ date: string; dateLabel: string; value: number }>,
+  startDate: string | null,
+  endDate: string | null,
+): Array<{ date: string; dateLabel: string; value: number }> {
+  const filtered = points.filter((point) => {
+    if (startDate && point.date < startDate) return false;
+    if (endDate && point.date > endDate) return false;
+    return true;
+  });
+
+  if (filtered.length < 2) return [];
+
+  const baseLevel = 1 + filtered[0].value;
+  if (!Number.isFinite(baseLevel) || baseLevel <= 0) return [];
+
+  return filtered.map((point) => ({
+    ...point,
+    value: ((1 + point.value) / baseLevel) - 1,
+  }));
 }
 
 function getRangeStartDate(endDate: Date, range: RangeKey): Date | null {
@@ -115,6 +138,9 @@ export function InvestedPortfolioPerformanceChart({
 }: InvestedPortfolioPerformanceChartProps) {
   const [selectedMetric, setSelectedMetric] = useState<PortfolioStaticPerformanceMetricDTO>(metric);
   const [selectedRange, setSelectedRange] = useState<RangeKey>('MAX');
+  const [rangeMode, setRangeMode] = useState<RangeMode>('preset');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioStaticPerformanceResponseDTO | null>(null);
@@ -185,6 +211,9 @@ export function InvestedPortfolioPerformanceChart({
     [result?.points],
   );
 
+  const fullSeriesStartDate = chartData[0]?.date ?? '';
+  const fullSeriesEndDate = chartData[chartData.length - 1]?.date ?? '';
+
   const rangeDataMap = useMemo(() => {
     const map = new Map<RangeKey, Array<{ date: string; dateLabel: string; value: number }>>();
     if (chartData.length < 2) {
@@ -196,32 +225,34 @@ export function InvestedPortfolioPerformanceChart({
 
     RANGE_OPTIONS.forEach((range) => {
       const startDate = getRangeStartDate(endDate, range.key);
-      const filtered = startDate
-        ? chartData.filter((point) => parseIsoDate(point.date).getTime() >= startDate.getTime())
-        : chartData;
-
-      if (filtered.length < 2) {
-        map.set(range.key, []);
-        return;
-      }
-
-      const baseLevel = 1 + filtered[0].value;
-      if (!Number.isFinite(baseLevel) || baseLevel <= 0) {
-        map.set(range.key, []);
-        return;
-      }
-
-      map.set(
-        range.key,
-        filtered.map((point) => ({
-          ...point,
-          value: ((1 + point.value) / baseLevel) - 1,
-        })),
-      );
+      const startIso = startDate ? startDate.toISOString().slice(0, 10) : null;
+      map.set(range.key, buildRebasedSubset(chartData, startIso, null));
     });
 
     return map;
   }, [chartData]);
+
+  useEffect(() => {
+    if (!fullSeriesStartDate || !fullSeriesEndDate) {
+      setCustomStartDate('');
+      setCustomEndDate('');
+      return;
+    }
+
+    setCustomStartDate((prev) => {
+      if (!prev) return fullSeriesStartDate;
+      if (prev < fullSeriesStartDate) return fullSeriesStartDate;
+      if (prev > fullSeriesEndDate) return fullSeriesStartDate;
+      return prev;
+    });
+
+    setCustomEndDate((prev) => {
+      if (!prev) return fullSeriesEndDate;
+      if (prev > fullSeriesEndDate) return fullSeriesEndDate;
+      if (prev < fullSeriesStartDate) return fullSeriesEndDate;
+      return prev;
+    });
+  }, [fullSeriesStartDate, fullSeriesEndDate]);
 
   const availableRangeMap = useMemo(() => {
     const availability: Record<RangeKey, boolean> = {
@@ -249,7 +280,27 @@ export function InvestedPortfolioPerformanceChart({
     setSelectedRange(fallback);
   }, [availableRangeMap, selectedRange]);
 
-  const displayedData = useMemo(() => rangeDataMap.get(selectedRange) ?? [], [rangeDataMap, selectedRange]);
+  const customRangeError = useMemo(() => {
+    if (rangeMode !== 'custom') return null;
+    if (!customStartDate || !customEndDate) return 'Seleziona data inizio e fine.';
+    if (customStartDate > customEndDate) return 'La data di inizio deve essere precedente o uguale alla data di fine.';
+    if (customStartDate < fullSeriesStartDate || customEndDate > fullSeriesEndDate) {
+      return 'Intervallo custom fuori dallo storico disponibile.';
+    }
+    return null;
+  }, [customEndDate, customStartDate, fullSeriesEndDate, fullSeriesStartDate, rangeMode]);
+
+  const customRangeData = useMemo(() => {
+    if (customRangeError) return [];
+    if (!customStartDate || !customEndDate) return [];
+    return buildRebasedSubset(chartData, customStartDate, customEndDate);
+  }, [chartData, customEndDate, customRangeError, customStartDate]);
+
+  const displayedData = useMemo(() => {
+    if (rangeMode === 'custom') return customRangeData;
+    return rangeDataMap.get(selectedRange) ?? [];
+  }, [customRangeData, rangeDataMap, rangeMode, selectedRange]);
+
   const displayedStartDate = displayedData[0]?.date ?? null;
   const displayedEndDate = displayedData[displayedData.length - 1]?.date ?? null;
   const displayedFinalReturn = displayedData[displayedData.length - 1]?.value ?? null;
@@ -289,7 +340,9 @@ export function InvestedPortfolioPerformanceChart({
         </div>
       ) : displayedData.length === 0 || !result ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-          Nessun dato storico disponibile per il periodo selezionato.
+          {rangeMode === 'custom' && customRangeError
+            ? customRangeError
+            : 'Nessun dato storico disponibile per il periodo selezionato.'}
         </div>
       ) : (
         <>
@@ -325,9 +378,12 @@ export function InvestedPortfolioPerformanceChart({
                   type="button"
                   disabled={!isAvailable}
                   title={isAvailable ? `Visualizza ${range.label}` : `Periodo ${range.label} non disponibile`}
-                  onClick={() => setSelectedRange(range.key)}
+                  onClick={() => {
+                    setRangeMode('preset');
+                    setSelectedRange(range.key);
+                  }}
                   className={`px-2.5 py-1.5 text-xs rounded border transition-colors ${
-                    isActive
+                    rangeMode === 'preset' && isActive
                       ? 'border-sky-500 bg-sky-500 text-white'
                       : isAvailable
                         ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
@@ -338,6 +394,53 @@ export function InvestedPortfolioPerformanceChart({
                 </button>
               );
             })}
+          </div>
+
+          <div className={`mt-2 rounded-md border px-2.5 py-2 ${rangeMode === 'custom' ? 'border-sky-300 bg-sky-50/40' : 'border-slate-200 bg-slate-50'}`}>
+            <div className="flex flex-wrap items-end gap-2">
+              <span className="text-xs text-slate-600 font-medium mr-1">Intervallo custom</span>
+              <label className="text-xs text-slate-500">
+                Da
+                <input
+                  type="date"
+                  className="input mt-1 h-8 text-xs"
+                  value={customStartDate}
+                  min={fullSeriesStartDate || undefined}
+                  max={customEndDate || fullSeriesEndDate || undefined}
+                  onChange={(event) => {
+                    setRangeMode('custom');
+                    setCustomStartDate(event.target.value);
+                  }}
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                A
+                <input
+                  type="date"
+                  className="input mt-1 h-8 text-xs"
+                  value={customEndDate}
+                  min={customStartDate || fullSeriesStartDate || undefined}
+                  max={fullSeriesEndDate || undefined}
+                  onChange={(event) => {
+                    setRangeMode('custom');
+                    setCustomEndDate(event.target.value);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn py-1 px-2 text-xs h-8"
+                onClick={() => {
+                  setRangeMode('preset');
+                  setSelectedRange('MAX');
+                }}
+              >
+                Torna a MAX
+              </button>
+            </div>
+            {rangeMode === 'custom' && customRangeError && (
+              <p className="text-xs text-red-600 mt-2">{customRangeError}</p>
+            )}
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
