@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   Cell,
   CartesianGrid,
@@ -26,6 +26,7 @@ import type {
   PortfolioAssetClassDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
+  PortfolioGeographicExposureCountryDTO,
   PortfolioGeographicExposureResponseDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioInstrumentDTO,
@@ -70,12 +71,78 @@ const INVESTED_ASSET_CLASS_COLORS = ['#94A3B8', '#38BDF8', '#F59E0B', '#10B981',
 const INVESTED_PIE_LABEL_MIN_GAP = 12;
 const INVESTED_PIE_LABEL_OUTER_OFFSET = 12;
 const INVESTED_PIE_LABEL_SIDE_OFFSET = 20;
+const GEOGRAPHIC_ASSET_CLASS_FILTER_OPTIONS = ['AZIONARIO', 'OBBLIGAZIONARIO', 'COMMODITIES', 'MONETARIO'] as const;
 const mk = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const pct = (v: number | null | undefined) => (!Number.isFinite(v ?? NaN) ? 'N/A' : `${((v as number) * 100).toFixed(2)}%`);
 const month = (d: string) => new Date(d).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
 
+type GeographicAssetClassFilter = (typeof GEOGRAPHIC_ASSET_CLASS_FILTER_OPTIONS)[number];
+type GeographicAssetClassCanonical = GeographicAssetClassFilter | 'ALTRO';
+type GeographicExposureTableRow = {
+  country: string;
+  amount: number;
+  percentage: number;
+  etfs: string[];
+};
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeGeographicAssetClass(assetClassName: string): GeographicAssetClassCanonical {
+  const normalized = assetClassName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+
+  if (normalized.includes('AZIONARIO')) return 'AZIONARIO';
+  if (normalized.includes('OBBLIGAZIONARIO')) return 'OBBLIGAZIONARIO';
+  if (normalized.includes('COMMODITIES')) return 'COMMODITIES';
+  if (normalized.includes('MONETARIO')) return 'MONETARIO';
+  return 'ALTRO';
+}
+
+function buildGeographicExposureTableRows(
+  countries: PortfolioGeographicExposureCountryDTO[],
+  selectedFilters: GeographicAssetClassFilter[],
+  resolveEtfAssetClass: (etfSymbol: string) => GeographicAssetClassCanonical,
+): GeographicExposureTableRow[] {
+  const selectedFilterSet = new Set(selectedFilters);
+  const isAllSelected = selectedFilterSet.size === 0;
+
+  const rows = countries
+    .map((country) => {
+      const amount = isAllSelected
+        ? country.amount
+        : (country.assetClassBreakdown ?? [])
+            .filter((entry) => {
+              const normalizedAssetClass = normalizeGeographicAssetClass(entry.assetClass);
+              return normalizedAssetClass !== 'ALTRO' && selectedFilterSet.has(normalizedAssetClass);
+            })
+            .reduce((sum, entry) => sum + Math.max(0, Number(entry.amount)), 0);
+
+      const etfs = isAllSelected
+        ? [...(country.etfs ?? [])]
+        : (country.etfs ?? []).filter((etfSymbol) => {
+            const normalizedAssetClass = resolveEtfAssetClass(etfSymbol);
+            return normalizedAssetClass !== 'ALTRO' && selectedFilterSet.has(normalizedAssetClass);
+          });
+
+      return {
+        country: country.country,
+        amount,
+        etfs: Array.from(new Set(etfs)).sort((left, right) => left.localeCompare(right)),
+      };
+    })
+    .filter((row) => Number.isFinite(row.amount) && row.amount > 0.0001)
+    .sort((left, right) => right.amount - left.amount);
+
+  const filteredTotal = rows.reduce((sum, row) => sum + row.amount, 0);
+  return rows.map((row) => ({
+    ...row,
+    percentage: filteredTotal > 0 ? (row.amount / filteredTotal) * 100 : 0,
+  }));
 }
 
 function createPieLabelRenderer(points: PieLabelPoint[]) {
@@ -243,6 +310,7 @@ export function Portfolio() {
   const [geographicExposureLoading, setGeographicExposureLoading] = useState(false);
   const [geographicExposureError, setGeographicExposureError] = useState<string | null>(null);
   const [isGeographicModalOpen, setIsGeographicModalOpen] = useState(false);
+  const [geographicAssetClassFilters, setGeographicAssetClassFilters] = useState<GeographicAssetClassFilter[]>([]);
   const [sectorExposure, setSectorExposure] = useState<PortfolioSectorExposureResponseDTO | null>(null);
   const [sectorExposureLoading, setSectorExposureLoading] = useState(false);
   const [sectorExposureError, setSectorExposureError] = useState<string | null>(null);
@@ -251,6 +319,7 @@ export function Portfolio() {
   const [studyGeographicExposureLoading, setStudyGeographicExposureLoading] = useState(false);
   const [studyGeographicExposureError, setStudyGeographicExposureError] = useState<string | null>(null);
   const [isStudyGeographicModalOpen, setIsStudyGeographicModalOpen] = useState(false);
+  const [studyGeographicAssetClassFilters, setStudyGeographicAssetClassFilters] = useState<GeographicAssetClassFilter[]>([]);
   const [studyGeographicPortfolioName, setStudyGeographicPortfolioName] = useState('');
   const [studyGeographicActivePortfolioId, setStudyGeographicActivePortfolioId] = useState<string | null>(null);
   const [studyGeographicBaseAmount, setStudyGeographicBaseAmount] = useState(0);
@@ -400,6 +469,31 @@ export function Portfolio() {
       slices,
     };
   }, [studySectorExposure]);
+  const resolveEtfAssetClass = useCallback(
+    (etfSymbol: string): GeographicAssetClassCanonical =>
+      normalizeGeographicAssetClass(
+        instrumentBySymbol.get(etfSymbol.trim().toUpperCase())?.assetClassName ?? 'ALTRO',
+      ),
+    [instrumentBySymbol],
+  );
+  const geographicExposureTableRows = useMemo(
+    () =>
+      buildGeographicExposureTableRows(
+        geographicExposure?.countries ?? [],
+        geographicAssetClassFilters,
+        resolveEtfAssetClass,
+      ),
+    [geographicAssetClassFilters, geographicExposure?.countries, resolveEtfAssetClass],
+  );
+  const studyGeographicExposureTableRows = useMemo(
+    () =>
+      buildGeographicExposureTableRows(
+        studyGeographicExposure?.countries ?? [],
+        studyGeographicAssetClassFilters,
+        resolveEtfAssetClass,
+      ),
+    [resolveEtfAssetClass, studyGeographicAssetClassFilters, studyGeographicExposure?.countries],
+  );
 
   const renderInvestedPieLabel = useMemo(
     () => createPieLabelRenderer(investedAssetClassChart.slices),
@@ -991,7 +1085,28 @@ export function Portfolio() {
     setIsStudyPerformanceModalOpen(false);
   };
 
+  const toggleAssetClassFilter = (
+    value: GeographicAssetClassFilter,
+    setter: Dispatch<SetStateAction<GeographicAssetClassFilter[]>>,
+  ) => {
+    setter((prev) => {
+      if (prev.includes(value)) return prev.filter((item) => item !== value);
+      return [...prev, value];
+    });
+  };
+
+  const openGeographicModal = () => {
+    setGeographicAssetClassFilters([]);
+    setIsGeographicModalOpen(true);
+  };
+
+  const closeGeographicModal = () => {
+    setGeographicAssetClassFilters([]);
+    setIsGeographicModalOpen(false);
+  };
+
   const closeStudyGeographicModal = () => {
+    setStudyGeographicAssetClassFilters([]);
     setIsStudyGeographicModalOpen(false);
     setStudyGeographicActivePortfolioId(null);
   };
@@ -1001,6 +1116,7 @@ export function Portfolio() {
     setStudyGeographicExposure(null);
     setStudyGeographicExposureError(null);
     setStudyGeographicExposureLoading(true);
+    setStudyGeographicAssetClassFilters([]);
     setStudyGeographicActivePortfolioId(portfolio.id);
     setIsStudyGeographicModalOpen(true);
 
@@ -1225,7 +1341,7 @@ export function Portfolio() {
                 {geographicExposureChart.slices.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setIsGeographicModalOpen(true)}
+                    onClick={openGeographicModal}
                     className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
                   >
                     Dettaglio ripartizione geografica
@@ -1542,7 +1658,7 @@ export function Portfolio() {
 
       {isGeographicModalOpen && geographicExposureChart.slices.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIsGeographicModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={closeGeographicModal} />
           <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <div>
@@ -1551,7 +1667,7 @@ export function Portfolio() {
                   Dettaglio completo delle partecipazioni per paese calcolate sul portafoglio investito.
                 </p>
               </div>
-              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => setIsGeographicModalOpen(false)}>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeGeographicModal}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1560,7 +1676,9 @@ export function Portfolio() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
-                  <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(geographicExposureChart.total)}</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">
+                    {formatCurrency(geographicExposureTableRows.reduce((sum, row) => sum + row.amount, 0))}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
@@ -1572,24 +1690,67 @@ export function Portfolio() {
                 </div>
               </div>
 
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  Filtra la tabella per tipologia ETF. Con filtri vuoti vedi TUTTI i dati.
+                </p>
+                <details className="relative">
+                  <summary className="list-none btn btn-secondary text-xs whitespace-nowrap cursor-pointer">
+                    Filtro ETF: {geographicAssetClassFilters.length === 0 ? 'TUTTI' : geographicAssetClassFilters.join(', ')}
+                  </summary>
+                  <div className="absolute right-0 mt-2 z-20 w-[260px] rounded-lg border border-slate-200 bg-white shadow-lg p-2 space-y-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-700 px-1 py-1">
+                      <input
+                        type="checkbox"
+                        checked={geographicAssetClassFilters.length === 0}
+                        onChange={() => setGeographicAssetClassFilters([])}
+                      />
+                      TUTTI
+                    </label>
+                    {GEOGRAPHIC_ASSET_CLASS_FILTER_OPTIONS.map((assetClass) => (
+                      <label key={`geo-filter-${assetClass}`} className="flex items-center gap-2 text-xs text-slate-700 px-1 py-1">
+                        <input
+                          type="checkbox"
+                          checked={geographicAssetClassFilters.includes(assetClass)}
+                          onChange={() => toggleAssetClassFilter(assetClass, setGeographicAssetClassFilters)}
+                        />
+                        {assetClass}
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+
               <div className="rounded-lg border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="min-w-[560px] w-full text-sm">
+                  <table className="min-w-[760px] w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr className="text-left text-slate-500">
                         <th className="px-3 py-2 font-medium">Paese</th>
                         <th className="px-3 py-2 font-medium text-right">% sul totale</th>
                         <th className="px-3 py-2 font-medium text-right">Importo</th>
+                        <th className="px-3 py-2 font-medium">ETF coinvolti</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {geographicExposureChart.slices.map((slice) => (
-                        <tr key={`geo-row-${slice.key}`} className="border-t border-slate-100">
-                          <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
-                          <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
-                          <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                      {geographicExposureTableRows.length === 0 ? (
+                        <tr className="border-t border-slate-100">
+                          <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
+                            Nessun paese disponibile con i filtri selezionati.
+                          </td>
                         </tr>
-                      ))}
+                      ) : (
+                        geographicExposureTableRows.map((row) => (
+                          <tr key={`geo-row-${row.country}`} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-medium text-slate-800">{row.country}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{row.percentage.toFixed(2)}%</td>
+                            <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(row.amount)}</td>
+                            <td className="px-3 py-2 text-slate-700">
+                              {row.etfs.length > 0 ? row.etfs.join(', ') : 'N/A'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1597,7 +1758,7 @@ export function Portfolio() {
             </div>
 
             <div className="p-4 border-t border-slate-200 flex items-center justify-end">
-              <button type="button" className="btn btn-primary" onClick={() => setIsGeographicModalOpen(false)}>
+              <button type="button" className="btn btn-primary" onClick={closeGeographicModal}>
                 Chiudi
               </button>
             </div>
@@ -1705,7 +1866,9 @@ export function Portfolio() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
-                      <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(studyGeographicExposureChart.total)}</p>
+                      <p className="text-base font-semibold text-slate-900 mt-1">
+                        {formatCurrency(studyGeographicExposureTableRows.reduce((sum, row) => sum + row.amount, 0))}
+                      </p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
@@ -1721,24 +1884,67 @@ export function Portfolio() {
                     Base calcolo: {formatCurrency(studyGeographicBaseAmount)} (ricalcolata al click, senza salvataggio su DB).
                   </p>
 
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-slate-500">
+                      Filtra la tabella per tipologia ETF. Con filtri vuoti vedi TUTTI i dati.
+                    </p>
+                    <details className="relative">
+                      <summary className="list-none btn btn-secondary text-xs whitespace-nowrap cursor-pointer">
+                        Filtro ETF: {studyGeographicAssetClassFilters.length === 0 ? 'TUTTI' : studyGeographicAssetClassFilters.join(', ')}
+                      </summary>
+                      <div className="absolute right-0 mt-2 z-20 w-[260px] rounded-lg border border-slate-200 bg-white shadow-lg p-2 space-y-1">
+                        <label className="flex items-center gap-2 text-xs text-slate-700 px-1 py-1">
+                          <input
+                            type="checkbox"
+                            checked={studyGeographicAssetClassFilters.length === 0}
+                            onChange={() => setStudyGeographicAssetClassFilters([])}
+                          />
+                          TUTTI
+                        </label>
+                        {GEOGRAPHIC_ASSET_CLASS_FILTER_OPTIONS.map((assetClass) => (
+                          <label key={`study-geo-filter-${assetClass}`} className="flex items-center gap-2 text-xs text-slate-700 px-1 py-1">
+                            <input
+                              type="checkbox"
+                              checked={studyGeographicAssetClassFilters.includes(assetClass)}
+                              onChange={() => toggleAssetClassFilter(assetClass, setStudyGeographicAssetClassFilters)}
+                            />
+                            {assetClass}
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+
                   <div className="rounded-lg border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="min-w-[560px] w-full text-sm">
+                      <table className="min-w-[760px] w-full text-sm">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr className="text-left text-slate-500">
                             <th className="px-3 py-2 font-medium">Paese</th>
                             <th className="px-3 py-2 font-medium text-right">% sul totale</th>
                             <th className="px-3 py-2 font-medium text-right">Importo</th>
+                            <th className="px-3 py-2 font-medium">ETF coinvolti</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {studyGeographicExposureChart.slices.map((slice) => (
-                            <tr key={`study-geo-row-${slice.key}`} className="border-t border-slate-100">
-                              <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
-                              <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
-                              <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                          {studyGeographicExposureTableRows.length === 0 ? (
+                            <tr className="border-t border-slate-100">
+                              <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
+                                Nessun paese disponibile con i filtri selezionati.
+                              </td>
                             </tr>
-                          ))}
+                          ) : (
+                            studyGeographicExposureTableRows.map((row) => (
+                              <tr key={`study-geo-row-${row.country}`} className="border-t border-slate-100">
+                                <td className="px-3 py-2 font-medium text-slate-800">{row.country}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{row.percentage.toFixed(2)}%</td>
+                                <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(row.amount)}</td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {row.etfs.length > 0 ? row.etfs.join(', ') : 'N/A'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>

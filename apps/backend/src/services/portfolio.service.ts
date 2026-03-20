@@ -78,6 +78,11 @@ type SectorExposureCacheEntry = {
   sectors: JustEtfSectorAllocation[];
 };
 
+type GeographicInstrumentMetadata = {
+  symbol: string;
+  assetClass: string;
+};
+
 type InvestedPositionJson = {
   symbol?: unknown;
   amount?: unknown;
@@ -314,6 +319,7 @@ export class PortfolioService {
   }
 
   async getGeographicExposure(
+    userId: string,
     input: PortfolioGeographicExposureRequestDTO
   ): Promise<PortfolioGeographicExposureResponseDTO> {
     const positionsByIsin = new Map<string, number>();
@@ -333,45 +339,90 @@ export class PortfolioService {
       throw new AppError('Invalid total amount for geographic exposure', 400, 'VALIDATION_ERROR');
     }
 
-    const countryRatioByName = new Map<string, number>();
+    type CountryAggregation = {
+      ratio: number;
+      assetClassRatioByName: Map<string, number>;
+      etfs: Set<string>;
+    };
+
+    const countryAggregationByName = new Map<string, CountryAggregation>();
+    const metadataByIsin = await this.resolveGeographicInstrumentMetadata(
+      userId,
+      Array.from(positionsByIsin.keys()),
+    );
+
+    const appendCountryContribution = (countryName: string, ratioContribution: number, metadata: GeographicInstrumentMetadata) => {
+      const safeRatioContribution = Math.max(0, ratioContribution);
+      if (safeRatioContribution <= 0) return;
+      const normalizedCountryName = this.normalizeCountryName(countryName);
+      if (!normalizedCountryName) return;
+
+      const current = countryAggregationByName.get(normalizedCountryName) ?? {
+        ratio: 0,
+        assetClassRatioByName: new Map<string, number>(),
+        etfs: new Set<string>(),
+      };
+
+      current.ratio += safeRatioContribution;
+      current.assetClassRatioByName.set(
+        metadata.assetClass,
+        (current.assetClassRatioByName.get(metadata.assetClass) ?? 0) + safeRatioContribution,
+      );
+      if (metadata.symbol) current.etfs.add(metadata.symbol);
+      countryAggregationByName.set(normalizedCountryName, current);
+    };
 
     for (const [isin, amount] of positionsByIsin.entries()) {
+      const metadata = metadataByIsin.get(isin) ?? {
+        symbol: isin,
+        assetClass: 'ALTRO',
+      };
       const countries = await this.fetchCountryAllocationsByIsin(isin);
-      if (countries.length === 0) continue;
-
       const etfPortfolioWeight = amount / totalAmount;
       let coveredRatio = 0;
 
       countries.forEach((country) => {
         const ratio = this.normalizeCountryRatio(country.percentage);
         if (ratio <= 0) return;
-        const countryName = this.normalizeCountryName(country.country);
-        if (!countryName) return;
         coveredRatio += ratio;
-        countryRatioByName.set(countryName, (countryRatioByName.get(countryName) ?? 0) + ratio * etfPortfolioWeight);
+        appendCountryContribution(country.country, ratio * etfPortfolioWeight, metadata);
       });
 
       if (coveredRatio < 1) {
-        countryRatioByName.set('Altro', (countryRatioByName.get('Altro') ?? 0) + (1 - coveredRatio) * etfPortfolioWeight);
+        appendCountryContribution('Altro', (1 - coveredRatio) * etfPortfolioWeight, metadata);
       }
     }
 
-    if (countryRatioByName.size === 0) {
+    if (countryAggregationByName.size === 0) {
       throw new AppError('Unable to resolve country allocations from justETF', 422, 'INSUFFICIENT_HISTORY');
     }
 
-    const ratioTotal = Array.from(countryRatioByName.values()).reduce((sum, value) => sum + value, 0);
-    if (ratioTotal < 1) {
-      countryRatioByName.set('Altro', (countryRatioByName.get('Altro') ?? 0) + (1 - ratioTotal));
+    const ratioTotal = Array.from(countryAggregationByName.values()).reduce((sum, value) => sum + value.ratio, 0);
+    if (ratioTotal < 1 && ratioTotal > 0.99) {
+      appendCountryContribution('Altro', 1 - ratioTotal, { symbol: '', assetClass: 'ALTRO' });
     }
 
-    const countries = Array.from(countryRatioByName.entries())
-      .map(([country, ratio]) => {
-        const safeRatio = Math.max(0, ratio);
+    const countries = Array.from(countryAggregationByName.entries())
+      .map(([country, aggregation]) => {
+        const safeRatio = Math.max(0, aggregation.ratio);
+        const assetClassBreakdown = Array.from(aggregation.assetClassRatioByName.entries())
+          .map(([assetClass, assetClassRatio]) => {
+            const safeAssetClassRatio = Math.max(0, assetClassRatio);
+            return {
+              assetClass,
+              percentage: this.round6(safeAssetClassRatio),
+              amount: this.roundToCents(safeAssetClassRatio * totalAmount),
+            };
+          })
+          .filter((row) => row.percentage > 0)
+          .sort((a, b) => b.amount - a.amount);
+
         return {
           country,
           percentage: this.round6(safeRatio),
           amount: this.roundToCents(safeRatio * totalAmount),
+          assetClassBreakdown,
+          etfs: Array.from(aggregation.etfs).sort((left, right) => left.localeCompare(right)),
         };
       })
       .filter((row) => row.percentage > 0)
@@ -1584,6 +1635,57 @@ export class PortfolioService {
       .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+  }
+
+  private normalizeAssetClassForExposure(name: string): string {
+    if (!name) return 'ALTRO';
+
+    const normalized = name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+
+    if (normalized.includes('AZIONARIO')) return 'AZIONARIO';
+    if (normalized.includes('OBBLIGAZIONARIO')) return 'OBBLIGAZIONARIO';
+    if (normalized.includes('COMMODITIES')) return 'COMMODITIES';
+    if (normalized.includes('MONETARIO')) return 'MONETARIO';
+    return 'ALTRO';
+  }
+
+  private async resolveGeographicInstrumentMetadata(
+    userId: string,
+    isins: string[],
+  ): Promise<Map<string, GeographicInstrumentMetadata>> {
+    const normalizedIsins = Array.from(new Set(isins.map((isin) => isin.trim().toUpperCase()).filter(Boolean)));
+    if (normalizedIsins.length === 0) return new Map();
+
+    const instruments = await prisma.portfolioInstrument.findMany({
+      where: {
+        userId,
+        isin: { in: normalizedIsins },
+      },
+      select: {
+        isin: true,
+        symbol: true,
+        assetClass: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    const out = new Map<string, GeographicInstrumentMetadata>();
+    instruments.forEach((instrument) => {
+      const isin = instrument.isin.trim().toUpperCase();
+      out.set(isin, {
+        symbol: instrument.symbol.trim().toUpperCase(),
+        assetClass: this.normalizeAssetClassForExposure(instrument.assetClass.name),
+      });
+    });
+
+    return out;
   }
 
   private metricToInputValueMode(metric: PortfolioStaticPerformanceMetricDTO): PortfolioInputValueModeDTO {

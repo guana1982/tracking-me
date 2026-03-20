@@ -281,7 +281,7 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request) => {
       const parsed = portfolioGeographicExposureRequestSchema.parse(request.body);
-      const data = await portfolioService.getGeographicExposure(parsed);
+      const data = await portfolioService.getGeographicExposure(request.authUser!.id, parsed);
       return { success: true, data };
     },
   });

@@ -443,6 +443,14 @@ export interface PortfolioGeographicExposureCountryDTO {
   country: string;
   amount: number;
   percentage: number;
+  assetClassBreakdown: PortfolioGeographicExposureAssetClassDTO[];
+  etfs: string[];
+}
+
+export interface PortfolioGeographicExposureAssetClassDTO {
+  assetClass: string;
+  amount: number;
+  percentage: number;
 }
 
 export interface PortfolioGeographicExposureResponseDTO {
