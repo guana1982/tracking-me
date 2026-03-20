@@ -46,6 +46,8 @@ import type {
   PortfolioInvestedStateDTO,
   PortfolioGeographicExposureRequestDTO,
   PortfolioGeographicExposureResponseDTO,
+  PortfolioSectorExposureRequestDTO,
+  PortfolioSectorExposureResponseDTO,
   UpdatePortfolioInvestedStateDTO,
 } from '@budget/shared';
 import { useAuthStore } from '../stores/authStore';
@@ -396,6 +398,12 @@ export const portfolioApi = {
 
   getGeographicExposure: (data: PortfolioGeographicExposureRequestDTO) =>
     fetchApi<PortfolioGeographicExposureResponseDTO>('/portfolio/geographic-exposure', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getSectorExposure: (data: PortfolioSectorExposureRequestDTO) =>
+    fetchApi<PortfolioSectorExposureResponseDTO>('/portfolio/sector-exposure', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

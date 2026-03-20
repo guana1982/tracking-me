@@ -25,6 +25,7 @@ import type {
   PortfolioHistoryHorizonDTO,
   PortfolioInstrumentDTO,
   PortfolioInputValueModeDTO,
+  PortfolioSectorExposureResponseDTO,
 } from '@budget/shared';
 
 type Horizon = PortfolioHistoryHorizonDTO;
@@ -236,6 +237,10 @@ export function Portfolio() {
   const [geographicExposureLoading, setGeographicExposureLoading] = useState(false);
   const [geographicExposureError, setGeographicExposureError] = useState<string | null>(null);
   const [isGeographicModalOpen, setIsGeographicModalOpen] = useState(false);
+  const [sectorExposure, setSectorExposure] = useState<PortfolioSectorExposureResponseDTO | null>(null);
+  const [sectorExposureLoading, setSectorExposureLoading] = useState(false);
+  const [sectorExposureError, setSectorExposureError] = useState<string | null>(null);
+  const [isSectorModalOpen, setIsSectorModalOpen] = useState(false);
   const [studyGeographicExposure, setStudyGeographicExposure] = useState<PortfolioGeographicExposureResponseDTO | null>(null);
   const [studyGeographicExposureLoading, setStudyGeographicExposureLoading] = useState(false);
   const [studyGeographicExposureError, setStudyGeographicExposureError] = useState<string | null>(null);
@@ -243,6 +248,13 @@ export function Portfolio() {
   const [studyGeographicPortfolioName, setStudyGeographicPortfolioName] = useState('');
   const [studyGeographicActivePortfolioId, setStudyGeographicActivePortfolioId] = useState<string | null>(null);
   const [studyGeographicBaseAmount, setStudyGeographicBaseAmount] = useState(0);
+  const [studySectorExposure, setStudySectorExposure] = useState<PortfolioSectorExposureResponseDTO | null>(null);
+  const [studySectorExposureLoading, setStudySectorExposureLoading] = useState(false);
+  const [studySectorExposureError, setStudySectorExposureError] = useState<string | null>(null);
+  const [isStudySectorModalOpen, setIsStudySectorModalOpen] = useState(false);
+  const [studySectorPortfolioName, setStudySectorPortfolioName] = useState('');
+  const [studySectorActivePortfolioId, setStudySectorActivePortfolioId] = useState<string | null>(null);
+  const [studySectorBaseAmount, setStudySectorBaseAmount] = useState(0);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
@@ -337,6 +349,20 @@ export function Portfolio() {
       slices,
     };
   }, [geographicExposure]);
+  const sectorExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (sectorExposure?.sectors ?? []).map((sector, index) => ({
+      key: sector.sector,
+      label: sector.sector,
+      value: sector.amount,
+      percentage: sector.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: sectorExposure?.totalAmount ?? 0,
+      slices,
+    };
+  }, [sectorExposure]);
   const studyGeographicExposureChart = useMemo(() => {
     const slices: InvestedGeographicSlice[] = (studyGeographicExposure?.countries ?? []).map((country, index) => ({
       key: country.country,
@@ -351,6 +377,20 @@ export function Portfolio() {
       slices,
     };
   }, [studyGeographicExposure]);
+  const studySectorExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (studySectorExposure?.sectors ?? []).map((sector, index) => ({
+      key: sector.sector,
+      label: sector.sector,
+      value: sector.amount,
+      percentage: sector.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: studySectorExposure?.totalAmount ?? 0,
+      slices,
+    };
+  }, [studySectorExposure]);
 
   const renderInvestedPieLabel = useMemo(
     () => createPieLabelRenderer(investedAssetClassChart.slices),
@@ -488,6 +528,42 @@ export function Portfolio() {
     };
 
     void loadGeographicExposure();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [investedEtfPositions]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadSectorExposure = async () => {
+      if (investedEtfPositions.length === 0) {
+        setSectorExposure(null);
+        setSectorExposureError(null);
+        setSectorExposureLoading(false);
+        return;
+      }
+
+      try {
+        setSectorExposureLoading(true);
+        setSectorExposureError(null);
+
+        const response = await portfolioApi.getSectorExposure({ positions: investedEtfPositions });
+        if (isCancelled) return;
+        setSectorExposure(response);
+      } catch (err) {
+        if (isCancelled) return;
+        setSectorExposure(null);
+        setSectorExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione settoriale');
+      } finally {
+        if (!isCancelled) {
+          setSectorExposureLoading(false);
+        }
+      }
+    };
+
+    void loadSectorExposure();
 
     return () => {
       isCancelled = true;
@@ -798,6 +874,47 @@ export function Portfolio() {
     });
   };
 
+  const buildStudyExposurePositions = (portfolio: StudyPortfolio) => {
+    const weightedRows = portfolio.rows
+      .map((row) => {
+        const symbol = row.label.trim().toUpperCase();
+        const weight = Number(row.weight.replace(',', '.'));
+        const isin = instrumentBySymbol.get(symbol)?.isin?.trim().toUpperCase() ?? '';
+        return { isin, weight };
+      })
+      .filter((row) => row.isin.length > 0 && Number.isFinite(row.weight) && row.weight > 0);
+
+    const totalWeight = weightedRows.reduce((sum, row) => sum + row.weight, 0);
+    if (weightedRows.length === 0 || totalWeight <= 0) {
+      return {
+        error: 'Nessuno strumento valido con ISIN e peso > 0 nel portafoglio di studio',
+        baseAmount: 0,
+        positions: [] as Array<{ isin: string; amount: number }>,
+      };
+    }
+
+    const baseAmount = investedTotal > 0 ? investedTotal : totalWeight;
+    const positionsByIsin = new Map<string, number>();
+    weightedRows.forEach((row) => {
+      const amount = (row.weight / totalWeight) * baseAmount;
+      positionsByIsin.set(row.isin, (positionsByIsin.get(row.isin) ?? 0) + amount);
+    });
+
+    const positions = Array.from(positionsByIsin.entries())
+      .map(([isin, amount]) => ({ isin, amount }))
+      .filter((position) => Number.isFinite(position.amount) && position.amount > 0);
+
+    if (positions.length === 0) {
+      return {
+        error: 'Impossibile costruire le posizioni per questo portafoglio di studio',
+        baseAmount,
+        positions: [] as Array<{ isin: string; amount: number }>,
+      };
+    }
+
+    return { error: null, baseAmount, positions };
+  };
+
   const closeStudyGeographicModal = () => {
     setIsStudyGeographicModalOpen(false);
     setStudyGeographicActivePortfolioId(null);
@@ -811,51 +928,58 @@ export function Portfolio() {
     setStudyGeographicActivePortfolioId(portfolio.id);
     setIsStudyGeographicModalOpen(true);
 
-    const weightedRows = portfolio.rows
-      .map((row) => {
-        const symbol = row.label.trim().toUpperCase();
-        const weight = Number(row.weight.replace(',', '.'));
-        const isin = instrumentBySymbol.get(symbol)?.isin?.trim().toUpperCase() ?? '';
-        return { isin, weight };
-      })
-      .filter((row) => row.isin.length > 0 && Number.isFinite(row.weight) && row.weight > 0);
-
-    const totalWeight = weightedRows.reduce((sum, row) => sum + row.weight, 0);
-    if (weightedRows.length === 0 || totalWeight <= 0) {
-      setStudyGeographicExposureError('Nessuno strumento valido con ISIN e peso > 0 nel portafoglio di studio');
+    const studyExposure = buildStudyExposurePositions(portfolio);
+    if (studyExposure.error) {
+      setStudyGeographicExposureError(studyExposure.error);
       setStudyGeographicExposureLoading(false);
       setStudyGeographicActivePortfolioId(null);
       return;
     }
 
-    const baseAmount = investedTotal > 0 ? investedTotal : totalWeight;
-    setStudyGeographicBaseAmount(baseAmount);
-
-    const positionsByIsin = new Map<string, number>();
-    weightedRows.forEach((row) => {
-      const amount = (row.weight / totalWeight) * baseAmount;
-      positionsByIsin.set(row.isin, (positionsByIsin.get(row.isin) ?? 0) + amount);
-    });
-
-    const positions = Array.from(positionsByIsin.entries())
-      .map(([isin, amount]) => ({ isin, amount }))
-      .filter((position) => Number.isFinite(position.amount) && position.amount > 0);
-
-    if (positions.length === 0) {
-      setStudyGeographicExposureError('Impossibile costruire le posizioni geografiche per questo portafoglio di studio');
-      setStudyGeographicExposureLoading(false);
-      setStudyGeographicActivePortfolioId(null);
-      return;
-    }
+    setStudyGeographicBaseAmount(studyExposure.baseAmount);
 
     try {
-      const response = await portfolioApi.getGeographicExposure({ positions });
+      const response = await portfolioApi.getGeographicExposure({ positions: studyExposure.positions });
       setStudyGeographicExposure(response);
     } catch (err) {
       setStudyGeographicExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione geografica');
     } finally {
       setStudyGeographicExposureLoading(false);
       setStudyGeographicActivePortfolioId(null);
+    }
+  };
+
+  const closeStudySectorModal = () => {
+    setIsStudySectorModalOpen(false);
+    setStudySectorActivePortfolioId(null);
+  };
+
+  const openStudySectorModal = async (portfolio: StudyPortfolio) => {
+    setStudySectorPortfolioName(portfolio.name.trim() || 'Portafoglio di studio');
+    setStudySectorExposure(null);
+    setStudySectorExposureError(null);
+    setStudySectorExposureLoading(true);
+    setStudySectorActivePortfolioId(portfolio.id);
+    setIsStudySectorModalOpen(true);
+
+    const studyExposure = buildStudyExposurePositions(portfolio);
+    if (studyExposure.error) {
+      setStudySectorExposureError(studyExposure.error);
+      setStudySectorExposureLoading(false);
+      setStudySectorActivePortfolioId(null);
+      return;
+    }
+
+    setStudySectorBaseAmount(studyExposure.baseAmount);
+
+    try {
+      const response = await portfolioApi.getSectorExposure({ positions: studyExposure.positions });
+      setStudySectorExposure(response);
+    } catch (err) {
+      setStudySectorExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione settoriale');
+    } finally {
+      setStudySectorExposureLoading(false);
+      setStudySectorActivePortfolioId(null);
     }
   };
 
@@ -1011,6 +1135,68 @@ export function Portfolio() {
                 </>
               )}
             </div>
+
+            <div className="h-[220px] relative">
+              {sectorExposureLoading ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Caricamento esposizione settoriale...
+                </div>
+              ) : sectorExposureError ? (
+                <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
+                  {sectorExposureError}
+                </div>
+              ) : sectorExposureChart.slices.length === 0 ? (
+                <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                  Nessun dato settoriale disponibile.
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                      <Pie
+                        data={sectorExposureChart.slices}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={42}
+                        outerRadius={68}
+                        minAngle={2}
+                        paddingAngle={2}
+                        startAngle={90}
+                        endAngle={-270}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        labelLine={false}
+                      >
+                        {sectorExposureChart.slices.map((slice) => (
+                          <Cell key={slice.key} fill={slice.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
+                          if (!point) return null;
+
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                              <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                              <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                              <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                            </div>
+                          );
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
+                    <p className="text-sm font-bold text-slate-700">{formatCurrency(sectorExposureChart.total)}</p>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="min-w-0">
@@ -1023,6 +1209,15 @@ export function Portfolio() {
                 className="mt-2 inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
               >
                 Dettaglio ripartizione geografica
+              </button>
+            )}
+            {sectorExposureChart.slices.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsSectorModalOpen(true)}
+                className="mt-2 ml-3 inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
+              >
+                Dettaglio ripartizione settoriale
               </button>
             )}
           </div>
@@ -1313,6 +1508,71 @@ export function Portfolio() {
         </div>
       )}
 
+      {isSectorModalOpen && sectorExposureChart.slices.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsSectorModalOpen(false)} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione settoriale</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per settore calcolate sul portafoglio investito.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => setIsSectorModalOpen(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(sectorExposureChart.total)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {sectorExposure?.generatedAt
+                      ? new Date(sectorExposure.generatedAt).toLocaleString('it-IT')
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[560px] w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-left text-slate-500">
+                        <th className="px-3 py-2 font-medium">Settore</th>
+                        <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                        <th className="px-3 py-2 font-medium text-right">Importo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sectorExposureChart.slices.map((slice) => (
+                        <tr key={`sector-row-${slice.key}`} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
+                          <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={() => setIsSectorModalOpen(false)}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isStudyGeographicModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeStudyGeographicModal} />
@@ -1399,6 +1659,92 @@ export function Portfolio() {
         </div>
       )}
 
+      {isStudySectorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeStudySectorModal} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione settoriale - {studySectorPortfolioName}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per settore calcolate al click sul portafoglio di studio.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeStudySectorModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              {studySectorExposureLoading ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 py-10 flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Calcolo ripartizione settoriale in corso...
+                </div>
+              ) : studySectorExposureError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {studySectorExposureError}
+                </div>
+              ) : studySectorExposureChart.slices.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Nessun dato settoriale disponibile per questo portafoglio di studio.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                      <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(studySectorExposureChart.total)}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">
+                        {studySectorExposure?.generatedAt
+                          ? new Date(studySectorExposure.generatedAt).toLocaleString('it-IT')
+                          : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500">
+                    Base calcolo: {formatCurrency(studySectorBaseAmount)} (ricalcolata al click, senza salvataggio su DB).
+                  </p>
+
+                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[560px] w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr className="text-left text-slate-500">
+                            <th className="px-3 py-2 font-medium">Settore</th>
+                            <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                            <th className="px-3 py-2 font-medium text-right">Importo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studySectorExposureChart.slices.map((slice) => (
+                            <tr key={`study-sector-row-${slice.key}`} className="border-t border-slate-100">
+                              <td className="px-3 py-2 font-medium text-slate-800">{slice.label}</td>
+                              <td className="px-3 py-2 text-right text-slate-700">{slice.percentage.toFixed(2)}%</td>
+                              <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(slice.value)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={closeStudySectorModal}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
         <button
           type="button"
@@ -1466,6 +1812,16 @@ export function Portfolio() {
                           <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
                         )}
                         Ripartizione geo
+                      </button>
+                      <button
+                        className="btn btn-secondary py-1 px-2 text-xs"
+                        onClick={() => void openStudySectorModal(p)}
+                        disabled={studySectorExposureLoading && studySectorActivePortfolioId === p.id}
+                      >
+                        {studySectorExposureLoading && studySectorActivePortfolioId === p.id && (
+                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        )}
+                        Ripartizione settori
                       </button>
                       <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditPortfolioModal(p)}>
                         <Pencil className="w-3.5 h-3.5 mr-1" />

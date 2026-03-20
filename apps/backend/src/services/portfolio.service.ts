@@ -7,6 +7,8 @@ import type {
   PortfolioAssetClassDTO,
   PortfolioGeographicExposureRequestDTO,
   PortfolioGeographicExposureResponseDTO,
+  PortfolioSectorExposureRequestDTO,
+  PortfolioSectorExposureResponseDTO,
   PortfolioHistoryHorizonDTO,
   PortfolioHistoryPointDTO,
   PortfolioHistoryResponseDTO,
@@ -58,9 +60,19 @@ type JustEtfCountryAllocation = {
   percentage: number;
 };
 
+type JustEtfSectorAllocation = {
+  sector: string;
+  percentage: number;
+};
+
 type GeographicExposureCacheEntry = {
   expiresAt: number;
   countries: JustEtfCountryAllocation[];
+};
+
+type SectorExposureCacheEntry = {
+  expiresAt: number;
+  sectors: JustEtfSectorAllocation[];
 };
 
 type InvestedPositionJson = {
@@ -79,6 +91,7 @@ const JUSTETF_CHART_BASE_URL = 'https://www.justetf.com/api/etfs';
 const JUSTETF_OVERVIEW_URL = 'https://www.justetf.com/en/search-api/etfs';
 const JUSTETF_PROFILE_URL = 'https://www.justetf.com/en/etf-profile.html';
 const JUSTETF_COUNTRIES_LOAD_MORE_PATH = '0-1.0-holdingsSection-countries-loadMoreCountries';
+const JUSTETF_SECTORS_LOAD_MORE_PATH = '0-1.0-holdingsSection-sectors-loadMoreSectors';
 const JUSTETF_OVERVIEW_STRATEGIES = ['epg-longOnly', 'epg-activeEtfs', 'epg-shortAndLeveraged'] as const;
 const JUSTETF_CHART_DEFAULT_PARAMS = {
   locale: 'en',
@@ -156,6 +169,8 @@ export class PortfolioService {
   private inFlight = new Map<string, Promise<PortfolioHistoryPointDTO[]>>();
   private geographicExposureCache = new Map<string, GeographicExposureCacheEntry>();
   private geographicExposureCacheVersion = 'v2';
+  private sectorExposureCache = new Map<string, SectorExposureCacheEntry>();
+  private sectorExposureCacheVersion = 'v1';
 
   async getHistory(
     symbols: string[],
@@ -361,6 +376,77 @@ export class PortfolioService {
       generatedAt: new Date().toISOString(),
       totalAmount: this.roundToCents(totalAmount),
       countries,
+    };
+  }
+
+  async getSectorExposure(
+    input: PortfolioSectorExposureRequestDTO
+  ): Promise<PortfolioSectorExposureResponseDTO> {
+    const positionsByIsin = new Map<string, number>();
+    input.positions.forEach((position) => {
+      const isin = position.isin.trim().toUpperCase();
+      const amount = Number(position.amount);
+      if (!ISIN_REGEX.test(isin) || !Number.isFinite(amount) || amount <= 0) return;
+      positionsByIsin.set(isin, (positionsByIsin.get(isin) ?? 0) + amount);
+    });
+
+    if (positionsByIsin.size === 0) {
+      throw new AppError('At least one valid ETF position is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const totalAmount = Array.from(positionsByIsin.values()).reduce((sum, value) => sum + value, 0);
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      throw new AppError('Invalid total amount for sector exposure', 400, 'VALIDATION_ERROR');
+    }
+
+    const sectorRatioByName = new Map<string, number>();
+
+    for (const [isin, amount] of positionsByIsin.entries()) {
+      const sectors = await this.fetchSectorAllocationsByIsin(isin);
+      if (sectors.length === 0) continue;
+
+      const etfPortfolioWeight = amount / totalAmount;
+      let coveredRatio = 0;
+
+      sectors.forEach((sector) => {
+        const ratio = this.normalizeAllocationRatio(sector.percentage);
+        if (ratio <= 0) return;
+        const sectorName = this.normalizeSectorName(sector.sector);
+        if (!sectorName) return;
+        coveredRatio += ratio;
+        sectorRatioByName.set(sectorName, (sectorRatioByName.get(sectorName) ?? 0) + ratio * etfPortfolioWeight);
+      });
+
+      if (coveredRatio < 1) {
+        sectorRatioByName.set('Altro', (sectorRatioByName.get('Altro') ?? 0) + (1 - coveredRatio) * etfPortfolioWeight);
+      }
+    }
+
+    if (sectorRatioByName.size === 0) {
+      throw new AppError('Unable to resolve sector allocations from justETF', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const ratioTotal = Array.from(sectorRatioByName.values()).reduce((sum, value) => sum + value, 0);
+    if (ratioTotal < 1) {
+      sectorRatioByName.set('Altro', (sectorRatioByName.get('Altro') ?? 0) + (1 - ratioTotal));
+    }
+
+    const sectors = Array.from(sectorRatioByName.entries())
+      .map(([sector, ratio]) => {
+        const safeRatio = Math.max(0, ratio);
+        return {
+          sector,
+          percentage: this.round6(safeRatio),
+          amount: this.roundToCents(safeRatio * totalAmount),
+        };
+      })
+      .filter((row) => row.percentage > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      totalAmount: this.roundToCents(totalAmount),
+      sectors,
     };
   }
 
@@ -1050,6 +1136,37 @@ export class PortfolioService {
     return best;
   }
 
+  private async fetchSectorAllocationsByIsin(isin: string): Promise<JustEtfSectorAllocation[]> {
+    const cacheKey = `${this.sectorExposureCacheVersion}:${isin}`;
+    const cached = this.sectorExposureCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.sectors;
+    }
+
+    let profileHtml = '';
+    let cookieHeader = '';
+
+    try {
+      const profile = await this.fetchProfileHtml(isin);
+      profileHtml = profile.html;
+      cookieHeader = profile.cookieHeader;
+    } catch {
+      // If profile fetch fails we still try to return from cache or empty data.
+    }
+
+    const baseSectors = this.parseSectorAllocationsFromMarkup(profileHtml);
+    const expandedMarkup = await this.fetchLoadMoreSectorsMarkup(isin, cookieHeader);
+    const expandedSectors = this.parseSectorAllocationsFromMarkup(expandedMarkup);
+    const best = this.pickBestSectorAllocation(baseSectors, expandedSectors);
+
+    this.sectorExposureCache.set(cacheKey, {
+      sectors: best,
+      expiresAt: Date.now() + this.cacheTtlMs,
+    });
+
+    return best;
+  }
+
   private async fetchProfileHtml(isin: string): Promise<{ html: string; cookieHeader: string }> {
     const profileUrl = `${JUSTETF_PROFILE_URL}?isin=${encodeURIComponent(isin)}`;
     const response = await fetch(profileUrl, {
@@ -1101,6 +1218,38 @@ export class PortfolioService {
     }
   }
 
+  private async fetchLoadMoreSectorsMarkup(isin: string, cookieHeader: string): Promise<string> {
+    const requestUrl = `${JUSTETF_PROFILE_URL}?${JUSTETF_SECTORS_LOAD_MORE_PATH}&isin=${encodeURIComponent(isin)}&_wicket=1`;
+    const baseUrl = `en/etf-profile.html?isin=${isin}`;
+
+    const headers: Record<string, string> = {
+      Accept: 'text/xml; charset=UTF-8',
+      'Accept-Language': 'en',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Referer: `${JUSTETF_PROFILE_URL}?isin=${isin}`,
+      'User-Agent': this.userAgent,
+      'Wicket-Ajax': 'true',
+      'Wicket-Ajax-BaseURL': baseUrl,
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    const cleanCookie = this.toCookieHeader(cookieHeader);
+    if (cleanCookie) {
+      headers.Cookie = cleanCookie;
+    }
+
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers,
+      });
+      if (!response.ok) return '';
+      return await response.text();
+    } catch {
+      return '';
+    }
+  }
+
   private pickBestCountryAllocation(
     baseCountries: JustEtfCountryAllocation[],
     expandedCountries: JustEtfCountryAllocation[],
@@ -1112,6 +1261,19 @@ export class PortfolioService {
     const expandedScore = expandedCountries.reduce((sum, row) => sum + this.normalizeCountryRatio(row.percentage), 0);
 
     return expandedScore >= baseScore ? expandedCountries : baseCountries;
+  }
+
+  private pickBestSectorAllocation(
+    baseSectors: JustEtfSectorAllocation[],
+    expandedSectors: JustEtfSectorAllocation[],
+  ): JustEtfSectorAllocation[] {
+    if (expandedSectors.length === 0) return baseSectors;
+    if (baseSectors.length === 0) return expandedSectors;
+
+    const baseScore = baseSectors.reduce((sum, row) => sum + this.normalizeAllocationRatio(row.percentage), 0);
+    const expandedScore = expandedSectors.reduce((sum, row) => sum + this.normalizeAllocationRatio(row.percentage), 0);
+
+    return expandedScore >= baseScore ? expandedSectors : baseSectors;
   }
 
   private parseCountryAllocationsFromMarkup(markup: string): JustEtfCountryAllocation[] {
@@ -1149,6 +1311,41 @@ export class PortfolioService {
       .sort((a, b) => b.percentage - a.percentage);
   }
 
+  private parseSectorAllocationsFromMarkup(markup: string): JustEtfSectorAllocation[] {
+    if (!markup) return [];
+
+    const bySector = new Map<string, number>();
+    const rowRegex = /<tr[^>]*data-testid="[^"]*sectors[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+
+    let rowMatch: RegExpExecArray | null = rowRegex.exec(markup);
+    while (rowMatch) {
+      const rowHtml = rowMatch[1];
+      const nameMatch = /data-testid="[^"]*sectors_value_name"[^>]*>([\s\S]*?)<\/(?:td|span)>/i.exec(rowHtml);
+      const percentageMatch = /data-testid="[^"]*sectors_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+
+      const sector = this.normalizeSectorName(
+        this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim()
+      );
+      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
+      const percentage = Number(
+        percentageText
+          .replace('%', '')
+          .replace(',', '.')
+          .replace(/[^\d.-]/g, '')
+      );
+
+      if (sector && Number.isFinite(percentage) && percentage > 0) {
+        bySector.set(sector, (bySector.get(sector) ?? 0) + percentage);
+      }
+
+      rowMatch = rowRegex.exec(markup);
+    }
+
+    return Array.from(bySector.entries())
+      .map(([sector, percentage]) => ({ sector, percentage }))
+      .sort((a, b) => b.percentage - a.percentage);
+  }
+
   private stripHtmlTags(value: string): string {
     return value.replace(/<[^>]*>/g, ' ');
   }
@@ -1176,9 +1373,13 @@ export class PortfolioService {
       .join('; ');
   }
 
-  private normalizeCountryRatio(percentage: number): number {
+  private normalizeAllocationRatio(percentage: number): number {
     if (!Number.isFinite(percentage) || percentage <= 0) return 0;
     return percentage > 1 ? percentage / 100 : percentage;
+  }
+
+  private normalizeCountryRatio(percentage: number): number {
+    return this.normalizeAllocationRatio(percentage);
   }
 
   private normalizeCountryName(country: string): string {
@@ -1203,6 +1404,16 @@ export class PortfolioService {
     }
 
     return cleaned;
+  }
+
+  private normalizeSectorName(sector: string): string {
+    if (!sector) return '';
+
+    return sector
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   private async getSymbolHistory(

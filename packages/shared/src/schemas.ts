@@ -267,6 +267,15 @@ export const portfolioGeographicExposureRequestSchema = z.object({
   positions: z.array(portfolioGeographicExposurePositionSchema).min(1).max(300),
 });
 
+export const portfolioSectorExposurePositionSchema = z.object({
+  isin: portfolioIsinSchema,
+  amount: z.number().positive().max(1_000_000_000),
+});
+
+export const portfolioSectorExposureRequestSchema = z.object({
+  positions: z.array(portfolioSectorExposurePositionSchema).min(1).max(300),
+});
+
 export const createPortfolioAssetClassSchema = z.object({
   name: portfolioAssetClassNameSchema,
 });
@@ -325,3 +334,4 @@ export type UpdatePortfolioAssetClassInput = z.infer<typeof updatePortfolioAsset
 export type CreatePortfolioInstrumentInput = z.infer<typeof createPortfolioInstrumentSchema>;
 export type UpdatePortfolioInstrumentInput = z.infer<typeof updatePortfolioInstrumentSchema>;
 export type PortfolioGeographicExposureRequestInput = z.infer<typeof portfolioGeographicExposureRequestSchema>;
+export type PortfolioSectorExposureRequestInput = z.infer<typeof portfolioSectorExposureRequestSchema>;

@@ -451,6 +451,27 @@ export interface PortfolioGeographicExposureResponseDTO {
   countries: PortfolioGeographicExposureCountryDTO[];
 }
 
+export interface PortfolioSectorExposureInputPositionDTO {
+  isin: string;
+  amount: number;
+}
+
+export interface PortfolioSectorExposureRequestDTO {
+  positions: PortfolioSectorExposureInputPositionDTO[];
+}
+
+export interface PortfolioSectorExposureSectorDTO {
+  sector: string;
+  amount: number;
+  percentage: number;
+}
+
+export interface PortfolioSectorExposureResponseDTO {
+  generatedAt: string;
+  totalAmount: number;
+  sectors: PortfolioSectorExposureSectorDTO[];
+}
+
 export interface PortfolioAssetClassDTO {
   id: string;
   name: string;
