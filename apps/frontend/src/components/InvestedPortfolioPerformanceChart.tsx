@@ -25,9 +25,10 @@ type InvestedPortfolioPerformanceChartProps = {
   metric?: PortfolioStaticPerformanceMetricDTO;
   height?: number;
   title?: string;
+  showMetricSelector?: boolean;
 };
 
-const METRIC_OPTIONS: Array<{ value: PortfolioStaticPerformanceMetricDTO; label: string }> = [
+export const PORTFOLIO_PERFORMANCE_METRIC_OPTIONS: Array<{ value: PortfolioStaticPerformanceMetricDTO; label: string }> = [
   { value: 'relative', label: 'relative' },
   { value: 'relative_with_reinvested_dividends', label: 'relative_with_reinvested_dividends' },
 ];
@@ -49,6 +50,7 @@ export function InvestedPortfolioPerformanceChart({
   metric = 'relative',
   height = 320,
   title = 'Andamento Storico Portafoglio (pesi statici)',
+  showMetricSelector = true,
 }: InvestedPortfolioPerformanceChartProps) {
   const [selectedMetric, setSelectedMetric] = useState<PortfolioStaticPerformanceMetricDTO>(metric);
   const [loading, setLoading] = useState(false);
@@ -130,17 +132,19 @@ export function InvestedPortfolioPerformanceChart({
             Curva aggregata a pesi iniziali fissi, ribasata a 0% alla data iniziale.
           </p>
         </div>
-        <select
-          className="input text-xs min-w-[220px]"
-          value={selectedMetric}
-          onChange={(event) => setSelectedMetric(event.target.value as PortfolioStaticPerformanceMetricDTO)}
-        >
-          {METRIC_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        {showMetricSelector && (
+          <select
+            className="input text-xs min-w-[220px]"
+            value={selectedMetric}
+            onChange={(event) => setSelectedMetric(event.target.value as PortfolioStaticPerformanceMetricDTO)}
+          >
+            {PORTFOLIO_PERFORMANCE_METRIC_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? (

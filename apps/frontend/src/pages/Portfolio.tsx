@@ -17,7 +17,10 @@ import {
 import { ChevronRight, Loader2, Pencil, Plus, X } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { portfolioApi } from '../lib/api';
-import { InvestedPortfolioPerformanceChart } from '../components/InvestedPortfolioPerformanceChart';
+import {
+  InvestedPortfolioPerformanceChart,
+  PORTFOLIO_PERFORMANCE_METRIC_OPTIONS,
+} from '../components/InvestedPortfolioPerformanceChart';
 import type {
   PortfolioAssetClassDTO,
   PortfolioCompareRequestDTO,
@@ -27,6 +30,7 @@ import type {
   PortfolioInstrumentDTO,
   PortfolioInputValueModeDTO,
   PortfolioSectorExposureResponseDTO,
+  PortfolioStaticPerformanceMetricDTO,
 } from '@budget/shared';
 
 type Horizon = PortfolioHistoryHorizonDTO;
@@ -258,6 +262,8 @@ export function Portfolio() {
   const [studySectorBaseAmount, setStudySectorBaseAmount] = useState(0);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  const [isStudyPerformanceModalOpen, setIsStudyPerformanceModalOpen] = useState(false);
+  const [studyPerformanceMetric, setStudyPerformanceMetric] = useState<PortfolioStaticPerformanceMetricDTO>('relative');
   const [isInvestedModalOpen, setIsInvestedModalOpen] = useState(false);
   const [investedDraft, setInvestedDraft] = useState<InvestedDraft | null>(null);
   const [editingInvestedSymbol, setEditingInvestedSymbol] = useState<string | null>(null);
@@ -915,6 +921,63 @@ export function Portfolio() {
 
     return { error: null, baseAmount, positions };
   };
+
+  const buildStudyPerformancePositions = (portfolio: StudyPortfolio) => {
+    const rows = portfolio.rows
+      .map((row) => {
+        const symbol = row.label.trim().toUpperCase();
+        const weight = Number(row.weight.replace(',', '.'));
+        const isin = instrumentBySymbol.get(symbol)?.isin?.trim().toUpperCase() ?? '';
+        return { isin, weight };
+      })
+      .filter((row) => row.isin.length > 0 && Number.isFinite(row.weight) && row.weight > 0);
+
+    if (rows.length === 0) {
+      return {
+        error: 'Nessuno strumento valido con ISIN e peso > 0',
+        positions: [] as Array<{ isin: string; amount: number }>,
+      };
+    }
+
+    const positionsByIsin = new Map<string, number>();
+    rows.forEach((row) => {
+      positionsByIsin.set(row.isin, (positionsByIsin.get(row.isin) ?? 0) + row.weight);
+    });
+
+    const positions = Array.from(positionsByIsin.entries())
+      .map(([isin, amount]) => ({ isin, amount }))
+      .filter((position) => Number.isFinite(position.amount) && position.amount > 0);
+
+    if (positions.length === 0) {
+      return {
+        error: 'Impossibile costruire una composizione valida',
+        positions: [] as Array<{ isin: string; amount: number }>,
+      };
+    }
+
+    return { error: null, positions };
+  };
+
+  const studyPerformanceCards = useMemo(
+    () =>
+      study.map((portfolio) => {
+        const built = buildStudyPerformancePositions(portfolio);
+        return {
+          id: portfolio.id,
+          name: portfolio.name.trim() || 'Portafoglio di studio',
+          positions: built.positions,
+          error: built.error,
+        };
+      }),
+    [study, instrumentBySymbol],
+  );
+
+  const studyPerformanceGridClass = useMemo(() => {
+    const count = studyPerformanceCards.length;
+    if (count <= 1) return 'grid grid-cols-1 gap-3';
+    if (count <= 4) return 'grid grid-cols-1 md:grid-cols-2 gap-3';
+    return 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
+  }, [studyPerformanceCards.length]);
 
   const closeStudyGeographicModal = () => {
     setIsStudyGeographicModalOpen(false);
@@ -1766,6 +1829,84 @@ export function Portfolio() {
         </div>
       )}
 
+      {isStudyPerformanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsStudyPerformanceModalOpen(false)} />
+          <div className="relative w-full sm:max-w-7xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Confronto Rendimenti Portafogli</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Vista comparativa rapida degli andamenti storici (pesi statici) per i portafogli in laboratorio.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+                onClick={() => setIsStudyPerformanceModalOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  Portafogli: {studyPerformanceCards.length}. Layout automatico: max 3 grafici per riga.
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Metrica</label>
+                  <select
+                    className="input text-xs min-w-[220px]"
+                    value={studyPerformanceMetric}
+                    onChange={(event) => setStudyPerformanceMetric(event.target.value as PortfolioStaticPerformanceMetricDTO)}
+                  >
+                    {PORTFOLIO_PERFORMANCE_METRIC_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {studyPerformanceCards.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Nessun portafoglio disponibile nel laboratorio strategico.
+                </div>
+              ) : (
+                <div className={studyPerformanceGridClass}>
+                  {studyPerformanceCards.map((card) => (
+                    <div key={`study-performance-${card.id}`} className="min-w-0">
+                      {card.error ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                          <p className="text-sm font-semibold text-red-800">{card.name}</p>
+                          <p className="text-xs text-red-700 mt-1">{card.error}</p>
+                        </div>
+                      ) : (
+                        <InvestedPortfolioPerformanceChart
+                          positions={card.positions}
+                          metric={studyPerformanceMetric}
+                          showMetricSelector={false}
+                          title={card.name}
+                          height={260}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={() => setIsStudyPerformanceModalOpen(false)}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden">
         <button
           type="button"
@@ -1802,6 +1943,13 @@ export function Portfolio() {
               </button>
               <button className="btn btn-primary" onClick={runCompare} disabled={loading}>
                 {loading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Confronta
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setIsStudyPerformanceModalOpen(true)}
+                disabled={study.length === 0}
+              >
+                Confronta Rendimenti
               </button>
             </div>
 
