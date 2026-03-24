@@ -1764,44 +1764,73 @@ export class PortfolioService {
     };
 
     const byCompany = new Map<string, CompanyAggregation>();
-    const rowRegex = /<tr[^>]*data-testid="[^"]*(?:securities|holdings)[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
-
-    let rowMatch: RegExpExecArray | null = rowRegex.exec(markup);
-    while (rowMatch) {
-      const rowHtml = rowMatch[1];
-      const nameMatch = /data-testid="[^"]*(?:securities|holdings)_value_name"[^>]*>([\s\S]*?)<\/(?:td|span)>/i.exec(rowHtml);
-      const percentageMatch = /data-testid="[^"]*(?:securities|holdings)_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
-      const isinMatch = /data-testid="[^"]*(?:securities|holdings)_value_isin"[^>]*>([\s\S]*?)<\/(?:td|span)>/i.exec(rowHtml);
-
-      const company = this.normalizeCompanyName(
-        this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim()
-      );
-      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
-      const percentage = Number(
-        percentageText
+    const parsePercentageValue = (rawText: string): number =>
+      Number(
+        rawText
           .replace('%', '')
           .replace(',', '.')
           .replace(/[^\d.-]/g, '')
       );
 
+    const appendCompanyRow = (rawCompany: string, rawPercentageText: string, rawIsin: string | null | undefined) => {
+      const percentage = parsePercentageValue(rawPercentageText);
+      if (!Number.isFinite(percentage) || percentage <= 0) return;
+
+      const holdingIsin = this.normalizeHoldingIsin(rawIsin);
+      const normalizedCompany = this.normalizeCompanyName(rawCompany);
+      const company =
+        normalizedCompany && holdingIsin && normalizedCompany.length <= 3 && holdingIsin.startsWith(normalizedCompany)
+          ? holdingIsin
+          : (normalizedCompany || holdingIsin || '');
+      if (!company) return;
+
+      const key = `${company.toLowerCase()}|${holdingIsin ?? ''}`;
+      const current = byCompany.get(key) ?? {
+        company,
+        isin: holdingIsin,
+        percentage: 0,
+      };
+      current.percentage += percentage;
+      byCompany.set(key, current);
+    };
+
+    // Equity ETFs expose "Top 10 Holdings" rows with stock profile links (name + percentage).
+    const topHoldingRowRegex = /<tr[^>]*data-testid="[^"]*top-holdings_row"[^>]*>([\s\S]*?)<\/tr>/gi;
+    let topHoldingRowMatch: RegExpExecArray | null = topHoldingRowRegex.exec(markup);
+    while (topHoldingRowMatch) {
+      const rowHtml = topHoldingRowMatch[1];
+      const nameAnchorMatch = /data-testid="[^"]*top-holdings_link_name"[^>]*>([\s\S]*?)<\/a>/i.exec(rowHtml);
+      const percentageMatch = /data-testid="[^"]*top-holdings_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+      const linkIsinMatch = /\/stock-profiles\/([A-Za-z0-9]{12})/i.exec(rowHtml);
+      const titleMatch = /data-testid="[^"]*top-holdings_link_name"[^>]*title="([^"]+)"/i.exec(rowHtml);
+
+      const rawCompany = this.decodeHtmlEntities(
+        this.stripHtmlTags(nameAnchorMatch?.[1] ?? titleMatch?.[1] ?? '')
+      ).trim();
+      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
+      appendCompanyRow(rawCompany, percentageText, linkIsinMatch?.[1] ?? null);
+
+      topHoldingRowMatch = topHoldingRowRegex.exec(markup);
+    }
+
+    // Bond/monetary ETFs may expose security-level holdings rows.
+    const securityRowRegex = /<tr[^>]*data-testid="[^"]*(?:securities|holdings)[^"]*row[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+    let securityRowMatch: RegExpExecArray | null = securityRowRegex.exec(markup);
+    while (securityRowMatch) {
+      const rowHtml = securityRowMatch[1];
+      const nameMatch = /data-testid="[^"]*(?:securities|holdings)_value_name"[^>]*>([\s\S]*?)<\/(?:td|span|a)>/i.exec(rowHtml);
+      const percentageMatch = /data-testid="[^"]*(?:securities|holdings)_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+      const isinMatch = /data-testid="[^"]*(?:securities|holdings)_value_isin"[^>]*>([\s\S]*?)<\/(?:td|span|a)>/i.exec(rowHtml);
+
+      const rawCompany = this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim();
+      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
       const rawIsinText = this.decodeHtmlEntities(this.stripHtmlTags(isinMatch?.[1] ?? '')).trim();
       const fallbackIsinMatch = /\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/i.exec(
         this.decodeHtmlEntities(this.stripHtmlTags(rowHtml)),
       );
-      const holdingIsin = this.normalizeHoldingIsin(rawIsinText || fallbackIsinMatch?.[1] || null);
 
-      if (company && Number.isFinite(percentage) && percentage > 0) {
-        const key = `${company.toLowerCase()}|${holdingIsin ?? ''}`;
-        const current = byCompany.get(key) ?? {
-          company,
-          isin: holdingIsin,
-          percentage: 0,
-        };
-        current.percentage += percentage;
-        byCompany.set(key, current);
-      }
-
-      rowMatch = rowRegex.exec(markup);
+      appendCompanyRow(rawCompany, percentageText, rawIsinText || fallbackIsinMatch?.[1] || null);
+      securityRowMatch = securityRowRegex.exec(markup);
     }
 
     return Array.from(byCompany.values()).sort((a, b) => b.percentage - a.percentage);
@@ -1882,7 +1911,7 @@ export class PortfolioService {
 
     return company
       .replace(/\u00a0/g, ' ')
-      .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
+      .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%\)?\s*$/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
   }
