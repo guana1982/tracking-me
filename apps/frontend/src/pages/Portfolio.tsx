@@ -24,6 +24,7 @@ import {
 import { StudyPortfoliosOverlayPerformanceChart } from '../components/StudyPortfoliosOverlayPerformanceChart';
 import type {
   PortfolioAssetClassDTO,
+  PortfolioCompanyExposureCompanyDTO,
   PortfolioCompanyExposureResponseDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
@@ -85,6 +86,10 @@ type GeographicExposureTableRow = {
   percentage: number;
   etfs: string[];
 };
+type CompanyExposureSplit = {
+  equity: PortfolioCompanyExposureCompanyDTO[];
+  securities: PortfolioCompanyExposureCompanyDTO[];
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -144,6 +149,87 @@ function buildGeographicExposureTableRows(
     ...row,
     percentage: filteredTotal > 0 ? (row.amount / filteredTotal) * 100 : 0,
   }));
+}
+
+function isIsinCode(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value.trim().toUpperCase());
+}
+
+function isSecurityStyleCompanyRow(row: PortfolioCompanyExposureCompanyDTO): boolean {
+  const company = (row.company || '').trim().toUpperCase();
+  const isin = (row.isin || '').trim().toUpperCase();
+
+  if (!company || company === 'ALTRO') return false;
+  if (isIsinCode(company)) return true;
+  if (company === isin && isIsinCode(isin)) return true;
+  if (company.length <= 4 && isin && isin.startsWith(company)) return true;
+
+  return false;
+}
+
+function splitCompanyExposureRows(rows: PortfolioCompanyExposureCompanyDTO[]): CompanyExposureSplit {
+  return rows.reduce<CompanyExposureSplit>(
+    (acc, row) => {
+      if (isSecurityStyleCompanyRow(row)) {
+        acc.securities.push(row);
+      } else {
+        acc.equity.push(row);
+      }
+      return acc;
+    },
+    { equity: [], securities: [] },
+  );
+}
+
+function CompanyExposureTableSection({
+  title,
+  rows,
+  emptyLabel,
+  rowKeyPrefix,
+}: {
+  title: string;
+  rows: PortfolioCompanyExposureCompanyDTO[];
+  emptyLabel: string;
+  rowKeyPrefix: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+        <p className="text-sm font-semibold text-slate-800">{title}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[640px] w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr className="text-left text-slate-500">
+              <th className="px-3 py-2 font-medium">Azienda</th>
+              <th className="px-3 py-2 font-medium">ISIN</th>
+              <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+              <th className="px-3 py-2 font-medium text-right">Importo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr className="border-t border-slate-100">
+                <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
+                  {emptyLabel}
+                </td>
+              </tr>
+            ) : (
+              rows.map((company) => (
+                <tr key={`${rowKeyPrefix}-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
+                  <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
+                  <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
+                  <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function createPieLabelRenderer(points: PieLabelPoint[]) {
@@ -520,6 +606,10 @@ export function Portfolio() {
       `${row.company} ${row.isin ?? ''}`.toLowerCase().includes(search),
     );
   }, [companyExposure?.companies, companySearchQuery]);
+  const filteredCompanyRowsByType = useMemo(
+    () => splitCompanyExposureRows(filteredCompanyRows),
+    [filteredCompanyRows],
+  );
   const filteredStudyCompanyRows = useMemo(() => {
     const rows = studyCompanyExposure?.companies ?? [];
     const search = studyCompanySearchQuery.trim().toLowerCase();
@@ -529,6 +619,10 @@ export function Portfolio() {
       `${row.company} ${row.isin ?? ''}`.toLowerCase().includes(search),
     );
   }, [studyCompanyExposure?.companies, studyCompanySearchQuery]);
+  const filteredStudyCompanyRowsByType = useMemo(
+    () => splitCompanyExposureRows(filteredStudyCompanyRows),
+    [filteredStudyCompanyRows],
+  );
   const resolveEtfAssetClass = useCallback(
     (etfSymbol: string): GeographicAssetClassCanonical =>
       normalizeGeographicAssetClass(
@@ -2094,38 +2188,18 @@ export function Portfolio() {
                 />
               </div>
 
-              <div className="rounded-lg border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-[640px] w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr className="text-left text-slate-500">
-                        <th className="px-3 py-2 font-medium">Azienda</th>
-                        <th className="px-3 py-2 font-medium">ISIN</th>
-                        <th className="px-3 py-2 font-medium text-right">% sul totale</th>
-                        <th className="px-3 py-2 font-medium text-right">Importo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCompanyRows.length === 0 ? (
-                        <tr className="border-t border-slate-100">
-                          <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
-                            Nessun risultato per la ricerca inserita.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredCompanyRows.map((company) => (
-                          <tr key={`company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
-                            <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
-                            <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
-                            <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <CompanyExposureTableSection
+                title="Aziende (equity)"
+                rows={filteredCompanyRowsByType.equity}
+                emptyLabel="Nessuna azienda equity trovata."
+                rowKeyPrefix="company-equity"
+              />
+              <CompanyExposureTableSection
+                title="Titoli/ISIN (bond/swap)"
+                rows={filteredCompanyRowsByType.securities}
+                emptyLabel="Nessun titolo/ISIN bond/swap trovato."
+                rowKeyPrefix="company-security"
+              />
             </div>
 
             <div className="p-4 border-t border-slate-200 flex items-center justify-end">
@@ -2418,38 +2492,18 @@ export function Portfolio() {
                     />
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-[640px] w-full text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                          <tr className="text-left text-slate-500">
-                            <th className="px-3 py-2 font-medium">Azienda</th>
-                            <th className="px-3 py-2 font-medium">ISIN</th>
-                            <th className="px-3 py-2 font-medium text-right">% sul totale</th>
-                            <th className="px-3 py-2 font-medium text-right">Importo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredStudyCompanyRows.length === 0 ? (
-                            <tr className="border-t border-slate-100">
-                              <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
-                                Nessun risultato per la ricerca inserita.
-                              </td>
-                            </tr>
-                          ) : (
-                            filteredStudyCompanyRows.map((company) => (
-                              <tr key={`study-company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
-                                <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
-                                <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
-                                <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
-                                <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <CompanyExposureTableSection
+                    title="Aziende (equity)"
+                    rows={filteredStudyCompanyRowsByType.equity}
+                    emptyLabel="Nessuna azienda equity trovata."
+                    rowKeyPrefix="study-company-equity"
+                  />
+                  <CompanyExposureTableSection
+                    title="Titoli/ISIN (bond/swap)"
+                    rows={filteredStudyCompanyRowsByType.securities}
+                    emptyLabel="Nessun titolo/ISIN bond/swap trovato."
+                    rowKeyPrefix="study-company-security"
+                  />
                 </>
               )}
             </div>
