@@ -3,6 +3,7 @@ import { portfolioService } from '../services/portfolio.service.js';
 import {
   createPortfolioAssetClassSchema,
   createPortfolioInstrumentSchema,
+  portfolioCompanyExposureRequestSchema,
   portfolioCompareRequestSchema,
   portfolioGeographicExposureRequestSchema,
   portfolioSectorExposureRequestSchema,
@@ -15,6 +16,7 @@ import {
 import type {
   CreatePortfolioAssetClassDTO,
   CreatePortfolioInstrumentDTO,
+  PortfolioCompanyExposureRequestDTO,
   PortfolioCompareRequestDTO,
   PortfolioGeographicExposureRequestDTO,
   PortfolioSectorExposureRequestDTO,
@@ -307,6 +309,31 @@ export const portfolioRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const parsed = portfolioSectorExposureRequestSchema.parse(request.body);
       const data = await portfolioService.getSectorExposure(parsed);
+      return { success: true, data };
+    },
+  });
+
+  fastify.post<{ Body: PortfolioCompanyExposureRequestDTO }>('/company-exposure', {
+    schema: {
+      tags: ['Portfolio'],
+      summary: 'Compute aggregated company exposure for invested ETF positions',
+      body: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object', additionalProperties: true },
+          },
+        },
+      },
+    },
+    handler: async (request) => {
+      const parsed = portfolioCompanyExposureRequestSchema.parse(request.body);
+      const data = await portfolioService.getCompanyExposure(parsed);
       return { success: true, data };
     },
   });

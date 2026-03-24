@@ -480,6 +480,28 @@ export interface PortfolioSectorExposureResponseDTO {
   sectors: PortfolioSectorExposureSectorDTO[];
 }
 
+export interface PortfolioCompanyExposureInputPositionDTO {
+  isin: string;
+  amount: number;
+}
+
+export interface PortfolioCompanyExposureRequestDTO {
+  positions: PortfolioCompanyExposureInputPositionDTO[];
+}
+
+export interface PortfolioCompanyExposureCompanyDTO {
+  company: string;
+  isin: string | null;
+  amount: number;
+  percentage: number;
+}
+
+export interface PortfolioCompanyExposureResponseDTO {
+  generatedAt: string;
+  totalAmount: number;
+  companies: PortfolioCompanyExposureCompanyDTO[];
+}
+
 export type PortfolioStaticPerformanceMetricDTO = 'relative' | 'relative_with_reinvested_dividends';
 
 export interface PortfolioStaticPerformancePositionDTO {

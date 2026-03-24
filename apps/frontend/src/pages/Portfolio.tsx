@@ -24,6 +24,7 @@ import {
 import { StudyPortfoliosOverlayPerformanceChart } from '../components/StudyPortfoliosOverlayPerformanceChart';
 import type {
   PortfolioAssetClassDTO,
+  PortfolioCompanyExposureResponseDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
   PortfolioGeographicExposureCountryDTO,
@@ -315,6 +316,10 @@ export function Portfolio() {
   const [sectorExposureLoading, setSectorExposureLoading] = useState(false);
   const [sectorExposureError, setSectorExposureError] = useState<string | null>(null);
   const [isSectorModalOpen, setIsSectorModalOpen] = useState(false);
+  const [companyExposure, setCompanyExposure] = useState<PortfolioCompanyExposureResponseDTO | null>(null);
+  const [companyExposureLoading, setCompanyExposureLoading] = useState(false);
+  const [companyExposureError, setCompanyExposureError] = useState<string | null>(null);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [studyGeographicExposure, setStudyGeographicExposure] = useState<PortfolioGeographicExposureResponseDTO | null>(null);
   const [studyGeographicExposureLoading, setStudyGeographicExposureLoading] = useState(false);
   const [studyGeographicExposureError, setStudyGeographicExposureError] = useState<string | null>(null);
@@ -330,6 +335,13 @@ export function Portfolio() {
   const [studySectorPortfolioName, setStudySectorPortfolioName] = useState('');
   const [studySectorActivePortfolioId, setStudySectorActivePortfolioId] = useState<string | null>(null);
   const [studySectorBaseAmount, setStudySectorBaseAmount] = useState(0);
+  const [studyCompanyExposure, setStudyCompanyExposure] = useState<PortfolioCompanyExposureResponseDTO | null>(null);
+  const [studyCompanyExposureLoading, setStudyCompanyExposureLoading] = useState(false);
+  const [studyCompanyExposureError, setStudyCompanyExposureError] = useState<string | null>(null);
+  const [isStudyCompanyModalOpen, setIsStudyCompanyModalOpen] = useState(false);
+  const [studyCompanyPortfolioName, setStudyCompanyPortfolioName] = useState('');
+  const [studyCompanyActivePortfolioId, setStudyCompanyActivePortfolioId] = useState<string | null>(null);
+  const [studyCompanyBaseAmount, setStudyCompanyBaseAmount] = useState(0);
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isStudyPerformanceModalOpen, setIsStudyPerformanceModalOpen] = useState(false);
@@ -441,6 +453,20 @@ export function Portfolio() {
       slices,
     };
   }, [sectorExposure]);
+  const companyExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (companyExposure?.companies ?? []).map((company, index) => ({
+      key: `${company.company}-${company.isin ?? 'NA'}`,
+      label: company.company,
+      value: company.amount,
+      percentage: company.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: companyExposure?.totalAmount ?? 0,
+      slices,
+    };
+  }, [companyExposure]);
   const studyGeographicExposureChart = useMemo(() => {
     const slices: InvestedGeographicSlice[] = (studyGeographicExposure?.countries ?? []).map((country, index) => ({
       key: country.country,
@@ -469,6 +495,20 @@ export function Portfolio() {
       slices,
     };
   }, [studySectorExposure]);
+  const studyCompanyExposureChart = useMemo(() => {
+    const slices: InvestedGeographicSlice[] = (studyCompanyExposure?.companies ?? []).map((company, index) => ({
+      key: `${company.company}-${company.isin ?? 'NA'}`,
+      label: company.company,
+      value: company.amount,
+      percentage: company.percentage * 100,
+      color: INVESTED_ASSET_CLASS_COLORS[index % INVESTED_ASSET_CLASS_COLORS.length],
+    }));
+
+    return {
+      total: studyCompanyExposure?.totalAmount ?? 0,
+      slices,
+    };
+  }, [studyCompanyExposure]);
   const resolveEtfAssetClass = useCallback(
     (etfSymbol: string): GeographicAssetClassCanonical =>
       normalizeGeographicAssetClass(
@@ -631,6 +671,42 @@ export function Portfolio() {
     };
 
     void loadGeographicExposure();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [investedEtfPositions]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadCompanyExposure = async () => {
+      if (investedEtfPositions.length === 0) {
+        setCompanyExposure(null);
+        setCompanyExposureError(null);
+        setCompanyExposureLoading(false);
+        return;
+      }
+
+      try {
+        setCompanyExposureLoading(true);
+        setCompanyExposureError(null);
+
+        const response = await portfolioApi.getCompanyExposure({ positions: investedEtfPositions });
+        if (isCancelled) return;
+        setCompanyExposure(response);
+      } catch (err) {
+        if (isCancelled) return;
+        setCompanyExposure(null);
+        setCompanyExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione aziende');
+      } finally {
+        if (!isCancelled) {
+          setCompanyExposureLoading(false);
+        }
+      }
+    };
+
+    void loadCompanyExposure();
 
     return () => {
       isCancelled = true;
@@ -1105,6 +1181,10 @@ export function Portfolio() {
     setIsGeographicModalOpen(false);
   };
 
+  const closeCompanyModal = () => {
+    setIsCompanyModalOpen(false);
+  };
+
   const closeStudyGeographicModal = () => {
     setStudyGeographicAssetClassFilters([]);
     setIsStudyGeographicModalOpen(false);
@@ -1175,6 +1255,40 @@ export function Portfolio() {
     }
   };
 
+  const closeStudyCompanyModal = () => {
+    setIsStudyCompanyModalOpen(false);
+    setStudyCompanyActivePortfolioId(null);
+  };
+
+  const openStudyCompanyModal = async (portfolio: StudyPortfolio) => {
+    setStudyCompanyPortfolioName(portfolio.name.trim() || 'Portafoglio di studio');
+    setStudyCompanyExposure(null);
+    setStudyCompanyExposureError(null);
+    setStudyCompanyExposureLoading(true);
+    setStudyCompanyActivePortfolioId(portfolio.id);
+    setIsStudyCompanyModalOpen(true);
+
+    const studyExposure = buildStudyExposurePositions(portfolio);
+    if (studyExposure.error) {
+      setStudyCompanyExposureError(studyExposure.error);
+      setStudyCompanyExposureLoading(false);
+      setStudyCompanyActivePortfolioId(null);
+      return;
+    }
+
+    setStudyCompanyBaseAmount(studyExposure.baseAmount);
+
+    try {
+      const response = await portfolioApi.getCompanyExposure({ positions: studyExposure.positions });
+      setStudyCompanyExposure(response);
+    } catch (err) {
+      setStudyCompanyExposureError(err instanceof Error ? err.message : 'Errore caricamento esposizione aziende');
+    } finally {
+      setStudyCompanyExposureLoading(false);
+      setStudyCompanyActivePortfolioId(null);
+    }
+  };
+
   const runCompare = async () => {
     setError(null);
     const rf = Number(riskFreeAnnual.replace(',', '.'));
@@ -1216,7 +1330,7 @@ export function Portfolio() {
             <p className="text-sm text-slate-500">Confronto multi-portafoglio di studio su dati justETF.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
             <div className="flex flex-col">
               <div className="h-[220px] relative">
                 {investedAssetClassChart.slices.length === 0 ? (
@@ -1421,6 +1535,82 @@ export function Portfolio() {
                     className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
                   >
                     Dettaglio ripartizione settoriale
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <div className="h-[220px] relative">
+                {companyExposureLoading ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Caricamento esposizione aziende...
+                  </div>
+                ) : companyExposureError ? (
+                  <div className="h-full rounded-xl border border-red-200 bg-red-50 px-4 flex items-center justify-center text-sm text-red-700 text-center">
+                    {companyExposureError}
+                  </div>
+                ) : companyExposureChart.slices.length === 0 ? (
+                  <div className="h-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+                    Nessun dato aziende disponibile.
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 12, right: 32, bottom: 12, left: 32 }}>
+                        <Pie
+                          data={companyExposureChart.slices}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={68}
+                          minAngle={2}
+                          paddingAngle={2}
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          labelLine={false}
+                        >
+                          {companyExposureChart.slices.map((slice) => (
+                            <Cell key={slice.key} fill={slice.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          wrapperStyle={{ zIndex: 40, pointerEvents: 'none' }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const point = payload[0]?.payload as InvestedGeographicSlice | undefined;
+                            if (!point) return null;
+
+                            return (
+                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                                <p className="text-sm font-semibold text-slate-900">{point.label}</p>
+                                <p className="text-sm text-slate-700 tabular-nums">{formatCurrency(point.value)}</p>
+                                <p className="text-xs text-slate-500">{point.percentage.toFixed(1)}%</p>
+                              </div>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none px-3">
+                      <p className="text-xs font-semibold text-slate-700">{formatCurrency(companyExposureChart.total)}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="mt-2 min-h-5 flex justify-center">
+                {companyExposureChart.slices.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCompanyModalOpen(true)}
+                    className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
+                  >
+                    Dettaglio ripartizione aziende
                   </button>
                 )}
               </div>
@@ -1831,6 +2021,73 @@ export function Portfolio() {
         </div>
       )}
 
+      {isCompanyModalOpen && companyExposureChart.slices.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeCompanyModal} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione aziende</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per azienda calcolate sul portafoglio investito.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeCompanyModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                  <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(companyExposureChart.total)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {companyExposure?.generatedAt
+                      ? new Date(companyExposure.generatedAt).toLocaleString('it-IT')
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[640px] w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-left text-slate-500">
+                        <th className="px-3 py-2 font-medium">Azienda</th>
+                        <th className="px-3 py-2 font-medium">ISIN</th>
+                        <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                        <th className="px-3 py-2 font-medium text-right">Importo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(companyExposure?.companies ?? []).map((company) => (
+                        <tr key={`company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
+                          <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
+                          <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={closeCompanyModal}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isStudyGeographicModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={closeStudyGeographicModal} />
@@ -2041,6 +2298,94 @@ export function Portfolio() {
 
             <div className="p-4 border-t border-slate-200 flex items-center justify-end">
               <button type="button" className="btn btn-primary" onClick={closeStudySectorModal}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isStudyCompanyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeStudyCompanyModal} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Ripartizione aziende - {studyCompanyPortfolioName}</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dettaglio completo delle partecipazioni per azienda calcolate al click sul portafoglio di studio.
+                </p>
+              </div>
+              <button type="button" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100" onClick={closeStudyCompanyModal}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              {studyCompanyExposureLoading ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 py-10 flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Calcolo ripartizione aziende in corso...
+                </div>
+              ) : studyCompanyExposureError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {studyCompanyExposureError}
+                </div>
+              ) : studyCompanyExposureChart.slices.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Nessun dato aziende disponibile per questo portafoglio di studio.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Totale allocato</p>
+                      <p className="text-base font-semibold text-slate-900 mt-1">{formatCurrency(studyCompanyExposureChart.total)}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">Calcolato il</p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">
+                        {studyCompanyExposure?.generatedAt
+                          ? new Date(studyCompanyExposure.generatedAt).toLocaleString('it-IT')
+                          : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500">
+                    Base calcolo: {formatCurrency(studyCompanyBaseAmount)} (ricalcolata al click, senza salvataggio su DB).
+                  </p>
+
+                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[640px] w-full text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr className="text-left text-slate-500">
+                            <th className="px-3 py-2 font-medium">Azienda</th>
+                            <th className="px-3 py-2 font-medium">ISIN</th>
+                            <th className="px-3 py-2 font-medium text-right">% sul totale</th>
+                            <th className="px-3 py-2 font-medium text-right">Importo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(studyCompanyExposure?.companies ?? []).map((company) => (
+                            <tr key={`study-company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
+                              <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
+                              <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
+                              <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
+                              <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end">
+              <button type="button" className="btn btn-primary" onClick={closeStudyCompanyModal}>
                 Chiudi
               </button>
             </div>
@@ -2268,6 +2613,16 @@ export function Portfolio() {
                           <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
                         )}
                         Ripartizione settori
+                      </button>
+                      <button
+                        className="btn btn-secondary py-1 px-2 text-xs"
+                        onClick={() => void openStudyCompanyModal(p)}
+                        disabled={studyCompanyExposureLoading && studyCompanyActivePortfolioId === p.id}
+                      >
+                        {studyCompanyExposureLoading && studyCompanyActivePortfolioId === p.id && (
+                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        )}
+                        Ripartizione aziende
                       </button>
                       <button className="btn btn-secondary py-1 px-2 text-xs" onClick={() => openEditPortfolioModal(p)}>
                         <Pencil className="w-3.5 h-3.5 mr-1" />

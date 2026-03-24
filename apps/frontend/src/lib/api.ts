@@ -46,6 +46,8 @@ import type {
   PortfolioInvestedStateDTO,
   PortfolioGeographicExposureRequestDTO,
   PortfolioGeographicExposureResponseDTO,
+  PortfolioCompanyExposureRequestDTO,
+  PortfolioCompanyExposureResponseDTO,
   PortfolioSectorExposureRequestDTO,
   PortfolioSectorExposureResponseDTO,
   PortfolioStaticPerformanceRequestDTO,
@@ -406,6 +408,12 @@ export const portfolioApi = {
 
   getSectorExposure: (data: PortfolioSectorExposureRequestDTO) =>
     fetchApi<PortfolioSectorExposureResponseDTO>('/portfolio/sector-exposure', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCompanyExposure: (data: PortfolioCompanyExposureRequestDTO) =>
+    fetchApi<PortfolioCompanyExposureResponseDTO>('/portfolio/company-exposure', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

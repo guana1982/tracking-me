@@ -1,6 +1,8 @@
 import type {
   CreatePortfolioAssetClassDTO,
   CreatePortfolioInstrumentDTO,
+  PortfolioCompanyExposureRequestDTO,
+  PortfolioCompanyExposureResponseDTO,
   PortfolioCompareRequestDTO,
   PortfolioCompareResponseDTO,
   PortfolioComparisonResultDTO,
@@ -68,6 +70,12 @@ type JustEtfSectorAllocation = {
   percentage: number;
 };
 
+type JustEtfCompanyAllocation = {
+  company: string;
+  isin: string | null;
+  percentage: number;
+};
+
 type GeographicExposureCacheEntry = {
   expiresAt: number;
   countries: JustEtfCountryAllocation[];
@@ -76,6 +84,11 @@ type GeographicExposureCacheEntry = {
 type SectorExposureCacheEntry = {
   expiresAt: number;
   sectors: JustEtfSectorAllocation[];
+};
+
+type CompanyExposureCacheEntry = {
+  expiresAt: number;
+  companies: JustEtfCompanyAllocation[];
 };
 
 type GeographicInstrumentMetadata = {
@@ -100,6 +113,7 @@ const JUSTETF_OVERVIEW_URL = 'https://www.justetf.com/en/search-api/etfs';
 const JUSTETF_PROFILE_URL = 'https://www.justetf.com/en/etf-profile.html';
 const JUSTETF_COUNTRIES_LOAD_MORE_PATH = '0-1.0-holdingsSection-countries-loadMoreCountries';
 const JUSTETF_SECTORS_LOAD_MORE_PATH = '0-1.0-holdingsSection-sectors-loadMoreSectors';
+const JUSTETF_COMPANIES_LOAD_MORE_PATH = '0-1.0-holdingsSection-securities-loadMoreSecurities';
 const JUSTETF_OVERVIEW_STRATEGIES = ['epg-longOnly', 'epg-activeEtfs', 'epg-shortAndLeveraged'] as const;
 const JUSTETF_CHART_DEFAULT_PARAMS = {
   locale: 'en',
@@ -181,6 +195,8 @@ export class PortfolioService {
   private geographicExposureCacheVersion = 'v2';
   private sectorExposureCache = new Map<string, SectorExposureCacheEntry>();
   private sectorExposureCacheVersion = 'v1';
+  private companyExposureCache = new Map<string, CompanyExposureCacheEntry>();
+  private companyExposureCacheVersion = 'v1';
 
   async getHistory(
     symbols: string[],
@@ -503,6 +519,101 @@ export class PortfolioService {
       generatedAt: new Date().toISOString(),
       totalAmount: this.roundToCents(totalAmount),
       sectors,
+    };
+  }
+
+  async getCompanyExposure(
+    input: PortfolioCompanyExposureRequestDTO
+  ): Promise<PortfolioCompanyExposureResponseDTO> {
+    const positionsByIsin = new Map<string, number>();
+    input.positions.forEach((position) => {
+      const isin = position.isin.trim().toUpperCase();
+      const amount = Number(position.amount);
+      if (!ISIN_REGEX.test(isin) || !Number.isFinite(amount) || amount <= 0) return;
+      positionsByIsin.set(isin, (positionsByIsin.get(isin) ?? 0) + amount);
+    });
+
+    if (positionsByIsin.size === 0) {
+      throw new AppError('At least one valid ETF position is required', 400, 'VALIDATION_ERROR');
+    }
+
+    const totalAmount = Array.from(positionsByIsin.values()).reduce((sum, value) => sum + value, 0);
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      throw new AppError('Invalid total amount for company exposure', 400, 'VALIDATION_ERROR');
+    }
+
+    type CompanyAggregation = {
+      company: string;
+      isin: string | null;
+      ratio: number;
+    };
+
+    const companyAggregationByKey = new Map<string, CompanyAggregation>();
+
+    const appendCompanyContribution = (companyName: string, companyIsin: string | null, ratioContribution: number) => {
+      const safeRatioContribution = Math.max(0, ratioContribution);
+      if (safeRatioContribution <= 0) return;
+
+      const normalizedCompanyName = this.normalizeCompanyName(companyName);
+      if (!normalizedCompanyName) return;
+
+      const normalizedCompanyIsin = this.normalizeHoldingIsin(companyIsin);
+      const key = `${normalizedCompanyName.toLowerCase()}|${normalizedCompanyIsin ?? ''}`;
+      const current = companyAggregationByKey.get(key) ?? {
+        company: normalizedCompanyName,
+        isin: normalizedCompanyIsin,
+        ratio: 0,
+      };
+      current.ratio += safeRatioContribution;
+      companyAggregationByKey.set(key, current);
+    };
+
+    for (const [isin, amount] of positionsByIsin.entries()) {
+      const companies = await this.fetchCompanyAllocationsByIsin(isin);
+      if (companies.length === 0) continue;
+
+      const etfPortfolioWeight = amount / totalAmount;
+      let coveredRatio = 0;
+
+      companies.forEach((company) => {
+        const ratio = this.normalizeAllocationRatio(company.percentage);
+        if (ratio <= 0) return;
+
+        coveredRatio += ratio;
+        appendCompanyContribution(company.company, company.isin, ratio * etfPortfolioWeight);
+      });
+
+      if (coveredRatio < 1) {
+        appendCompanyContribution('Altro', null, (1 - coveredRatio) * etfPortfolioWeight);
+      }
+    }
+
+    if (companyAggregationByKey.size === 0) {
+      throw new AppError('Unable to resolve company allocations from justETF', 422, 'INSUFFICIENT_HISTORY');
+    }
+
+    const ratioTotal = Array.from(companyAggregationByKey.values()).reduce((sum, value) => sum + value.ratio, 0);
+    if (ratioTotal < 1) {
+      appendCompanyContribution('Altro', null, 1 - ratioTotal);
+    }
+
+    const companies = Array.from(companyAggregationByKey.values())
+      .map((aggregation) => {
+        const safeRatio = Math.max(0, aggregation.ratio);
+        return {
+          company: aggregation.company,
+          isin: aggregation.isin,
+          percentage: this.round6(safeRatio),
+          amount: this.roundToCents(safeRatio * totalAmount),
+        };
+      })
+      .filter((row) => row.percentage > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      totalAmount: this.roundToCents(totalAmount),
+      companies,
     };
   }
 
@@ -1388,6 +1499,37 @@ export class PortfolioService {
     return best;
   }
 
+  private async fetchCompanyAllocationsByIsin(isin: string): Promise<JustEtfCompanyAllocation[]> {
+    const cacheKey = `${this.companyExposureCacheVersion}:${isin}`;
+    const cached = this.companyExposureCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.companies;
+    }
+
+    let profileHtml = '';
+    let cookieHeader = '';
+
+    try {
+      const profile = await this.fetchProfileHtml(isin);
+      profileHtml = profile.html;
+      cookieHeader = profile.cookieHeader;
+    } catch {
+      // If profile fetch fails we still try to return from cache or empty data.
+    }
+
+    const baseCompanies = this.parseCompanyAllocationsFromMarkup(profileHtml);
+    const expandedMarkup = await this.fetchLoadMoreCompaniesMarkup(isin, cookieHeader);
+    const expandedCompanies = this.parseCompanyAllocationsFromMarkup(expandedMarkup);
+    const best = this.pickBestCompanyAllocation(baseCompanies, expandedCompanies);
+
+    this.companyExposureCache.set(cacheKey, {
+      companies: best,
+      expiresAt: Date.now() + this.cacheTtlMs,
+    });
+
+    return best;
+  }
+
   private async fetchProfileHtml(isin: string): Promise<{ html: string; cookieHeader: string }> {
     const profileUrl = `${JUSTETF_PROFILE_URL}?isin=${encodeURIComponent(isin)}`;
     const response = await fetch(profileUrl, {
@@ -1471,6 +1613,38 @@ export class PortfolioService {
     }
   }
 
+  private async fetchLoadMoreCompaniesMarkup(isin: string, cookieHeader: string): Promise<string> {
+    const requestUrl = `${JUSTETF_PROFILE_URL}?${JUSTETF_COMPANIES_LOAD_MORE_PATH}&isin=${encodeURIComponent(isin)}&_wicket=1`;
+    const baseUrl = `en/etf-profile.html?isin=${isin}`;
+
+    const headers: Record<string, string> = {
+      Accept: 'text/xml; charset=UTF-8',
+      'Accept-Language': 'en',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Referer: `${JUSTETF_PROFILE_URL}?isin=${isin}`,
+      'User-Agent': this.userAgent,
+      'Wicket-Ajax': 'true',
+      'Wicket-Ajax-BaseURL': baseUrl,
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    const cleanCookie = this.toCookieHeader(cookieHeader);
+    if (cleanCookie) {
+      headers.Cookie = cleanCookie;
+    }
+
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers,
+      });
+      if (!response.ok) return '';
+      return await response.text();
+    } catch {
+      return '';
+    }
+  }
+
   private pickBestCountryAllocation(
     baseCountries: JustEtfCountryAllocation[],
     expandedCountries: JustEtfCountryAllocation[],
@@ -1495,6 +1669,19 @@ export class PortfolioService {
     const expandedScore = expandedSectors.reduce((sum, row) => sum + this.normalizeAllocationRatio(row.percentage), 0);
 
     return expandedScore >= baseScore ? expandedSectors : baseSectors;
+  }
+
+  private pickBestCompanyAllocation(
+    baseCompanies: JustEtfCompanyAllocation[],
+    expandedCompanies: JustEtfCompanyAllocation[],
+  ): JustEtfCompanyAllocation[] {
+    if (expandedCompanies.length === 0) return baseCompanies;
+    if (baseCompanies.length === 0) return expandedCompanies;
+
+    const baseScore = baseCompanies.reduce((sum, row) => sum + this.normalizeAllocationRatio(row.percentage), 0);
+    const expandedScore = expandedCompanies.reduce((sum, row) => sum + this.normalizeAllocationRatio(row.percentage), 0);
+
+    return expandedScore >= baseScore ? expandedCompanies : baseCompanies;
   }
 
   private parseCountryAllocationsFromMarkup(markup: string): JustEtfCountryAllocation[] {
@@ -1567,6 +1754,59 @@ export class PortfolioService {
       .sort((a, b) => b.percentage - a.percentage);
   }
 
+  private parseCompanyAllocationsFromMarkup(markup: string): JustEtfCompanyAllocation[] {
+    if (!markup) return [];
+
+    type CompanyAggregation = {
+      company: string;
+      isin: string | null;
+      percentage: number;
+    };
+
+    const byCompany = new Map<string, CompanyAggregation>();
+    const rowRegex = /<tr[^>]*data-testid="[^"]*(?:securities|holdings)[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+
+    let rowMatch: RegExpExecArray | null = rowRegex.exec(markup);
+    while (rowMatch) {
+      const rowHtml = rowMatch[1];
+      const nameMatch = /data-testid="[^"]*(?:securities|holdings)_value_name"[^>]*>([\s\S]*?)<\/(?:td|span)>/i.exec(rowHtml);
+      const percentageMatch = /data-testid="[^"]*(?:securities|holdings)_value_percentage"[^>]*>([\s\S]*?)<\/span>/i.exec(rowHtml);
+      const isinMatch = /data-testid="[^"]*(?:securities|holdings)_value_isin"[^>]*>([\s\S]*?)<\/(?:td|span)>/i.exec(rowHtml);
+
+      const company = this.normalizeCompanyName(
+        this.decodeHtmlEntities(this.stripHtmlTags(nameMatch?.[1] ?? '')).trim()
+      );
+      const percentageText = this.decodeHtmlEntities(this.stripHtmlTags(percentageMatch?.[1] ?? '')).trim();
+      const percentage = Number(
+        percentageText
+          .replace('%', '')
+          .replace(',', '.')
+          .replace(/[^\d.-]/g, '')
+      );
+
+      const rawIsinText = this.decodeHtmlEntities(this.stripHtmlTags(isinMatch?.[1] ?? '')).trim();
+      const fallbackIsinMatch = /\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/i.exec(
+        this.decodeHtmlEntities(this.stripHtmlTags(rowHtml)),
+      );
+      const holdingIsin = this.normalizeHoldingIsin(rawIsinText || fallbackIsinMatch?.[1] || null);
+
+      if (company && Number.isFinite(percentage) && percentage > 0) {
+        const key = `${company.toLowerCase()}|${holdingIsin ?? ''}`;
+        const current = byCompany.get(key) ?? {
+          company,
+          isin: holdingIsin,
+          percentage: 0,
+        };
+        current.percentage += percentage;
+        byCompany.set(key, current);
+      }
+
+      rowMatch = rowRegex.exec(markup);
+    }
+
+    return Array.from(byCompany.values()).sort((a, b) => b.percentage - a.percentage);
+  }
+
   private stripHtmlTags(value: string): string {
     return value.replace(/<[^>]*>/g, ' ');
   }
@@ -1635,6 +1875,22 @@ export class PortfolioService {
       .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+  }
+
+  private normalizeCompanyName(company: string): string {
+    if (!company) return '';
+
+    return company
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s*\(?\d+(?:[.,]\d+)?\s*%?\)?\s*$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  private normalizeHoldingIsin(value: string | null | undefined): string | null {
+    if (!value) return null;
+    const clean = value.trim().toUpperCase();
+    return ISIN_REGEX.test(clean) ? clean : null;
   }
 
   private normalizeAssetClassForExposure(name: string): string {

@@ -276,6 +276,15 @@ export const portfolioSectorExposureRequestSchema = z.object({
   positions: z.array(portfolioSectorExposurePositionSchema).min(1).max(300),
 });
 
+export const portfolioCompanyExposurePositionSchema = z.object({
+  isin: portfolioIsinSchema,
+  amount: z.number().positive().max(1_000_000_000),
+});
+
+export const portfolioCompanyExposureRequestSchema = z.object({
+  positions: z.array(portfolioCompanyExposurePositionSchema).min(1).max(300),
+});
+
 export const portfolioStaticPerformanceMetricSchema = z.enum(['relative', 'relative_with_reinvested_dividends']);
 
 export const portfolioStaticPerformanceRequestSchema = z.object({
@@ -342,4 +351,5 @@ export type CreatePortfolioInstrumentInput = z.infer<typeof createPortfolioInstr
 export type UpdatePortfolioInstrumentInput = z.infer<typeof updatePortfolioInstrumentSchema>;
 export type PortfolioGeographicExposureRequestInput = z.infer<typeof portfolioGeographicExposureRequestSchema>;
 export type PortfolioSectorExposureRequestInput = z.infer<typeof portfolioSectorExposureRequestSchema>;
+export type PortfolioCompanyExposureRequestInput = z.infer<typeof portfolioCompanyExposureRequestSchema>;
 export type PortfolioStaticPerformanceRequestInput = z.infer<typeof portfolioStaticPerformanceRequestSchema>;
