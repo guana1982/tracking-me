@@ -342,6 +342,8 @@ export function Portfolio() {
   const [studyCompanyPortfolioName, setStudyCompanyPortfolioName] = useState('');
   const [studyCompanyActivePortfolioId, setStudyCompanyActivePortfolioId] = useState<string | null>(null);
   const [studyCompanyBaseAmount, setStudyCompanyBaseAmount] = useState(0);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [studyCompanySearchQuery, setStudyCompanySearchQuery] = useState('');
   const [isInvestedOpen, setIsInvestedOpen] = useState(true);
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isStudyPerformanceModalOpen, setIsStudyPerformanceModalOpen] = useState(false);
@@ -509,6 +511,24 @@ export function Portfolio() {
       slices,
     };
   }, [studyCompanyExposure]);
+  const filteredCompanyRows = useMemo(() => {
+    const rows = companyExposure?.companies ?? [];
+    const search = companySearchQuery.trim().toLowerCase();
+    if (!search) return rows;
+
+    return rows.filter((row) =>
+      `${row.company} ${row.isin ?? ''}`.toLowerCase().includes(search),
+    );
+  }, [companyExposure?.companies, companySearchQuery]);
+  const filteredStudyCompanyRows = useMemo(() => {
+    const rows = studyCompanyExposure?.companies ?? [];
+    const search = studyCompanySearchQuery.trim().toLowerCase();
+    if (!search) return rows;
+
+    return rows.filter((row) =>
+      `${row.company} ${row.isin ?? ''}`.toLowerCase().includes(search),
+    );
+  }, [studyCompanyExposure?.companies, studyCompanySearchQuery]);
   const resolveEtfAssetClass = useCallback(
     (etfSymbol: string): GeographicAssetClassCanonical =>
       normalizeGeographicAssetClass(
@@ -1181,7 +1201,13 @@ export function Portfolio() {
     setIsGeographicModalOpen(false);
   };
 
+  const openCompanyModal = () => {
+    setCompanySearchQuery('');
+    setIsCompanyModalOpen(true);
+  };
+
   const closeCompanyModal = () => {
+    setCompanySearchQuery('');
     setIsCompanyModalOpen(false);
   };
 
@@ -1256,6 +1282,7 @@ export function Portfolio() {
   };
 
   const closeStudyCompanyModal = () => {
+    setStudyCompanySearchQuery('');
     setIsStudyCompanyModalOpen(false);
     setStudyCompanyActivePortfolioId(null);
   };
@@ -1265,6 +1292,7 @@ export function Portfolio() {
     setStudyCompanyExposure(null);
     setStudyCompanyExposureError(null);
     setStudyCompanyExposureLoading(true);
+    setStudyCompanySearchQuery('');
     setStudyCompanyActivePortfolioId(portfolio.id);
     setIsStudyCompanyModalOpen(true);
 
@@ -1607,7 +1635,7 @@ export function Portfolio() {
                 {companyExposureChart.slices.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setIsCompanyModalOpen(true)}
+                    onClick={openCompanyModal}
                     className="inline-flex items-center text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900 hover:decoration-slate-500 transition-colors"
                   >
                     Dettaglio ripartizione aziende
@@ -2053,6 +2081,19 @@ export function Portfolio() {
                 </div>
               </div>
 
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <label htmlFor="company-search-invested" className="text-xs text-slate-500 uppercase tracking-wide block mb-2">
+                  Cerca azienda o ISIN
+                </label>
+                <input
+                  id="company-search-invested"
+                  className="input w-full"
+                  value={companySearchQuery}
+                  onChange={(event) => setCompanySearchQuery(event.target.value)}
+                  placeholder="Es. NVIDIA, US67066G1040..."
+                />
+              </div>
+
               <div className="rounded-lg border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-[640px] w-full text-sm">
@@ -2065,14 +2106,22 @@ export function Portfolio() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(companyExposure?.companies ?? []).map((company) => (
-                        <tr key={`company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
-                          <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
-                          <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
-                          <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
-                          <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                      {filteredCompanyRows.length === 0 ? (
+                        <tr className="border-t border-slate-100">
+                          <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
+                            Nessun risultato per la ricerca inserita.
+                          </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredCompanyRows.map((company) => (
+                          <tr key={`company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
+                            <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
+                            <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
+                            <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2356,6 +2405,19 @@ export function Portfolio() {
                     Base calcolo: {formatCurrency(studyCompanyBaseAmount)} (ricalcolata al click, senza salvataggio su DB).
                   </p>
 
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label htmlFor="company-search-study" className="text-xs text-slate-500 uppercase tracking-wide block mb-2">
+                      Cerca azienda o ISIN
+                    </label>
+                    <input
+                      id="company-search-study"
+                      className="input w-full"
+                      value={studyCompanySearchQuery}
+                      onChange={(event) => setStudyCompanySearchQuery(event.target.value)}
+                      placeholder="Es. NVIDIA, US67066G1040..."
+                    />
+                  </div>
+
                   <div className="rounded-lg border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="min-w-[640px] w-full text-sm">
@@ -2368,14 +2430,22 @@ export function Portfolio() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(studyCompanyExposure?.companies ?? []).map((company) => (
-                            <tr key={`study-company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
-                              <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
-                              <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
-                              <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
-                              <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                          {filteredStudyCompanyRows.length === 0 ? (
+                            <tr className="border-t border-slate-100">
+                              <td colSpan={4} className="px-3 py-3 text-sm text-slate-500 text-center">
+                                Nessun risultato per la ricerca inserita.
+                              </td>
                             </tr>
-                          ))}
+                          ) : (
+                            filteredStudyCompanyRows.map((company) => (
+                              <tr key={`study-company-row-${company.company}-${company.isin ?? 'NA'}`} className="border-t border-slate-100">
+                                <td className="px-3 py-2 font-medium text-slate-800">{company.company}</td>
+                                <td className="px-3 py-2 text-slate-700">{company.isin ?? 'N/A'}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{(company.percentage * 100).toFixed(2)}%</td>
+                                <td className="px-3 py-2 text-right text-slate-800 font-medium tabular-nums">{formatCurrency(company.amount)}</td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
