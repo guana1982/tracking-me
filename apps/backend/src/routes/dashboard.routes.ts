@@ -37,6 +37,27 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Get savings pace (current-vs-best-month comparison) for a period
+  fastify.get<{ Params: { periodKey: string } }>('/savings-pace/:periodKey', {
+    schema: {
+      tags: ['Dashboard'],
+      summary: 'Get savings pace for a period (compare vs best-savings month)',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+    },
+    handler: async (request) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+      const pace = await dashboardService.getSavingsPace(periodKey, request.authUser!.id);
+      return { success: true, data: pace };
+    },
+  });
+
   // Get dashboard summary for a specific period
   fastify.get<{ Params: { periodKey: string } }>('/:periodKey', {
     schema: {

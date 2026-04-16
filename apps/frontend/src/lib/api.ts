@@ -2,6 +2,7 @@ import type {
   ApiResponse,
   DashboardSummaryDTO,
   SavingsHistoryDTO,
+  SavingsPaceDTO,
   MonthListItemDTO,
   MonthPeriodDTO,
   BudgetRuleDTO,
@@ -125,6 +126,9 @@ export const dashboardApi = {
 
   getSavingsHistory: (periodKey: string) =>
     fetchApi<SavingsHistoryDTO>(`/dashboard/savings-history/${periodKey}`),
+
+  getSavingsPace: (periodKey: string) =>
+    fetchApi<SavingsPaceDTO>(`/dashboard/savings-pace/${periodKey}`),
 };
 
 // Month Periods

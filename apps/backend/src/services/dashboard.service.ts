@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO } from '@budget/shared';
+import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
@@ -159,6 +159,93 @@ export class DashboardService {
       currentMonthSavings,
       previousMonthsTotal,
       cumulativeTotal,
+    };
+  }
+
+  /**
+   * Get savings pace for a period: compares outflows (NEEDS+WANTS) month-to-date
+   * against the historical best-savings month's outflows up to the same day-of-month.
+   * SAVINGS category is excluded — it represents money already set aside, not spending.
+   */
+  async getSavingsPace(currentPeriodKey: string, userId: string): Promise<SavingsPaceDTO> {
+    const periods = await prisma.monthPeriod.findMany({
+      where: { userId },
+      include: {
+        expenses: true,
+        reallocations: true,
+      },
+      orderBy: [{ year: 'asc' }, { month: 'asc' }],
+    });
+
+    const monthsSavings = periods.map((p) => {
+      const savingsExpenses = p.expenses
+        .filter((e) => e.category === 'SAVINGS')
+        .reduce((sum, e) => sum + e.amount, 0);
+      const reallocatedToSavings = p.reallocations
+        .filter((r) => r.toCategory === 'SAVINGS')
+        .reduce((sum, r) => sum + r.amount, 0);
+      return {
+        period: p,
+        savings: roundCurrency(savingsExpenses + reallocatedToSavings),
+      };
+    });
+
+    // asOfDay: today for the live calendar month, last day of that month for any other period
+    const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
+    const now = new Date();
+    const isLiveCurrent = currYear === now.getFullYear() && currMonth === now.getMonth() + 1;
+    const lastDayOfCurr = new Date(currYear, currMonth, 0).getDate();
+    const asOfDay = isLiveCurrent ? now.getDate() : lastDayOfCurr;
+
+    const candidates = monthsSavings.filter(
+      (m) => m.period.periodKey !== currentPeriodKey && m.savings > 0
+    );
+    candidates.sort((a, b) => b.savings - a.savings);
+    const best = candidates[0] ?? null;
+
+    const currentPeriod = monthsSavings.find(
+      (m) => m.period.periodKey === currentPeriodKey
+    )?.period;
+
+    const sumSpendUpToDay = (expenses: { category: string; amount: number; date: Date }[], day: number) =>
+      expenses
+        .filter((e) => e.category !== 'SAVINGS' && e.date.getDate() <= day)
+        .reduce((sum, e) => sum + e.amount, 0);
+
+    const currentSpendToDate = currentPeriod
+      ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, asOfDay))
+      : 0;
+
+    const bestSpendToDate = best
+      ? roundCurrency(sumSpendUpToDay(best.period.expenses, asOfDay))
+      : 0;
+
+    // 50 = tied with best month, 100 = spending 0, 0 = spending 2x or more.
+    let performancePct = 50;
+    if (best) {
+      if (bestSpendToDate === 0) {
+        performancePct = currentSpendToDate === 0 ? 50 : 0;
+      } else {
+        const deviation = (bestSpendToDate - currentSpendToDate) / bestSpendToDate;
+        const capped = Math.max(-1, Math.min(1, deviation));
+        performancePct = 50 + capped * 50;
+      }
+    }
+
+    return {
+      bestMonth: best
+        ? {
+            periodKey: best.period.periodKey,
+            month: best.period.month,
+            year: best.period.year,
+            savings: best.savings,
+          }
+        : null,
+      asOfDay,
+      currentSpendToDate,
+      bestSpendToDate,
+      performancePct: Math.round(performancePct * 10) / 10,
+      hasComparison: best !== null,
     };
   }
 

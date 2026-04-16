@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -16,11 +16,12 @@ interface BudgetChartProps {
   showStats?: boolean;
   savingsHistory?: SavingsHistoryDTO | null;
   isClosed?: boolean;
+  middleSlot?: ReactNode;
 }
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory, isClosed = false }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomePopoverOpen, setIsIncomePopoverOpen] = useState(false);
   const incomeRef = useRef<HTMLDivElement>(null);
@@ -85,7 +86,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
     })) ?? [];
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
         {/* Card 1: Budget overview */}
         <div className="card py-4 px-5">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
@@ -182,7 +183,10 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
           </div>
         </div>
 
-        {/* Card 2: Savings overview */}
+        {/* Card 2: Middle slot (e.g. savings gauge) */}
+        {middleSlot}
+
+        {/* Card 3: Savings overview */}
         {savingsHistory && barData.length > 0 && (
           <div className="card py-4 px-5">
             {/* Savings header with labels */}

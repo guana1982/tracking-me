@@ -247,6 +247,22 @@ export interface SavingsHistoryDTO {
   cumulativeTotal: number;
 }
 
+// Savings pace — comparison between current month-to-date spending and the
+// best-savings month's spending up to the same day-of-month.
+export interface SavingsPaceDTO {
+  bestMonth: {
+    periodKey: string;
+    month: number;
+    year: number;
+    savings: number;
+  } | null;
+  asOfDay: number;            // 1..31 — day-of-month used for the comparison (today for current period, monthLength for closed months)
+  currentSpendToDate: number; // total NEEDS+WANTS+SAVINGS expenses in current month with date <= asOfDay
+  bestSpendToDate: number;    // same but for the best-savings month
+  performancePct: number;     // 0..100 — gauge position: 50 = tied, >50 spending less (greener), <50 spending more (redder)
+  hasComparison: boolean;     // false when no usable historical month is available
+}
+
 // Month list item for navigation
 export interface MonthListItemDTO {
   periodKey: string;

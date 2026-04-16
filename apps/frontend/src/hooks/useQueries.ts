@@ -36,6 +36,7 @@ import type {
 export const queryKeys = {
   dashboard: (periodKey: string) => ['dashboard', periodKey] as const,
   savingsHistory: (periodKey: string) => ['savingsHistory', periodKey] as const,
+  savingsPace: (periodKey: string) => ['savingsPace', periodKey] as const,
   periods: ['periods'] as const,
   period: (periodKey: string) => ['period', periodKey] as const,
   budgetRule: (periodKey: string) => ['budgetRule', periodKey] as const,
@@ -68,6 +69,14 @@ export function useSavingsHistory(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.savingsHistory(periodKey),
     queryFn: () => dashboardApi.getSavingsHistory(periodKey),
+  });
+}
+
+// Savings Pace (current vs best-savings month)
+export function useSavingsPace(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.savingsPace(periodKey),
+    queryFn: () => dashboardApi.getSavingsPace(periodKey),
   });
 }
 

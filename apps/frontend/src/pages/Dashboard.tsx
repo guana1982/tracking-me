@@ -1,7 +1,8 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
+import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
 import { Loader2, RefreshCw, Undo2, Lock, Unlock } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
@@ -10,6 +11,7 @@ export function Dashboard() {
   const { periodKey } = usePeriodStore();
   const { data, isLoading, error } = useDashboard(periodKey);
   const { data: savingsHistory } = useSavingsHistory(periodKey);
+  const { data: savingsPace } = useSavingsPace(periodKey);
   const { data: reallocations } = useReallocations(periodKey);
   const { data: reallocationPreview } = useReallocationPreview(periodKey);
   const { data: monthPeriod } = usePeriod(periodKey);
@@ -97,7 +99,15 @@ export function Dashboard() {
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 space-y-3 xl:space-y-4 md:h-full md:flex md:flex-col md:space-y-3">
       {/* Chart with Stats - Full width responsive */}
       <div className="flex-shrink-0">
-        <BudgetChart categories={categories} totalIncome={totalIncome} compact showStats savingsHistory={savingsHistory} isClosed={isClosed} />
+        <BudgetChart
+          categories={categories}
+          totalIncome={totalIncome}
+          compact
+          showStats
+          savingsHistory={savingsHistory}
+          isClosed={isClosed}
+          middleSlot={<SavingsGauge pace={savingsPace} />}
+        />
       </div>
 
       {/* Reallocation Button - visible only after cutoff day and when month is not closed */}
