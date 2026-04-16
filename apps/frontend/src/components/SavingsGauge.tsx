@@ -69,7 +69,10 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
 
       {hasData ? (
         <>
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <p className="text-2xl font-bold text-slate-900 leading-none mb-1">
+              {Math.round(pct)}%
+            </p>
             <svg
               viewBox={`0 0 ${W} ${H}`}
               className="w-full h-auto max-w-[240px]"
@@ -108,17 +111,6 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 fill="#1e293b"
               />
               <circle cx={cx} cy={cy} r={7} fill="#ffffff" stroke="#1e293b" strokeWidth={2} />
-
-              {/* Percentage text */}
-              <text
-                x={cx}
-                y={cy - 22}
-                textAnchor="middle"
-                className="fill-slate-900"
-                style={{ fontSize: 24, fontWeight: 700 }}
-              >
-                {Math.round(pct)}%
-              </text>
 
               {/* End labels */}
               <text x={cx - rOuter + 4} y={cy + 14} textAnchor="middle" style={{ fontSize: 10 }} className="fill-slate-400">0</text>
