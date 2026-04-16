@@ -247,20 +247,31 @@ export interface SavingsHistoryDTO {
   cumulativeTotal: number;
 }
 
-// Savings pace — comparison between current month-to-date spending and the
-// best-savings month's spending up to the same day-of-month.
+// Savings pace — answers "at the current run-rate, will I stay within budget this month?"
+// Primary metric: projected end-of-month spending (NEEDS+WANTS) vs budget target (income × (needsPct+wantsPct)).
+// Secondary: comparison against the best-savings-rate historical month at the equivalent month-progress.
 export interface SavingsPaceDTO {
+  // Time context
+  daysElapsed: number;               // days of the current month accounted for (today, or daysInMonth for non-live periods)
+  daysInMonth: number;               // total days in the current month
+
+  // Current-month run-rate vs budget target
+  currentSpendToDate: number;        // NEEDS+WANTS spent so far (SAVINGS excluded)
+  projectedMonthlySpend: number;     // linear projection to end of month = currentSpendToDate × daysInMonth / daysElapsed
+  budgetTarget: number;              // income × (needsPct + wantsPct) / 100 — max NEEDS+WANTS allowed
+  performancePct: number;            // 0..100 gauge position. 50 = projected exactly at target; >50 under target; <50 over target
+
+  // Secondary: best historical month by savings-rate (savings / income), excluding the current period
   bestMonth: {
     periodKey: string;
     month: number;
     year: number;
+    income: number;
     savings: number;
+    savingsRate: number;             // 0..1 (e.g. 0.18 = 18%)
   } | null;
-  asOfDay: number;            // 1..31 — day-of-month used for the comparison (today for current period, monthLength for closed months)
-  currentSpendToDate: number; // total NEEDS+WANTS+SAVINGS expenses in current month with date <= asOfDay
-  bestSpendToDate: number;    // same but for the best-savings month
-  performancePct: number;     // 0..100 — gauge position: 50 = tied, >50 spending less (greener), <50 spending more (redder)
-  hasComparison: boolean;     // false when no usable historical month is available
+  bestSpendAtSameProgress: number;   // best month's NEEDS+WANTS up to the equivalent day (same % of month elapsed)
+  hasComparison: boolean;            // false when no usable historical month is available
 }
 
 // Month list item for navigation

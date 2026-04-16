@@ -163,9 +163,13 @@ export class DashboardService {
   }
 
   /**
-   * Get savings pace for a period: compares outflows (NEEDS+WANTS) month-to-date
-   * against the historical best-savings month's outflows up to the same day-of-month.
-   * SAVINGS category is excluded — it represents money already set aside, not spending.
+   * Get savings pace for a period.
+   * Primary metric: linear run-rate projection of NEEDS+WANTS spending for the
+   * current month, compared against the budget target (income × (needsPct+wantsPct)).
+   * Secondary metric: comparison against the historical month with the best
+   * savings-rate (savings/income), evaluated at the equivalent month-progress
+   * (so day 16/30 is compared to day ~15/28 in February).
+   * SAVINGS category is excluded from spending — it's already set aside.
    */
   async getSavingsPace(currentPeriodKey: string, userId: string): Promise<SavingsPaceDTO> {
     const periods = await prisma.monthPeriod.findMany({
@@ -173,78 +177,110 @@ export class DashboardService {
       include: {
         expenses: true,
         reallocations: true,
+        incomes: true,
+        budgetRule: true,
       },
       orderBy: [{ year: 'asc' }, { month: 'asc' }],
     });
 
-    const monthsSavings = periods.map((p) => {
+    const months = periods.map((p) => {
+      const income = p.incomes.reduce((sum, i) => sum + i.amount, 0);
       const savingsExpenses = p.expenses
         .filter((e) => e.category === 'SAVINGS')
         .reduce((sum, e) => sum + e.amount, 0);
       const reallocatedToSavings = p.reallocations
         .filter((r) => r.toCategory === 'SAVINGS')
         .reduce((sum, r) => sum + r.amount, 0);
-      return {
-        period: p,
-        savings: roundCurrency(savingsExpenses + reallocatedToSavings),
-      };
+      const savings = savingsExpenses + reallocatedToSavings;
+      const savingsRate = income > 0 ? savings / income : 0;
+      return { period: p, income, savings, savingsRate };
     });
 
-    // asOfDay: today for the live calendar month, last day of that month for any other period
+    // Current-month time context
     const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
     const now = new Date();
     const isLiveCurrent = currYear === now.getFullYear() && currMonth === now.getMonth() + 1;
-    const lastDayOfCurr = new Date(currYear, currMonth, 0).getDate();
-    const asOfDay = isLiveCurrent ? now.getDate() : lastDayOfCurr;
+    const daysInMonth = new Date(currYear, currMonth, 0).getDate();
+    const daysElapsed = isLiveCurrent
+      ? Math.min(Math.max(1, now.getDate()), daysInMonth)
+      : daysInMonth;
+    const progressRatio = daysElapsed / daysInMonth;
 
-    const candidates = monthsSavings.filter(
-      (m) => m.period.periodKey !== currentPeriodKey && m.savings > 0
-    );
-    candidates.sort((a, b) => b.savings - a.savings);
-    const best = candidates[0] ?? null;
+    const currentData = months.find((m) => m.period.periodKey === currentPeriodKey);
+    const currentPeriod = currentData?.period;
+    const currentIncome = currentData?.income ?? 0;
 
-    const currentPeriod = monthsSavings.find(
-      (m) => m.period.periodKey === currentPeriodKey
-    )?.period;
+    const needsPct = currentPeriod?.budgetRule?.needsPct ?? DEFAULT_BUDGET_RULE.needsPct;
+    const wantsPct = currentPeriod?.budgetRule?.wantsPct ?? DEFAULT_BUDGET_RULE.wantsPct;
 
-    const sumSpendUpToDay = (expenses: { category: string; amount: number; date: Date }[], day: number) =>
+    const sumSpendUpToDay = (
+      expenses: { category: string; amount: number; date: Date }[],
+      day: number
+    ) =>
       expenses
         .filter((e) => e.category !== 'SAVINGS' && e.date.getDate() <= day)
         .reduce((sum, e) => sum + e.amount, 0);
 
     const currentSpendToDate = currentPeriod
-      ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, asOfDay))
+      ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, daysElapsed))
       : 0;
 
-    const bestSpendToDate = best
-      ? roundCurrency(sumSpendUpToDay(best.period.expenses, asOfDay))
-      : 0;
+    // Linear run-rate projection to end of month
+    const projectedMonthlySpend =
+      daysElapsed > 0
+        ? roundCurrency((currentSpendToDate / daysElapsed) * daysInMonth)
+        : 0;
 
-    // 50 = tied with best month, 100 = spending 0, 0 = spending 2x or more.
+    // Budget target for NEEDS+WANTS combined
+    const budgetTarget = roundCurrency((currentIncome * (needsPct + wantsPct)) / 100);
+
+    // performancePct: 50 = projected exactly at target; 100 = zero projected spend; 0 = 2× target or worse
     let performancePct = 50;
+    if (budgetTarget > 0) {
+      const deviation = (budgetTarget - projectedMonthlySpend) / budgetTarget;
+      const capped = Math.max(-1, Math.min(1, deviation));
+      performancePct = 50 + capped * 50;
+    } else {
+      performancePct = projectedMonthlySpend === 0 ? 50 : 0;
+    }
+
+    // Secondary: best historical month by savings rate (not absolute savings)
+    const candidates = months.filter(
+      (m) =>
+        m.period.periodKey !== currentPeriodKey &&
+        m.income > 0 &&
+        m.savingsRate > 0
+    );
+    candidates.sort((a, b) => b.savingsRate - a.savingsRate);
+    const best = candidates[0] ?? null;
+
+    let bestSpendAtSameProgress = 0;
     if (best) {
-      if (bestSpendToDate === 0) {
-        performancePct = currentSpendToDate === 0 ? 50 : 0;
-      } else {
-        const deviation = (bestSpendToDate - currentSpendToDate) / bestSpendToDate;
-        const capped = Math.max(-1, Math.min(1, deviation));
-        performancePct = 50 + capped * 50;
-      }
+      const bestDaysInMonth = new Date(best.period.year, best.period.month, 0).getDate();
+      const equivalentDay = Math.max(1, Math.round(progressRatio * bestDaysInMonth));
+      bestSpendAtSameProgress = roundCurrency(
+        sumSpendUpToDay(best.period.expenses, equivalentDay)
+      );
     }
 
     return {
+      daysElapsed,
+      daysInMonth,
+      currentSpendToDate,
+      projectedMonthlySpend,
+      budgetTarget,
+      performancePct: Math.round(performancePct * 10) / 10,
       bestMonth: best
         ? {
             periodKey: best.period.periodKey,
             month: best.period.month,
             year: best.period.year,
-            savings: best.savings,
+            income: roundCurrency(best.income),
+            savings: roundCurrency(best.savings),
+            savingsRate: Math.round(best.savingsRate * 1000) / 1000,
           }
         : null,
-      asOfDay,
-      currentSpendToDate,
-      bestSpendToDate,
-      performancePct: Math.round(performancePct * 10) / 10,
+      bestSpendAtSameProgress,
       hasComparison: best !== null,
     };
   }

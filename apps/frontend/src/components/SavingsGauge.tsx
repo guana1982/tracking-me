@@ -34,8 +34,8 @@ function arcWedgePath(cx: number, cy: number, rOuter: number, rInner: number, st
 }
 
 export function SavingsGauge({ pace }: SavingsGaugeProps) {
-  const hasData = !!pace?.hasComparison;
-  const pct = hasData ? pace!.performancePct : 50;
+  const hasBudget = !!pace && pace.budgetTarget > 0;
+  const pct = hasBudget ? pace!.performancePct : 50;
   const angle = 180 + (pct / 100) * 180;
 
   const W = 220;
@@ -55,19 +55,20 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
   const bestMonthLabel = pace?.bestMonth
     ? `${MONTH_LABELS[pace.bestMonth.month - 1]} ${pace.bestMonth.year}`
     : null;
+  const bestRatePct = pace?.bestMonth ? Math.round(pace.bestMonth.savingsRate * 100) : null;
 
   return (
     <div className="card py-4 px-5 flex flex-col">
       <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
         Ritmo risparmio
       </p>
-      {bestMonthLabel && (
+      {hasBudget && (
         <p className="text-xs text-slate-500 mb-2">
-          vs miglior mese: <span className="font-semibold text-slate-700">{bestMonthLabel}</span>
+          Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.daysInMonth}</span> · proiezione vs budget
         </p>
       )}
 
-      {hasData ? (
+      {hasBudget ? (
         <>
           <div className="flex-1 flex flex-col items-center justify-center">
             <p className="text-2xl font-bold text-slate-900 leading-none mb-1">
@@ -87,7 +88,6 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 />
               ))}
 
-              {/* Tick marks at zone borders */}
               {[33, 66].map((t) => {
                 const a = zoneAngle(t);
                 const outer = polar(cx, cy, rOuter + 2, a);
@@ -105,14 +105,12 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 );
               })}
 
-              {/* Needle */}
               <polygon
                 points={`${needleTip.x},${needleTip.y} ${needleBaseA.x},${needleBaseA.y} ${needleBaseB.x},${needleBaseB.y}`}
                 fill="#1e293b"
               />
               <circle cx={cx} cy={cy} r={7} fill="#ffffff" stroke="#1e293b" strokeWidth={2} />
 
-              {/* End labels */}
               <text x={cx - rOuter + 4} y={cy + 14} textAnchor="middle" style={{ fontSize: 10 }} className="fill-slate-400">0</text>
               <text x={cx + rOuter - 4} y={cy + 14} textAnchor="middle" style={{ fontSize: 10 }} className="fill-slate-400">100</text>
             </svg>
@@ -131,21 +129,39 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
             ))}
           </div>
 
+          {/* Primary: projected end-of-month vs budget target */}
           <div className="flex justify-between gap-3 mt-3 pt-2 border-t border-slate-100">
             <div>
-              <p className="text-xs text-slate-500">Speso (al giorno {pace!.asOfDay})</p>
-              <p className="text-sm font-bold text-slate-900">{formatCurrency(pace!.currentSpendToDate)}</p>
+              <p className="text-xs text-slate-500">Proiezione fine mese</p>
+              <p className="text-sm font-bold text-slate-900">{formatCurrency(pace!.projectedMonthlySpend)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-500">Miglior mese (stesso giorno)</p>
-              <p className="text-sm font-bold text-slate-900">{formatCurrency(pace!.bestSpendToDate)}</p>
+              <p className="text-xs text-slate-500">Target budget</p>
+              <p className="text-sm font-bold text-slate-900">{formatCurrency(pace!.budgetTarget)}</p>
             </div>
           </div>
+
+          {/* Secondary: best historical month by savings-rate */}
+          {pace!.hasComparison && bestMonthLabel && (
+            <div className="flex justify-between gap-3 mt-2 pt-2 border-t border-dashed border-slate-100">
+              <div>
+                <p className="text-xs text-slate-500">
+                  Miglior mese <span className="font-semibold text-slate-600">{bestMonthLabel}</span>
+                  {bestRatePct !== null && <span className="text-slate-400"> · {bestRatePct}% risp.</span>}
+                </p>
+                <p className="text-xs font-semibold text-slate-700">{formatCurrency(pace!.bestSpendAtSameProgress)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Tu (stesso avanzamento)</p>
+                <p className="text-xs font-semibold text-slate-700">{formatCurrency(pace!.currentSpendToDate)}</p>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="flex-1 flex items-center justify-center py-8">
           <p className="text-sm text-slate-400 text-center">
-            Non ci sono ancora mesi precedenti con cui confrontarsi
+            Imposta entrate e regola di budget per vedere il ritmo risparmio
           </p>
         </div>
       )}
