@@ -107,7 +107,11 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               {/* Center text */}
@@ -272,7 +276,11 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
+                />
               </PieChart>
             </ResponsiveContainer>
             {/* Center text */}
@@ -321,7 +329,11 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip
+              content={<CustomTooltip />}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
+            />
             <Legend
               verticalAlign="bottom"
               height={36}
