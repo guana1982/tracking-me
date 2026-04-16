@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Info, X } from 'lucide-react';
 import type { SavingsPaceDTO } from '@budget/shared';
 import { formatCurrency } from '../lib/utils';
 
@@ -34,6 +36,7 @@ function arcWedgePath(cx: number, cy: number, rOuter: number, rInner: number, st
 }
 
 export function SavingsGauge({ pace }: SavingsGaugeProps) {
+  const [showInfo, setShowInfo] = useState(false);
   const hasBudget = !!pace && pace.budgetTarget > 0;
   const pct = hasBudget ? pace!.performancePct : 50;
   const angle = 180 + (pct / 100) * 180;
@@ -59,9 +62,20 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
 
   return (
     <div className="card py-4 px-5 flex flex-col">
-      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-        Ritmo risparmio
-      </p>
+      <div className="flex items-center gap-1.5 mb-1">
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+          Ritmo risparmio
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowInfo(true)}
+          className="text-slate-400 hover:text-sky-600 transition-colors"
+          aria-label="Come funziona il calcolo"
+          title="Come funziona il calcolo"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+      </div>
       {hasBudget && (
         <p className="text-xs text-slate-500 mb-2">
           Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.daysInMonth}</span> · proiezione vs budget
@@ -163,6 +177,99 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
           <p className="text-sm text-slate-400 text-center">
             Imposta entrate e regola di budget per vedere il ritmo risparmio
           </p>
+        </div>
+      )}
+
+      {showInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => setShowInfo(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="savings-gauge-info-title"
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowInfo(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 transition-colors"
+              aria-label="Chiudi"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 id="savings-gauge-info-title" className="text-lg font-bold text-slate-900 mb-3 pr-6">
+              Come si calcola il ritmo del risparmio
+            </h3>
+
+            <div className="space-y-4 text-sm text-slate-700">
+              <p>
+                Il tachimetro risponde a una domanda semplice: <strong>se continui a spendere
+                al ritmo di oggi, finirai il mese dentro il tuo budget?</strong>
+              </p>
+
+              <div>
+                <p className="font-semibold text-slate-800 mb-1">Come funziona il calcolo</p>
+                <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-600">
+                  <li>
+                    Sommiamo tutte le tue spese di <strong>Necessità</strong> e <strong>Svago</strong> dal 1° del mese a oggi
+                    (i risparmi non contano, perché non sono una spesa ma denaro messo da parte).
+                  </li>
+                  <li>
+                    <strong>Proiettiamo</strong> quel totale alla fine del mese. Esempio: se il giorno 15 di un mese di 30 giorni
+                    hai speso 500 €, la proiezione è circa 1000 €.
+                  </li>
+                  <li>
+                    Confrontiamo la proiezione con il <strong>target di budget</strong>, cioè la parte delle tue entrate
+                    destinata alle spese (Necessità + Svago). Per la regola 65/25/10, il target è il 90% delle entrate.
+                  </li>
+                </ol>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-800 mb-2">Zone del tachimetro</p>
+                <ul className="space-y-1.5 text-sm text-slate-600">
+                  <li className="flex items-start gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: '#16a34a' }} />
+                    <span><strong className="text-slate-800">Ottimo</strong> — la proiezione è sotto il target: stai risparmiando più del previsto.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+                    <span><strong className="text-slate-800">Attenzione</strong> — la proiezione è vicino al target: modera le prossime spese.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: '#dc2626' }} />
+                    <span><strong className="text-slate-800">Critico</strong> — la proiezione supera il target: stai spendendo troppo.</span>
+                  </li>
+                </ul>
+                <p className="text-xs text-slate-500 mt-2">
+                  La lancetta si posiziona al 50% quando la proiezione coincide esattamente con il target.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-800 mb-1">Il confronto secondario</p>
+                <p className="text-sm text-slate-600">
+                  Sotto il tachimetro trovi anche un confronto con il mese in cui hai risparmiato di più
+                  <em> in proporzione alle entrate</em> (non il mese con più euro risparmiati in assoluto, ma quello con la
+                  migliore percentuale di risparmio). Il confronto è fatto alla <strong>stessa percentuale di mese trascorso</strong>:
+                  se oggi è il giorno 17 di 30, confrontiamo con il giorno equivalente di quel mese
+                  (es. il giorno 16 se aveva 28 giorni), così il raffronto resta equo anche tra mesi di durata diversa.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowInfo(false)}
+              className="mt-5 w-full bg-sky-600 hover:bg-sky-700 text-white rounded-lg py-2.5 px-4 text-sm font-medium transition-colors"
+            >
+              Chiudi
+            </button>
+          </div>
         </div>
       )}
     </div>
