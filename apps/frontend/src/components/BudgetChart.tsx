@@ -88,9 +88,9 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
     return (
       <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
         {/* Card 1: Budget overview */}
-        <div className="card py-4 px-5">
+        <div className="card py-4 px-5 flex flex-col">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             {/* Donut chart - larger */}
             <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -188,7 +188,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
 
         {/* Card 3: Savings overview */}
         {savingsHistory && barData.length > 0 && (
-          <div className="card py-4 px-5">
+          <div className="card py-4 px-5 flex flex-col">
             {/* Savings header with labels */}
             <div className="flex justify-between items-start mb-3">
               <div>
@@ -211,9 +211,10 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
               </div>
             </div>
 
-            {/* Bar chart - full width */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
+            {/* Bar chart - full width, vertically centered in remaining card space */}
+            <div className="flex-1 flex items-center min-h-0">
+              <div className="h-28 w-full">
+                <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={barData}
                   margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
@@ -252,6 +253,7 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             </div>
           </div>
         )}
