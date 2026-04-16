@@ -78,7 +78,7 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
       </div>
       {hasBudget && (
         <p className="text-xs text-slate-500 mb-2">
-          Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.daysInMonth}</span> · proiezione vs budget
+          Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.effectiveCutoffDay}</span> · proiezione a stipendio vs budget
         </p>
       )}
 
@@ -208,19 +208,24 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
             <div className="space-y-4 text-sm text-slate-700">
               <p>
                 Il tachimetro risponde a una domanda semplice: <strong>se continui a spendere
-                al ritmo di oggi, finirai il mese dentro il tuo budget?</strong>
+                al ritmo di oggi, arriverai al giorno dello stipendio dentro il tuo budget?</strong>
               </p>
 
               <div>
                 <p className="font-semibold text-slate-800 mb-1">Come funziona il calcolo</p>
                 <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-600">
                   <li>
+                    Consideriamo come <strong>fine mese</strong> il giorno in cui ricevi lo stipendio
+                    (il <em>cutoffDay</em> della tua regola di budget, es. il 27). Se cade di sabato o domenica, lo spostiamo al
+                    venerdì precedente, perché è il giorno in cui lo stipendio viene effettivamente accreditato.
+                  </li>
+                  <li>
                     Sommiamo tutte le tue spese di <strong>Necessità</strong> e <strong>Svago</strong> dal 1° del mese a oggi
                     (i risparmi non contano, perché non sono una spesa ma denaro messo da parte).
                   </li>
                   <li>
-                    <strong>Proiettiamo</strong> quel totale alla fine del mese. Esempio: se il giorno 15 di un mese di 30 giorni
-                    hai speso 500 €, la proiezione è circa 1000 €.
+                    <strong>Proiettiamo</strong> quel totale al giorno di stipendio. Esempio: se il giorno 15 e il tuo payday è il 27,
+                    hai speso 500 €, la proiezione è circa 900 € (500 × 27 / 15).
                   </li>
                   <li>
                     Confrontiamo la proiezione con il <strong>target di budget</strong>, cioè la parte delle tue entrate
@@ -255,9 +260,9 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 <p className="text-sm text-slate-600">
                   Sotto il tachimetro trovi anche un confronto con il mese in cui hai risparmiato di più
                   <em> in proporzione alle entrate</em> (non il mese con più euro risparmiati in assoluto, ma quello con la
-                  migliore percentuale di risparmio). Il confronto è fatto alla <strong>stessa percentuale di mese trascorso</strong>:
-                  se oggi è il giorno 17 di 30, confrontiamo con il giorno equivalente di quel mese
-                  (es. il giorno 16 se aveva 28 giorni), così il raffronto resta equo anche tra mesi di durata diversa.
+                  migliore percentuale di risparmio). Il confronto è fatto alla <strong>stessa percentuale di ciclo-stipendio trascorso</strong>:
+                  se oggi è il giorno 14 di un ciclo che termina al 27, confrontiamo con il giorno equivalente di quel mese
+                  tenendo conto anche del suo payday, così il raffronto resta equo.
                 </p>
               </div>
             </div>

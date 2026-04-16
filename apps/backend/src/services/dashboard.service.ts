@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
-import { buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
+import { adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
 import { monthPeriodService } from './month-period.service.js';
 import { budgetRuleService } from './budget-rule.service.js';
 import { expenseService } from './expense.service.js';
@@ -196,15 +196,11 @@ export class DashboardService {
       return { period: p, income, savings, savingsRate };
     });
 
-    // Current-month time context
+    // Current-month time context — "end of month" is the user's payday (cutoffDay),
+    // shifted to the previous Friday if it falls on Sat/Sun.
     const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
     const now = new Date();
     const isLiveCurrent = currYear === now.getFullYear() && currMonth === now.getMonth() + 1;
-    const daysInMonth = new Date(currYear, currMonth, 0).getDate();
-    const daysElapsed = isLiveCurrent
-      ? Math.min(Math.max(1, now.getDate()), daysInMonth)
-      : daysInMonth;
-    const progressRatio = daysElapsed / daysInMonth;
 
     const currentData = months.find((m) => m.period.periodKey === currentPeriodKey);
     const currentPeriod = currentData?.period;
@@ -212,6 +208,12 @@ export class DashboardService {
 
     const needsPct = currentPeriod?.budgetRule?.needsPct ?? DEFAULT_BUDGET_RULE.needsPct;
     const wantsPct = currentPeriod?.budgetRule?.wantsPct ?? DEFAULT_BUDGET_RULE.wantsPct;
+    const nominalCutoffDay = currentPeriod?.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+    const effectiveCutoffDay = adjustCutoffDayForWeekend(currYear, currMonth, nominalCutoffDay);
+    const daysElapsed = isLiveCurrent
+      ? Math.min(Math.max(1, now.getDate()), effectiveCutoffDay)
+      : effectiveCutoffDay;
+    const progressRatio = daysElapsed / effectiveCutoffDay;
 
     const sumSpendUpToDay = (
       expenses: { category: string; amount: number; date: Date }[],
@@ -225,10 +227,10 @@ export class DashboardService {
       ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, daysElapsed))
       : 0;
 
-    // Linear run-rate projection to end of month
+    // Linear run-rate projection to payday (effectiveCutoffDay)
     const projectedMonthlySpend =
       daysElapsed > 0
-        ? roundCurrency((currentSpendToDate / daysElapsed) * daysInMonth)
+        ? roundCurrency((currentSpendToDate / daysElapsed) * effectiveCutoffDay)
         : 0;
 
     // Budget target for NEEDS+WANTS combined
@@ -256,8 +258,13 @@ export class DashboardService {
 
     let bestSpendAtSameProgress = 0;
     if (best) {
-      const bestDaysInMonth = new Date(best.period.year, best.period.month, 0).getDate();
-      const equivalentDay = Math.max(1, Math.round(progressRatio * bestDaysInMonth));
+      const bestNominalCutoff = best.period.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+      const bestEffectiveCutoff = adjustCutoffDayForWeekend(
+        best.period.year,
+        best.period.month,
+        bestNominalCutoff
+      );
+      const equivalentDay = Math.max(1, Math.round(progressRatio * bestEffectiveCutoff));
       bestSpendAtSameProgress = roundCurrency(
         sumSpendUpToDay(best.period.expenses, equivalentDay)
       );
@@ -265,7 +272,8 @@ export class DashboardService {
 
     return {
       daysElapsed,
-      daysInMonth,
+      effectiveCutoffDay,
+      nominalCutoffDay,
       currentSpendToDate,
       projectedMonthlySpend,
       budgetTarget,

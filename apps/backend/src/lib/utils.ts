@@ -104,3 +104,18 @@ export function isPastCutoffDay(cutoffDay: number, periodKey: string): boolean {
 export function roundCurrency(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
+
+/**
+ * Adjust a nominal payday (e.g. cutoffDay from BudgetRule) for weekends.
+ * Payday logic: if the nominal day falls on Saturday → previous Friday;
+ * on Sunday → previous Friday. Otherwise keep the nominal day.
+ * Always clamped to [1, daysInMonth].
+ */
+export function adjustCutoffDayForWeekend(year: number, month: number, nominalDay: number): number {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const clamped = Math.min(Math.max(1, nominalDay), daysInMonth);
+  const dow = new Date(year, month - 1, clamped).getDay();
+  if (dow === 0) return Math.max(1, clamped - 2); // Sunday → Friday
+  if (dow === 6) return Math.max(1, clamped - 1); // Saturday → Friday
+  return clamped;
+}
