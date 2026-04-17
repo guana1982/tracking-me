@@ -252,7 +252,7 @@ export class DashboardService {
       console.log('[SavingsPace DEBUG] Excluded rows (date.getDate() > ' + daysElapsed + '):');
       for (const e of excluded) {
         console.log(
-          `  ${e.date.toISOString()} | getDate=${e.date.getDate()} getUTCDate=${e.date.getUTCDate()} | ${e.category} | ${e.amount.toFixed(2).padStart(8)} € | ${e.description}`
+          `  ${e.date.toISOString()} | getDate=${e.date.getDate()} getUTCDate=${e.date.getUTCDate()} | ${e.category} | ${e.amount.toFixed(2).padStart(8)} € | ${e.label}`
         );
       }
     }

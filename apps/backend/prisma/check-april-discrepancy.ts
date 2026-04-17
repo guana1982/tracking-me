@@ -34,7 +34,7 @@ async function main() {
   console.log('\n=== Expenses with date.getDate() > 17 (the "missing" 89€) ===');
   for (const e of after17) {
     console.log(
-      `  ${e.date.toISOString()} | getDate()=${e.date.getDate()} | ${e.category.padEnd(6)} | ${e.amount.toFixed(2).padStart(8)} € | ${e.description}`
+      `  ${e.date.toISOString()} | getDate()=${e.date.getDate()} | ${e.category.padEnd(6)} | ${e.amount.toFixed(2).padStart(8)} € | ${e.label}`
     );
   }
 
@@ -44,7 +44,7 @@ async function main() {
     const localDay = e.date.getDate();
     const flag = utcDay !== localDay ? ' ⚠️ TZ-SHIFT' : '';
     console.log(
-      `  ${e.date.toISOString()} | UTC=${utcDay} local=${localDay}${flag} | ${e.category.padEnd(6)} | ${e.amount.toFixed(2).padStart(8)} € | ${e.description}`
+      `  ${e.date.toISOString()} | UTC=${utcDay} local=${localDay}${flag} | ${e.category.padEnd(6)} | ${e.amount.toFixed(2).padStart(8)} € | ${e.label}`
     );
   }
 }
