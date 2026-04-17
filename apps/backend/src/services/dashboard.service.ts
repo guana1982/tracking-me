@@ -164,11 +164,15 @@ export class DashboardService {
 
   /**
    * Get savings pace for a period.
-   * Primary metric: linear run-rate projection of NEEDS+WANTS spending for the
-   * current month, compared against the budget target (income × (needsPct+wantsPct)).
+   * Works on the pay-cycle, not the calendar month: the "April" cycle runs from the
+   * day after March's payday up to April's payday (both weekend-adjusted). Expenses
+   * made after April's payday belong to May's cycle.
+   * Primary metric: linear run-rate projection of NEEDS+WANTS spending to end of
+   * cycle, compared against the budget target (income × (needsPct+wantsPct)).
    * Secondary metric: comparison against the historical month with the best
-   * savings-rate (savings/income), evaluated at the equivalent month-progress
-   * (so day 16/30 is compared to day ~15/28 in February).
+   * savings-rate at the equivalent cycle-progress.
+   * NOTE: DTO fields keep legacy names — `daysElapsed` = days elapsed in cycle,
+   * `effectiveCutoffDay` = total cycle length in days (frontend shows "Giorno X/Y").
    * SAVINGS category is excluded from spending — it's already set aside.
    */
   async getSavingsPace(currentPeriodKey: string, userId: string): Promise<SavingsPaceDTO> {
@@ -196,8 +200,6 @@ export class DashboardService {
       return { period: p, income, savings, savingsRate };
     });
 
-    // Current-month time context — "end of month" is the user's payday (cutoffDay),
-    // shifted to the previous Friday if it falls on Sat/Sun.
     const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
     const now = new Date();
     const isLiveCurrent = currYear === now.getFullYear() && currMonth === now.getMonth() + 1;
@@ -209,61 +211,36 @@ export class DashboardService {
     const needsPct = currentPeriod?.budgetRule?.needsPct ?? DEFAULT_BUDGET_RULE.needsPct;
     const wantsPct = currentPeriod?.budgetRule?.wantsPct ?? DEFAULT_BUDGET_RULE.wantsPct;
     const nominalCutoffDay = currentPeriod?.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
-    const effectiveCutoffDay = adjustCutoffDayForWeekend(currYear, currMonth, nominalCutoffDay);
-    const daysElapsed = isLiveCurrent
-      ? Math.min(Math.max(1, now.getDate()), effectiveCutoffDay)
-      : effectiveCutoffDay;
-    const progressRatio = daysElapsed / effectiveCutoffDay;
 
-    const sumSpendUpToDay = (
+    const prevCutoff = this.findPrevPeriodCutoff(months, currYear, currMonth);
+    const cycleStart = this.computeCycleStart(currYear, currMonth, prevCutoff);
+    const cycleEnd = this.computeCycleEnd(currYear, currMonth, nominalCutoffDay);
+    const cycleLengthDays = this.daysBetween(cycleStart, cycleEnd) + 1;
+
+    const elapsedSoFar = isLiveCurrent ? this.daysBetween(cycleStart, now) + 1 : cycleLengthDays;
+    const daysInCycleElapsed = Math.min(Math.max(1, elapsedSoFar), cycleLengthDays);
+    const progressRatio = daysInCycleElapsed / cycleLengthDays;
+
+    const asOfDate = isLiveCurrent && now < cycleEnd ? now : cycleEnd;
+
+    const sumSpendInRange = (
       expenses: { category: string; amount: number; date: Date }[],
-      day: number
+      start: Date,
+      end: Date
     ) =>
       expenses
-        .filter((e) => e.category !== 'SAVINGS' && e.date.getDate() <= day)
+        .filter((e) => e.category !== 'SAVINGS' && e.date >= start && e.date <= end)
         .reduce((sum, e) => sum + e.amount, 0);
 
     const currentSpendToDate = currentPeriod
-      ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, daysElapsed))
+      ? roundCurrency(sumSpendInRange(currentPeriod.expenses, cycleStart, asOfDate))
       : 0;
 
-    // TEMP DEBUG — remove once discrepancy is understood
-    if (currentPeriod && isLiveCurrent) {
-      const nonSavings = currentPeriod.expenses.filter((e) => e.category !== 'SAVINGS');
-      const included = nonSavings.filter((e) => e.date.getDate() <= daysElapsed);
-      const excluded = nonSavings.filter((e) => e.date.getDate() > daysElapsed);
-      const totalAll = nonSavings.reduce((s, e) => s + e.amount, 0);
-      const totalIncl = included.reduce((s, e) => s + e.amount, 0);
-      const totalExcl = excluded.reduce((s, e) => s + e.amount, 0);
-      console.log('\n[SavingsPace DEBUG]', {
-        periodKey: currentPeriodKey,
-        daysElapsed,
-        nominalCutoffDay,
-        effectiveCutoffDay,
-        totals: {
-          nonSavingsTotal: totalAll.toFixed(2),
-          includedUpToToday: totalIncl.toFixed(2),
-          excludedAfterToday: totalExcl.toFixed(2),
-          rowsTotal: nonSavings.length,
-          rowsIncluded: included.length,
-          rowsExcluded: excluded.length,
-        },
-      });
-      console.log('[SavingsPace DEBUG] Excluded rows (date.getDate() > ' + daysElapsed + '):');
-      for (const e of excluded) {
-        console.log(
-          `  ${e.date.toISOString()} | getDate=${e.date.getDate()} getUTCDate=${e.date.getUTCDate()} | ${e.category} | ${e.amount.toFixed(2).padStart(8)} € | ${e.label}`
-        );
-      }
-    }
-
-    // Linear run-rate projection to payday (effectiveCutoffDay)
     const projectedMonthlySpend =
-      daysElapsed > 0
-        ? roundCurrency((currentSpendToDate / daysElapsed) * effectiveCutoffDay)
+      daysInCycleElapsed > 0
+        ? roundCurrency((currentSpendToDate / daysInCycleElapsed) * cycleLengthDays)
         : 0;
 
-    // Budget target for NEEDS+WANTS combined
     const budgetTarget = roundCurrency((currentIncome * (needsPct + wantsPct)) / 100);
 
     // performancePct: 50 = projected exactly at target; 100 = zero projected spend; 0 = 2× target or worse
@@ -276,7 +253,6 @@ export class DashboardService {
       performancePct = projectedMonthlySpend === 0 ? 50 : 0;
     }
 
-    // Secondary: best historical month by savings rate (not absolute savings)
     const candidates = months.filter(
       (m) =>
         m.period.periodKey !== currentPeriodKey &&
@@ -289,20 +265,25 @@ export class DashboardService {
     let bestSpendAtSameProgress = 0;
     if (best) {
       const bestNominalCutoff = best.period.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
-      const bestEffectiveCutoff = adjustCutoffDayForWeekend(
-        best.period.year,
-        best.period.month,
-        bestNominalCutoff
+      const bestPrevCutoff = this.findPrevPeriodCutoff(months, best.period.year, best.period.month);
+      const bestCycleStart = this.computeCycleStart(best.period.year, best.period.month, bestPrevCutoff);
+      const bestCycleEnd = this.computeCycleEnd(best.period.year, best.period.month, bestNominalCutoff);
+      const bestCycleLen = this.daysBetween(bestCycleStart, bestCycleEnd) + 1;
+      const bestEquivDays = Math.min(
+        bestCycleLen,
+        Math.max(1, Math.round(progressRatio * bestCycleLen))
       );
-      const equivalentDay = Math.max(1, Math.round(progressRatio * bestEffectiveCutoff));
+      const bestAsOf = new Date(bestCycleStart);
+      bestAsOf.setDate(bestAsOf.getDate() + bestEquivDays - 1);
+      bestAsOf.setHours(23, 59, 59, 999);
       bestSpendAtSameProgress = roundCurrency(
-        sumSpendUpToDay(best.period.expenses, equivalentDay)
+        sumSpendInRange(best.period.expenses, bestCycleStart, bestAsOf)
       );
     }
 
     return {
-      daysElapsed,
-      effectiveCutoffDay,
+      daysElapsed: daysInCycleElapsed,
+      effectiveCutoffDay: cycleLengthDays,
       nominalCutoffDay,
       currentSpendToDate,
       projectedMonthlySpend,
@@ -321,6 +302,38 @@ export class DashboardService {
       bestSpendAtSameProgress,
       hasComparison: best !== null,
     };
+  }
+
+  private findPrevPeriodCutoff(
+    months: { period: { year: number; month: number; budgetRule: { cutoffDay: number } | null } }[],
+    year: number,
+    month: number
+  ): number {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prev = months.find(
+      (m) => m.period.year === prevYear && m.period.month === prevMonth
+    );
+    return prev?.period.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+  }
+
+  private computeCycleStart(year: number, month: number, prevNominalCutoff: number): Date {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevAdjusted = adjustCutoffDayForWeekend(prevYear, prevMonth, prevNominalCutoff);
+    // Day after previous payday; Date constructor handles end-of-month overflow.
+    return new Date(prevYear, prevMonth - 1, prevAdjusted + 1);
+  }
+
+  private computeCycleEnd(year: number, month: number, nominalCutoff: number): Date {
+    const adjusted = adjustCutoffDayForWeekend(year, month, nominalCutoff);
+    return new Date(year, month - 1, adjusted, 23, 59, 59, 999);
+  }
+
+  private daysBetween(start: Date, end: Date): number {
+    const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+    const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+    return Math.round((endUtc - startUtc) / 86400000);
   }
 
   private buildReallocationPreview(
