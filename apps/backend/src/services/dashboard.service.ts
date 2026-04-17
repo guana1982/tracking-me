@@ -227,6 +227,36 @@ export class DashboardService {
       ? roundCurrency(sumSpendUpToDay(currentPeriod.expenses, daysElapsed))
       : 0;
 
+    // TEMP DEBUG — remove once discrepancy is understood
+    if (currentPeriod && isLiveCurrent) {
+      const nonSavings = currentPeriod.expenses.filter((e) => e.category !== 'SAVINGS');
+      const included = nonSavings.filter((e) => e.date.getDate() <= daysElapsed);
+      const excluded = nonSavings.filter((e) => e.date.getDate() > daysElapsed);
+      const totalAll = nonSavings.reduce((s, e) => s + e.amount, 0);
+      const totalIncl = included.reduce((s, e) => s + e.amount, 0);
+      const totalExcl = excluded.reduce((s, e) => s + e.amount, 0);
+      console.log('\n[SavingsPace DEBUG]', {
+        periodKey: currentPeriodKey,
+        daysElapsed,
+        nominalCutoffDay,
+        effectiveCutoffDay,
+        totals: {
+          nonSavingsTotal: totalAll.toFixed(2),
+          includedUpToToday: totalIncl.toFixed(2),
+          excludedAfterToday: totalExcl.toFixed(2),
+          rowsTotal: nonSavings.length,
+          rowsIncluded: included.length,
+          rowsExcluded: excluded.length,
+        },
+      });
+      console.log('[SavingsPace DEBUG] Excluded rows (date.getDate() > ' + daysElapsed + '):');
+      for (const e of excluded) {
+        console.log(
+          `  ${e.date.toISOString()} | getDate=${e.date.getDate()} getUTCDate=${e.date.getUTCDate()} | ${e.category} | ${e.amount.toFixed(2).padStart(8)} € | ${e.description}`
+        );
+      }
+    }
+
     // Linear run-rate projection to payday (effectiveCutoffDay)
     const projectedMonthlySpend =
       daysElapsed > 0

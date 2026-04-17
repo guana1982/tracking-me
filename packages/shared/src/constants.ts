@@ -7,7 +7,7 @@ export const DEFAULT_BUDGET_RULE = {
   needsPct: 65,
   wantsPct: 25,
   savingsPct: 10,
-  cutoffDay: 26,
+  cutoffDay: 27,
   autoReallocateNeedsRemainder: true,
 } as const;
 
