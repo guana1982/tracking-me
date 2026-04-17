@@ -248,21 +248,19 @@ export interface SavingsHistoryDTO {
 }
 
 // Savings pace — answers "at the current run-rate, will I stay within budget by payday?"
-// Operates on the pay-cycle, not the calendar month: the cycle runs from the day after
-// the previous payday to the current period's payday (both weekend-adjusted to the
-// previous Friday if they fall on Sat/Sun). Expenses dated after payday belong to the
-// next cycle.
-// Primary metric: projected NEEDS+WANTS spending at end-of-cycle vs budget target (income × (needsPct+wantsPct)).
-// Secondary: comparison against the best-savings-rate historical month at the equivalent cycle-progress.
+// "End of month" here means the user's effective payday (BudgetRule.cutoffDay, e.g. 27),
+// shifted to the previous Friday if it falls on Saturday or Sunday.
+// Primary metric: projected spending (NEEDS+WANTS) at payday vs budget target (income × (needsPct+wantsPct)).
+// Secondary: comparison against the best-savings-rate historical month at the equivalent payday-progress.
 export interface SavingsPaceDTO {
-  // Cycle progress — frontend renders as "Giorno {daysElapsed}/{effectiveCutoffDay}"
-  daysElapsed: number;               // days elapsed within the current pay-cycle (1-based, clamped to effectiveCutoffDay)
-  effectiveCutoffDay: number;        // total length of the pay-cycle in days
-  nominalCutoffDay: number;          // raw cutoffDay from BudgetRule (the payday number, before weekend adjustment)
+  // Time context — driven by the user's payday, not the calendar month end
+  daysElapsed: number;               // days of the current month accounted for, clamped to effectiveCutoffDay
+  effectiveCutoffDay: number;        // the payday used as "end of month" (cutoffDay shifted to Friday if weekend)
+  nominalCutoffDay: number;          // the raw cutoffDay from BudgetRule before weekend adjustment
 
-  // Run-rate vs budget target
-  currentSpendToDate: number;        // NEEDS+WANTS spent in the cycle so far (SAVINGS excluded)
-  projectedMonthlySpend: number;     // linear projection to end-of-cycle = currentSpendToDate × effectiveCutoffDay / daysElapsed
+  // Current-month run-rate vs budget target
+  currentSpendToDate: number;        // NEEDS+WANTS spent so far (SAVINGS excluded)
+  projectedMonthlySpend: number;     // linear projection to payday = currentSpendToDate × effectiveCutoffDay / daysElapsed
   budgetTarget: number;              // income × (needsPct + wantsPct) / 100 — max NEEDS+WANTS allowed
   performancePct: number;            // 0..100 gauge position. 50 = projected exactly at target; >50 under target; <50 over target
 
