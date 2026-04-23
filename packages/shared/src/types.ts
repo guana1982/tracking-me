@@ -261,7 +261,7 @@ export interface SavingsPaceDTO {
   nominalCutoffDay: number;          // raw cutoffDay from BudgetRule (the payday number, before weekend adjustment)
 
   // Run-rate vs budget target
-  currentSpendToDate: number;        // NEEDS+WANTS spent in the cycle so far (SAVINGS excluded)
+  currentSpendToDate: number;        // NEEDS+WANTS stored in the selected period (SAVINGS excluded, expense date ignored)
   projectedMonthlySpend: number;     // linear projection to end-of-cycle = currentSpendToDate × effectiveCutoffDay / daysElapsed
   budgetTarget: number;              // income × (needsPct + wantsPct) / 100 — max NEEDS+WANTS allowed
   performancePct: number;            // 0..100 gauge position. 50 = projected exactly at target; >50 under target; <50 over target
@@ -275,7 +275,7 @@ export interface SavingsPaceDTO {
     savings: number;
     savingsRate: number;             // 0..1 (e.g. 0.18 = 18%)
   } | null;
-  bestSpendAtSameProgress: number;   // best month's NEEDS+WANTS up to the equivalent payday-relative day
+  bestSpendAtSameProgress: number;   // best month's NEEDS+WANTS at current cycle progress ratio (date-agnostic)
   hasComparison: boolean;            // false when no usable historical month is available
 }
 

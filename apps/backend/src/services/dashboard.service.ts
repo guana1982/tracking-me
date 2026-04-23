@@ -221,19 +221,15 @@ export class DashboardService {
     const daysInCycleElapsed = Math.min(Math.max(1, elapsedSoFar), cycleLengthDays);
     const progressRatio = daysInCycleElapsed / cycleLengthDays;
 
-    const asOfDate = isLiveCurrent && now < cycleEnd ? now : cycleEnd;
-
-    const sumSpendInRange = (
-      expenses: { category: string; amount: number; date: Date }[],
-      start: Date,
-      end: Date
+    const sumPeriodSpend = (
+      expenses: { category: string; amount: number }[]
     ) =>
       expenses
-        .filter((e) => e.category !== 'SAVINGS' && e.date >= start && e.date <= end)
+        .filter((e) => e.category !== 'SAVINGS')
         .reduce((sum, e) => sum + e.amount, 0);
 
     const currentSpendToDate = currentPeriod
-      ? roundCurrency(sumSpendInRange(currentPeriod.expenses, cycleStart, asOfDate))
+      ? roundCurrency(sumPeriodSpend(currentPeriod.expenses))
       : 0;
 
     const projectedMonthlySpend =
@@ -264,20 +260,9 @@ export class DashboardService {
 
     let bestSpendAtSameProgress = 0;
     if (best) {
-      const bestNominalCutoff = best.period.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
-      const bestPrevCutoff = this.findPrevPeriodCutoff(months, best.period.year, best.period.month);
-      const bestCycleStart = this.computeCycleStart(best.period.year, best.period.month, bestPrevCutoff);
-      const bestCycleEnd = this.computeCycleEnd(best.period.year, best.period.month, bestNominalCutoff);
-      const bestCycleLen = this.daysBetween(bestCycleStart, bestCycleEnd) + 1;
-      const bestEquivDays = Math.min(
-        bestCycleLen,
-        Math.max(1, Math.round(progressRatio * bestCycleLen))
-      );
-      const bestAsOf = new Date(bestCycleStart);
-      bestAsOf.setDate(bestAsOf.getDate() + bestEquivDays - 1);
-      bestAsOf.setHours(23, 59, 59, 999);
+      const bestTotalSpend = sumPeriodSpend(best.period.expenses);
       bestSpendAtSameProgress = roundCurrency(
-        sumSpendInRange(best.period.expenses, bestCycleStart, bestAsOf)
+        bestTotalSpend * progressRatio
       );
     }
 

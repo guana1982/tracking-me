@@ -220,8 +220,8 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                     venerdì precedente, perché è il giorno in cui lo stipendio viene effettivamente accreditato.
                   </li>
                   <li>
-                    Sommiamo tutte le tue spese di <strong>Necessità</strong> e <strong>Svago</strong> dal 1° del mese a oggi
-                    (i risparmi non contano, perché non sono una spesa ma denaro messo da parte).
+                    Sommiamo tutte le tue spese di <strong>Necessita</strong> e <strong>Svago</strong> nel mese selezionato
+                    (conta la tab del mese, non la data inserita sulla singola spesa; i risparmi non contano).
                   </li>
                   <li>
                     <strong>Proiettiamo</strong> quel totale al giorno di stipendio. Esempio: se il giorno 15 e il tuo payday è il 27,
@@ -260,9 +260,8 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 <p className="text-sm text-slate-600">
                   Sotto il tachimetro trovi anche un confronto con il mese in cui hai risparmiato di più
                   <em> in proporzione alle entrate</em> (non il mese con più euro risparmiati in assoluto, ma quello con la
-                  migliore percentuale di risparmio). Il confronto è fatto alla <strong>stessa percentuale di ciclo-stipendio trascorso</strong>:
-                  se oggi è il giorno 14 di un ciclo che termina al 27, confrontiamo con il giorno equivalente di quel mese
-                  tenendo conto anche del suo payday, così il raffronto resta equo.
+                  migliore percentuale di risparmio). Il confronto e fatto alla <strong>stessa percentuale di ciclo-stipendio trascorso</strong>,
+                  proiettando in modo lineare lo stesso avanzamento sul mese migliore.
                 </p>
               </div>
             </div>
@@ -280,3 +279,4 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
     </div>
   );
 }
+
