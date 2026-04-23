@@ -15,12 +15,16 @@ const BACKEND_URL = getBackendBaseUrl();
 export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const errorParam = searchParams.get('error');
   const authError =
     errorParam === 'auth_failed'
       ? 'Accesso con Google non riuscito. Riprova.'
       : errorParam;
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
