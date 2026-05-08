@@ -862,7 +862,7 @@ export function CashFlow() {
               )}
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
-          <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1 scrollbar-thin">
+          <div className="flex items-center justify-end gap-1.5 mb-2 overflow-x-auto pb-1 scrollbar-thin">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
