@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -201,6 +201,47 @@ function diffDisplay(value: number | null): string {
   return formatCurrency(value);
 }
 
+function csvCell(value: string | number | null | undefined): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function csvAmount(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '';
+  return value.toFixed(2).replace('.', ',');
+}
+
+function buildCashFlowCsv(rows: RowWithMetrics[], columns: CashFlowColumn[]): string {
+  const headers = ['Check', 'Data'];
+  columns.forEach((column) => {
+    headers.push(column.label, getDiffHeaderLabel(column));
+  });
+  headers.push('Totale', 'Diff Tot', 'Note');
+
+  const lines = [
+    headers.map(csvCell).join(';'),
+    ...rows.map((row) => {
+      const cells: Array<string | number | null | undefined> = [
+        row.checkLabel,
+        row.date.slice(0, 10),
+      ];
+
+      columns.forEach((column) => {
+        cells.push(csvAmount(getRowValue(row, column.key)));
+        cells.push(csvAmount(row.diffByColumn[column.key] ?? null));
+      });
+
+      cells.push(csvAmount(row.total));
+      cells.push(csvAmount(row.diffTotal));
+      cells.push(row.notes ?? '');
+
+      return cells.map(csvCell).join(';');
+    }),
+  ];
+
+  return lines.join('\r\n');
+}
+
 function getDiffHeaderLabel(column: CashFlowColumn): string {
   return LEGACY_DIFF_LABELS[column.key] ?? `Diff ${column.label}`;
 }
@@ -364,6 +405,19 @@ export function CashFlow() {
       };
     });
   }, [sortedRows, activeColumns, settings]);
+
+  const handleExportCsv = () => {
+    const csv = buildCashFlowCsv(rowsWithMetrics, activeColumns);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cash-flow-check-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const latestRow = rowsWithMetrics[0] ?? null;
   const positiveDiffCount = rowsWithMetrics.filter((row) => (row.diffTotal ?? 0) > 0).length;
@@ -949,16 +1003,28 @@ export function CashFlow() {
       </div>
 
       <div className="card !p-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900">Storico Check</h3>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors"
-            onClick={() => setIsCompactTable((prev) => !prev)}
-          >
-            {isCompactTable ? <Columns3 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
-            {isCompactTable ? 'Espandi' : 'Compatto'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              onClick={handleExportCsv}
+              disabled={rowsWithMetrics.length === 0}
+              title="Esporta tabella in CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              onClick={() => setIsCompactTable((prev) => !prev)}
+            >
+              {isCompactTable ? <Columns3 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+              {isCompactTable ? 'Espandi' : 'Compatto'}
+            </button>
+          </div>
         </div>
         {rowsWithMetrics.length === 0 ? (
           <p className="text-sm text-slate-500">Nessun check inserito.</p>
