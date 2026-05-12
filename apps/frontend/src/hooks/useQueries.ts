@@ -139,6 +139,7 @@ export function useCreateIncome(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.incomes(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -152,6 +153,7 @@ export function useUpdateIncome(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.incomes(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -164,6 +166,7 @@ export function useDeleteIncome(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.incomes(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -184,6 +187,7 @@ export function useCreateExpense(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -197,6 +201,7 @@ export function useUpdateExpense(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -209,6 +214,7 @@ export function useDeleteExpense(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -267,6 +273,7 @@ export function useApplyFixedExpenseTemplates(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.fixedExpenses() });
     },
   });
@@ -289,6 +296,7 @@ export function useUpdateBudgetRule(periodKey: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.budgetRule(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -323,6 +331,7 @@ export function useCreateReallocation(periodKey: string) {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsHistory(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }
@@ -341,6 +350,7 @@ export function useDeleteReallocation(periodKey: string) {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsHistory(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },
   });
 }

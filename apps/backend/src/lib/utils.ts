@@ -21,7 +21,21 @@ export function parsePeriodKey(periodKey: string): { year: number; month: number
  */
 export function getCurrentPeriodKey(): string {
   const now = new Date();
-  return generatePeriodKey(now.getFullYear(), now.getMonth() + 1);
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const effectiveCutoffDay = adjustCutoffDayForWeekend(
+    currentYear,
+    currentMonth,
+    DEFAULT_BUDGET_RULE.cutoffDay
+  );
+
+  if (now.getDate() > effectiveCutoffDay) {
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+    return generatePeriodKey(nextYear, nextMonth);
+  }
+
+  return generatePeriodKey(currentYear, currentMonth);
 }
 
 /**

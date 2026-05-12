@@ -202,7 +202,6 @@ export class DashboardService {
 
     const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
     const now = new Date();
-    const isLiveCurrent = currYear === now.getFullYear() && currMonth === now.getMonth() + 1;
 
     const currentData = months.find((m) => m.period.periodKey === currentPeriodKey);
     const currentPeriod = currentData?.period;
@@ -211,6 +210,8 @@ export class DashboardService {
     const needsPct = currentPeriod?.budgetRule?.needsPct ?? DEFAULT_BUDGET_RULE.needsPct;
     const wantsPct = currentPeriod?.budgetRule?.wantsPct ?? DEFAULT_BUDGET_RULE.wantsPct;
     const nominalCutoffDay = currentPeriod?.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+    const livePeriodKey = this.getPeriodKeyForDate(now, nominalCutoffDay);
+    const isLiveCurrent = currentPeriodKey === livePeriodKey;
 
     const prevCutoff = this.findPrevPeriodCutoff(months, currYear, currMonth);
     const cycleStart = this.computeCycleStart(currYear, currMonth, prevCutoff);
@@ -222,19 +223,21 @@ export class DashboardService {
     const progressRatio = daysInCycleElapsed / cycleLengthDays;
 
     const sumPeriodSpend = (
-      expenses: { category: string; amount: number }[]
+      expenses: { category: string; amount: number; isFixed?: boolean }[],
+      fixedOnly?: boolean
     ) =>
       expenses
         .filter((e) => e.category !== 'SAVINGS')
+        .filter((e) => fixedOnly === undefined || Boolean(e.isFixed) === fixedOnly)
         .reduce((sum, e) => sum + e.amount, 0);
 
-    const currentSpendToDate = currentPeriod
-      ? roundCurrency(sumPeriodSpend(currentPeriod.expenses))
-      : 0;
+    const fixedSpend = currentPeriod ? sumPeriodSpend(currentPeriod.expenses, true) : 0;
+    const variableSpendToDate = currentPeriod ? sumPeriodSpend(currentPeriod.expenses, false) : 0;
+    const currentSpendToDate = roundCurrency(fixedSpend + variableSpendToDate);
 
     const projectedMonthlySpend =
       daysInCycleElapsed > 0
-        ? roundCurrency((currentSpendToDate / daysInCycleElapsed) * cycleLengthDays)
+        ? roundCurrency(fixedSpend + (variableSpendToDate / daysInCycleElapsed) * cycleLengthDays)
         : 0;
 
     const budgetTarget = roundCurrency((currentIncome * (needsPct + wantsPct)) / 100);
@@ -319,6 +322,20 @@ export class DashboardService {
     const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
     const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
     return Math.round((endUtc - startUtc) / 86400000);
+  }
+
+  private getPeriodKeyForDate(date: Date, nominalCutoff: number): string {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const adjusted = adjustCutoffDayForWeekend(year, month, nominalCutoff);
+
+    if (date.getDate() > adjusted) {
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+      return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+    }
+
+    return `${year}-${String(month).padStart(2, '0')}`;
   }
 
   private buildReallocationPreview(

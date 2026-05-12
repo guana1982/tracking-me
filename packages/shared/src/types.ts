@@ -262,7 +262,7 @@ export interface SavingsPaceDTO {
 
   // Run-rate vs budget target
   currentSpendToDate: number;        // NEEDS+WANTS stored in the selected period (SAVINGS excluded, expense date ignored)
-  projectedMonthlySpend: number;     // linear projection to end-of-cycle = currentSpendToDate × effectiveCutoffDay / daysElapsed
+  projectedMonthlySpend: number;     // fixed NEEDS+WANTS + variable NEEDS+WANTS projected to end-of-cycle
   budgetTarget: number;              // income × (needsPct + wantsPct) / 100 — max NEEDS+WANTS allowed
   performancePct: number;            // 0..100 gauge position. 50 = projected exactly at target; >50 under target; <50 over target
 

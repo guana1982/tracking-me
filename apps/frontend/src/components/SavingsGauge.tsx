@@ -78,7 +78,7 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
       </div>
       {hasBudget && (
         <p className="text-xs text-slate-500 mb-2">
-          Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.effectiveCutoffDay}</span> · proiezione a stipendio vs budget
+          Giorno <span className="font-semibold text-slate-700">{pace!.daysElapsed}/{pace!.effectiveCutoffDay}</span> - fisse + ritmo variabile vs budget
         </p>
       )}
 
@@ -215,17 +215,14 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 <p className="font-semibold text-slate-800 mb-1">Come funziona il calcolo</p>
                 <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-600">
                   <li>
-                    Consideriamo come <strong>fine mese</strong> il giorno in cui ricevi lo stipendio
-                    (il <em>cutoffDay</em> della tua regola di budget, es. il 27). Se cade di sabato o domenica, lo spostiamo al
-                    venerdì precedente, perché è il giorno in cui lo stipendio viene effettivamente accreditato.
+                    Consideriamo il mese come ciclo stipendio: dal giorno dopo il <em>cutoffDay</em> del mese precedente fino al <em>cutoffDay</em> del mese selezionato. Se cade di sabato o domenica, lo spostiamo al venerdi precedente.
                   </li>
                   <li>
                     Sommiamo tutte le tue spese di <strong>Necessita</strong> e <strong>Svago</strong> nel mese selezionato
                     (conta la tab del mese, non la data inserita sulla singola spesa; i risparmi non contano).
                   </li>
                   <li>
-                    <strong>Proiettiamo</strong> quel totale al giorno di stipendio. Esempio: se il giorno 15 e il tuo payday è il 27,
-                    hai speso 500 €, la proiezione è circa 900 € (500 × 27 / 15).
+                    Le spese fisse vengono contate una sola volta. Solo le spese variabili vengono <strong>proiettate</strong> al giorno di stipendio, cosi i costi ricorrenti caricati a inizio mese non vengono trattati come ritmo giornaliero.
                   </li>
                   <li>
                     Confrontiamo la proiezione con il <strong>target di budget</strong>, cioè la parte delle tue entrate

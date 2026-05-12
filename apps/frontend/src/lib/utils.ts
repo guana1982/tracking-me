@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, parse } from 'date-fns';
 import { it } from 'date-fns/locale';
-import type { Category } from '@budget/shared';
+import { DEFAULT_BUDGET_RULE, type Category } from '@budget/shared';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -34,11 +34,34 @@ export function formatPeriodKey(periodKey: string): string {
 
 export function getCurrentPeriodKey(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const effectiveCutoffDay = adjustCutoffDayForWeekend(
+    currentYear,
+    currentMonth,
+    DEFAULT_BUDGET_RULE.cutoffDay
+  );
+
+  if (now.getDate() > effectiveCutoffDay) {
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+    return generatePeriodKey(nextYear, nextMonth);
+  }
+
+  return generatePeriodKey(currentYear, currentMonth);
 }
 
 export function generatePeriodKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function adjustCutoffDayForWeekend(year: number, month: number, nominalDay: number): number {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const clamped = Math.min(Math.max(1, nominalDay), daysInMonth);
+  const dayOfWeek = new Date(year, month - 1, clamped).getDay();
+  if (dayOfWeek === 0) return Math.max(1, clamped - 2);
+  if (dayOfWeek === 6) return Math.max(1, clamped - 1);
+  return clamped;
 }
 
 export function getAllPeriodsForYear(year: number): { periodKey: string; month: number }[] {
