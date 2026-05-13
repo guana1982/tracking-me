@@ -427,17 +427,23 @@ export function CashFlow() {
         .slice()
         .reverse()
         .map((row) => {
+          const selectedTotal = showTotalTrend
+            ? row.total
+            : activeColumns
+              .filter((col) => visibleTrendKeys.has(col.key))
+              .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
           const point: Record<string, string | number> = {
             dateLabel: formatDate(row.date),
             checkLabel: row.checkLabel,
             total: row.total,
+            selectedTotal,
           };
           activeColumns.forEach((col) => {
             point[col.key] = getRowValue(row, col.key);
           });
           return point;
         }),
-    [rowsWithMetrics, activeColumns]
+    [rowsWithMetrics, activeColumns, showTotalTrend, visibleTrendKeys]
   );
 
   const toggleTrendKey = (key: string) => {
@@ -453,18 +459,17 @@ export function CashFlow() {
     TREND_LINE_COLORS[key] ?? FALLBACK_TREND_COLORS[index % FALLBACK_TREND_COLORS.length];
 
   const hasVisibleTrendSeries = showTotalTrend || visibleTrendKeys.size > 0;
+  const trendLineLabel = showTotalTrend ? 'Totale' : 'Selezione';
+  const trendLineColor = showTotalTrend ? '#2563eb' : '#0f766e';
 
   const trendYDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
     trendData.forEach((point) => {
-      if (showTotalTrend) values.push(Number(point.total));
-      visibleTrendKeys.forEach((key) => {
-        const v = Number(point[key]);
-        if (Number.isFinite(v)) values.push(v);
-      });
+      const v = Number(point.selectedTotal);
+      if (Number.isFinite(v)) values.push(v);
     });
     return computeYAxis(values);
-  }, [trendData, showTotalTrend, visibleTrendKeys]);
+  }, [trendData]);
 
   const allocationChart = useMemo(() => {
     if (!latestRow) {
@@ -970,11 +975,13 @@ export function CashFlow() {
                         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                           <p className="text-[10px] text-slate-500">{point.dateLabel}</p>
                           <p className="text-xs font-semibold text-slate-900">{point.checkLabel}</p>
-                          {showTotalTrend && <p className="text-xs font-bold text-blue-600">Totale: {formatCurrency(Number(point.total))}</p>}
-                          {activeColumns.map((col, idx) => {
+                          <p className="text-xs font-bold" style={{ color: trendLineColor }}>
+                            {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
+                          </p>
+                          {!showTotalTrend && activeColumns.map((col, idx) => {
                             if (!visibleTrendKeys.has(col.key)) return null;
                             return (
-                              <p key={col.key} className="text-xs font-semibold" style={{ color: getTrendColor(col.key, idx) }}>
+                              <p key={col.key} className="text-[10px] font-semibold" style={{ color: getTrendColor(col.key, idx) }}>
                                 {col.label}: {formatCurrency(Number(point[col.key] ?? 0))}
                               </p>
                             );
@@ -983,16 +990,7 @@ export function CashFlow() {
                       );
                     }}
                   />
-                  {showTotalTrend && (
-                    <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: '#1d4ed8', stroke: '#fff', strokeWidth: 2 }} />
-                  )}
-                  {activeColumns.map((col, idx) => {
-                    if (!visibleTrendKeys.has(col.key)) return null;
-                    const color = getTrendColor(col.key, idx);
-                    return (
-                      <Line key={col.key} type="monotone" dataKey={col.key} stroke={color} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: color, stroke: '#fff', strokeWidth: 2 }} />
-                    );
-                  })}
+                  <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
