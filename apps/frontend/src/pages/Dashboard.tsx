@@ -4,8 +4,47 @@ import { CategoryCard } from '../components/CategoryCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
-import { Loader2, RefreshCw, Undo2, Lock, Unlock } from 'lucide-react';
+import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
+import type { ExpenseDTO } from '@budget/shared';
+
+function csvCell(value: string | number | null | undefined): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function csvAmount(value: number): string {
+  return value.toFixed(2).replace('.', ',');
+}
+
+function getExpenseCategoryLabel(category: ExpenseDTO['category']): string {
+  switch (category) {
+    case 'NEEDS':
+      return 'Necessita';
+    case 'WANTS':
+      return 'Svago';
+    case 'SAVINGS':
+      return 'Risparmi';
+  }
+}
+
+function buildExpensesCsv(expenses: ExpenseDTO[]): string {
+  const headers = ['Data', 'Categoria', 'Descrizione', 'Importo', 'Fissa', 'Tricount', 'Note'];
+  const lines = [
+    headers.map(csvCell).join(';'),
+    ...expenses.map((expense) => [
+      expense.date.slice(0, 10),
+      getExpenseCategoryLabel(expense.category),
+      expense.label,
+      csvAmount(expense.amount),
+      expense.isFixed ? 'Si' : 'No',
+      expense.tricountType ?? '',
+      expense.notes ?? '',
+    ].map(csvCell).join(';')),
+  ];
+
+  return lines.join('\r\n');
+}
 
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
@@ -31,6 +70,21 @@ export function Dashboard() {
   // Check if we can show the reallocation button (after cutoff day and has available amount)
   const canShowReallocationButton = reallocationPreview?.isAfterCutoff &&
     (reallocationPreview?.suggestedAmount > 0 || hasReallocation);
+
+  const handleExportExpensesCsv = () => {
+    if (!data?.recentExpenses.length) return;
+
+    const csv = buildExpensesCsv(data.recentExpenses);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `spese-${periodKey}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleReallocation = async () => {
     if (hasReallocation) {
@@ -135,6 +189,19 @@ export function Dashboard() {
           </button>
         </div>
       )}
+
+      <div className="flex flex-shrink-0 justify-end">
+        <button
+          type="button"
+          onClick={handleExportExpensesCsv}
+          disabled={recentExpenses.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Esporta tutte le spese del mese in CSV"
+        >
+          <Download className="w-4 h-4" />
+          CSV spese mese
+        </button>
+      </div>
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:flex-1 md:min-h-0">
