@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { expenseService } from '../services/expense.service.js';
 import {
+  CATEGORIES,
   createExpenseSchema,
   updateExpenseSchema,
   expenseFiltersSchema,
@@ -26,7 +27,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         querystring: {
           type: 'object',
           properties: {
-            category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+            category: { type: 'string', enum: [...CATEGORIES] },
             startDate: { type: 'string', format: 'date' },
             endDate: { type: 'string', format: 'date' },
             search: { type: 'string', maxLength: 100 },
@@ -91,7 +92,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
           type: 'object',
           properties: {
             date: { type: 'string' },
-            category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+            category: { type: 'string', enum: [...CATEGORIES] },
             label: { type: 'string', minLength: 1, maxLength: 200 },
             amount: { type: 'number', minimum: 0.01 },
             notes: { type: 'string', maxLength: 500 },
@@ -130,7 +131,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           date: { type: 'string' },
-          category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+          category: { type: 'string', enum: [...CATEGORIES] },
           label: { type: 'string', minLength: 1, maxLength: 200 },
           amount: { type: 'number', minimum: 0.01 },
           notes: { type: 'string', maxLength: 500 },
