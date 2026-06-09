@@ -144,7 +144,8 @@ export class MonthPeriodService {
   }
 
   /**
-   * Close a month period (no more edits allowed)
+   * Close a month period (no more edits allowed).
+   * Idempotent: closing an already-closed month is a no-op, not an error.
    */
   async closeMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
     const period = await prisma.monthPeriod.findFirst({
@@ -156,7 +157,7 @@ export class MonthPeriodService {
     }
 
     if (period.isClosed) {
-      throw new AppError(`Month period ${periodKey} is already closed`, 400, 'ALREADY_CLOSED');
+      return this.toDTO(period);
     }
 
     const updated = await prisma.monthPeriod.update({
@@ -171,7 +172,8 @@ export class MonthPeriodService {
   }
 
   /**
-   * Reopen a closed month period
+   * Reopen a closed month period.
+   * Idempotent: reopening a month that is not closed is a no-op, not an error.
    */
   async reopenMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
     const period = await prisma.monthPeriod.findFirst({
@@ -183,7 +185,7 @@ export class MonthPeriodService {
     }
 
     if (!period.isClosed) {
-      throw new AppError(`Month period ${periodKey} is not closed`, 400, 'NOT_CLOSED');
+      return this.toDTO(period);
     }
 
     const updated = await prisma.monthPeriod.update({

@@ -62,8 +62,8 @@ export function Dashboard() {
   const closeMonth = useCloseMonth(periodKey);
   const reopenMonth = useReopenMonth(periodKey);
 
-  // Check if the month is closed
-  const isClosed = monthPeriod?.isClosed ?? false;
+  // Check if the month is closed (fall back to the dashboard summary so the two sources can't disagree)
+  const isClosed = monthPeriod?.isClosed ?? data?.monthPeriod.isClosed ?? false;
 
   // Check if reallocations exist for current period (one for NEEDS, one for WANTS)
   const needsReallocation = reallocations?.find(r => r.fromCategory === 'NEEDS' && r.toCategory === 'SAVINGS');

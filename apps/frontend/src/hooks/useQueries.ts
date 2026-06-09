@@ -100,6 +100,10 @@ export function useCloseMonth(periodKey: string) {
 
   return useMutation({
     mutationFn: () => periodsApi.close(periodKey),
+    onSuccess: (updatedPeriod) => {
+      // Update the cache immediately so the UI freezes without waiting for refetch
+      queryClient.setQueryData(queryKeys.period(periodKey), updatedPeriod);
+    },
     onSettled: () => {
       // Invalidate queries regardless of success/failure to sync UI with server state
       queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
@@ -114,6 +118,10 @@ export function useReopenMonth(periodKey: string) {
 
   return useMutation({
     mutationFn: () => periodsApi.reopen(periodKey),
+    onSuccess: (updatedPeriod) => {
+      // Update the cache immediately so the UI unfreezes without waiting for refetch
+      queryClient.setQueryData(queryKeys.period(periodKey), updatedPeriod);
+    },
     onSettled: () => {
       // Invalidate queries regardless of success/failure to sync UI with server state
       queryClient.invalidateQueries({ queryKey: queryKeys.period(periodKey) });
