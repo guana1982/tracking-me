@@ -1,4 +1,4 @@
-import { useState, useRef, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -6,7 +6,7 @@ import {
 import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
-import { IncomePopover } from './IncomePopover';
+import { IncomeModal } from './IncomeModal';
 import { Pencil, Lock } from 'lucide-react';
 
 interface BudgetChartProps {
@@ -24,8 +24,7 @@ const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'S
 
 export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
-  const [isIncomePopoverOpen, setIsIncomePopoverOpen] = useState(false);
-  const incomeRef = useRef<HTMLDivElement>(null);
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
 
   // Parse periodKey to get month label
   const [year, month] = periodKey.split('-');
@@ -144,30 +143,24 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
 
               {/* Stats: Entrate, Speso, Rimanente */}
               <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
-                <div className="text-center sm:text-left relative" ref={incomeRef}>
-                  <div className="flex items-center gap-1">
+                <div className="text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1">
                     <p className="text-xs text-slate-500">Entrate</p>
                     {isClosed && <Lock className="w-3 h-3 text-slate-400" />}
                   </div>
-                  {isClosed ? (
-                    <p className="text-sm font-bold text-slate-500">
-                      {formatCurrency(totalIncome)}
-                    </p>
-                  ) : (
+                  <p className={`text-sm font-bold ${isClosed ? 'text-slate-500' : 'text-slate-900'}`}>
+                    {formatCurrency(totalIncome)}
+                  </p>
+                  {!isClosed && (
                     <button
-                      onClick={() => setIsIncomePopoverOpen(!isIncomePopoverOpen)}
-                      className="group flex items-center gap-1 text-sm font-bold text-slate-900 hover:text-sky-600 transition-colors"
+                      onClick={() => setIsIncomeModalOpen(true)}
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-md px-1.5 py-0.5 sm:-ml-1.5 transition-colors"
+                      title="Gestisci le entrate del mese"
                     >
-                      {formatCurrency(totalIncome)}
-                      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Pencil className="w-3 h-3" />
+                      Modifica
                     </button>
                   )}
-                  <IncomePopover
-                    periodKey={periodKey}
-                    isOpen={isIncomePopoverOpen}
-                    onClose={() => setIsIncomePopoverOpen(false)}
-                    anchorRef={incomeRef}
-                  />
                 </div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs text-slate-500">Speso</p>
@@ -264,6 +257,12 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
             </div>
           </div>
         )}
+
+        <IncomeModal
+          periodKey={periodKey}
+          isOpen={isIncomeModalOpen}
+          onClose={() => setIsIncomeModalOpen(false)}
+        />
       </div>
     );
   }
