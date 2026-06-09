@@ -6,7 +6,7 @@ import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
 import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download } from 'lucide-react';
-import { formatCurrency } from '../lib/utils';
+import { cn, formatCurrency } from '../lib/utils';
 import type { ExpenseDTO } from '@budget/shared';
 
 function csvCell(value: string | number | null | undefined): string {
@@ -154,7 +154,44 @@ export function Dashboard() {
   const extraExpenses = recentExpenses.filter((e) => e.category === 'EXTRA');
 
   return (
-    <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 space-y-3 xl:space-y-4 md:h-full md:flex md:flex-col md:space-y-3">
+    <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 md:h-full md:flex md:flex-col">
+      {/* Closed month banner - the only interactive element while the month is frozen */}
+      {isClosed && (
+        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-lg bg-amber-100 flex-shrink-0">
+              <Lock className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Mese chiuso</p>
+              <p className="text-xs text-amber-600">
+                La pagina è in sola lettura: sblocca il mese per modificare spese, entrate e riallocazioni.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => reopenMonth.mutate()}
+            disabled={reopenMonth.isPending}
+            className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {reopenMonth.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Unlock className="w-4 h-4" />
+            )}
+            Sblocca mese
+          </button>
+        </div>
+      )}
+
+      {/* Page content - fully frozen (no clicks) while the month is closed */}
+      <div
+        aria-disabled={isClosed}
+        className={cn(
+          'space-y-3 xl:space-y-4 md:flex-1 md:min-h-0 md:flex md:flex-col md:space-y-3',
+          isClosed && 'pointer-events-none select-none opacity-60'
+        )}
+      >
       {/* Chart with Stats - Full width responsive */}
       <div className="flex-shrink-0">
         <BudgetChart
@@ -169,8 +206,8 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Reallocation Button - visible only after cutoff day and when month is not closed */}
-      {canShowReallocationButton && !isClosed && (
+      {/* Reallocation Button - visible after cutoff day; frozen (non-clickable) while the month is closed */}
+      {canShowReallocationButton && (
         <div className="flex-shrink-0">
           <button
             onClick={handleReallocation}
@@ -272,29 +309,24 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Close/Reopen Month Button - visible after cutoff day */}
-      {reallocationPreview?.isAfterCutoff && (
+      {/* Close Month Button - visible after cutoff day; unlock happens from the banner above */}
+      {reallocationPreview?.isAfterCutoff && !isClosed && (
         <div className="flex-shrink-0 mt-4">
           <button
-            onClick={() => isClosed ? reopenMonth.mutate() : closeMonth.mutate()}
-            disabled={closeMonth.isPending || reopenMonth.isPending}
-            className={`w-full py-3 px-4 rounded-lg font-semibold text-base flex items-center justify-center gap-2 transition-all ${
-              isClosed
-                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-2 border-amber-400'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 border-2 border-emerald-700'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            onClick={() => closeMonth.mutate()}
+            disabled={closeMonth.isPending}
+            className="w-full py-3 px-4 rounded-lg font-semibold text-base flex items-center justify-center gap-2 transition-all bg-emerald-600 text-white hover:bg-emerald-700 border-2 border-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {(closeMonth.isPending || reopenMonth.isPending) ? (
+            {closeMonth.isPending ? (
               <Loader2 className="w-5 h-5 animate-spin" />
-            ) : isClosed ? (
-              <Unlock className="w-5 h-5" />
             ) : (
               <Lock className="w-5 h-5" />
             )}
-            {isClosed ? 'Riapri il mese' : 'Chiusura mese'}
+            Chiusura mese
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }

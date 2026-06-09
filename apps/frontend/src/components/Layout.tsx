@@ -6,6 +6,7 @@ import {
   Briefcase,
   Settings,
   Plus,
+  Lock,
   ChevronDown,
   LogOut,
   User,
@@ -32,6 +33,7 @@ export function Layout() {
   const appTitle = isCashFlowPage ? 'Net Worth' : isPortfolioPage ? 'Portafoglio' : 'Budget';
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
+  const isMonthClosed = dashboard?.monthPeriod?.isClosed ?? false;
 
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -123,13 +125,15 @@ export function Layout() {
             </div>
 
             <div className="flex items-center gap-2 xl:gap-3">
-              {/* Quick Add Button (Desktop) */}
+              {/* Quick Add Button (Desktop) - disabled while the month is closed */}
               {showBudgetContext && (
                 <button
                   onClick={() => setIsQuickAddOpen(true)}
-                  className="hidden sm:flex items-center gap-2 btn btn-primary text-xs xl:text-sm"
+                  disabled={isMonthClosed}
+                  title={isMonthClosed ? 'Mese chiuso: sblocca il mese per aggiungere spese' : undefined}
+                  className="hidden sm:flex items-center gap-2 btn btn-primary text-xs xl:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isMonthClosed ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   <span>Aggiungi spesa</span>
                 </button>
               )}
@@ -242,13 +246,14 @@ export function Layout() {
         </div>
       </nav>
 
-      {/* Floating Action Button (Mobile) */}
+      {/* Floating Action Button (Mobile) - disabled while the month is closed */}
       {showBudgetContext && (
         <button
           onClick={() => setIsQuickAddOpen(true)}
-          className="sm:hidden fixed bottom-20 right-4 z-50 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+          disabled={isMonthClosed}
+          className="sm:hidden fixed bottom-20 right-4 z-50 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors disabled:opacity-50"
         >
-          <Plus className="w-6 h-6" />
+          {isMonthClosed ? <Lock className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
         </button>
       )}
 
