@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Wallet, ShoppingBag, PiggyBank, Calendar, Users } from 'lucide-react';
+import { X, Wallet, ShoppingBag, PiggyBank, Plane, Calendar, Users } from 'lucide-react';
 import { cn, getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import { useCreateExpense } from '../hooks/useQueries';
 import type { Category, TricountType } from '@budget/shared';
@@ -15,6 +15,7 @@ const categories: { value: Category; icon: React.ElementType }[] = [
   { value: 'NEEDS', icon: ShoppingBag },
   { value: 'WANTS', icon: Wallet },
   { value: 'SAVINGS', icon: PiggyBank },
+  { value: 'EXTRA', icon: Plane },
 ];
 
 export function QuickAddModal({ isOpen, onClose, periodKey, defaultCategory }: QuickAddModalProps) {
@@ -119,7 +120,7 @@ export function QuickAddModal({ isOpen, onClose, periodKey, defaultCategory }: Q
           {/* Category */}
           <div>
             <label className="label">Categoria</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {categories.map((cat) => {
                 const colors = getCategoryColor(cat.value);
                 const isSelected = category === cat.value;
@@ -143,6 +144,11 @@ export function QuickAddModal({ isOpen, onClose, periodKey, defaultCategory }: Q
                 );
               })}
             </div>
+            {category === 'EXTRA' && (
+              <p className="mt-2 text-xs text-violet-600 bg-violet-50 rounded-lg px-3 py-2">
+                Spesa fuori budget (Trade Republic): non incide su Speso e Rimanente del mese.
+              </p>
+            )}
           </div>
 
           {/* Label */}

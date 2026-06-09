@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { CATEGORIES } from './constants';
+import { BUDGET_CATEGORIES, CATEGORIES } from './constants';
 
 // Category enum schema
 export const categorySchema = z.enum(CATEGORIES);
+export const budgetCategorySchema = z.enum(BUDGET_CATEGORIES);
 export const fixedExpenseCategorySchema = z.enum(['NEEDS', 'WANTS']);
 
 // Tricount type schema for shared expenses
@@ -98,10 +99,10 @@ export const applyFixedExpenseTemplatesSchema = z.object({
   templateIds: z.array(z.string().min(1)).optional(),
 });
 
-// Reallocation schemas
+// Reallocation schemas (budget categories only — EXTRA is outside the budget)
 export const createReallocationSchema = z.object({
-  fromCategory: categorySchema,
-  toCategory: categorySchema,
+  fromCategory: budgetCategorySchema,
+  toCategory: budgetCategorySchema,
   amount: z.number().positive().multipleOf(0.01),
   reason: z.string().max(200).trim().optional(),
 });

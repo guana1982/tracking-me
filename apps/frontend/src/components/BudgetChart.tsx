@@ -12,6 +12,7 @@ import { Pencil, Lock } from 'lucide-react';
 interface BudgetChartProps {
   categories: CategorySummary[];
   totalIncome: number;
+  extraSpent?: number; // EXTRA expenses total — shown as recap only, never part of the budget math
   compact?: boolean;
   showStats?: boolean;
   savingsHistory?: SavingsHistoryDTO | null;
@@ -21,7 +22,7 @@ interface BudgetChartProps {
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomePopoverOpen, setIsIncomePopoverOpen] = useState(false);
   const incomeRef = useRef<HTMLDivElement>(null);
@@ -176,6 +177,12 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                   <p className="text-xs text-slate-500">Rimanente</p>
                   <p className={`text-sm font-bold ${remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(remaining)}
+                  </p>
+                </div>
+                <div className="text-center sm:text-left pl-6 border-l border-dashed border-violet-200" title="Spese Extra & Vacanze (Trade Republic) — fuori budget">
+                  <p className="text-xs text-violet-500">Extra</p>
+                  <p className="text-sm font-bold text-violet-600">
+                    {formatCurrency(extraSpent)}
                   </p>
                 </div>
               </div>

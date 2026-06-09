@@ -252,7 +252,8 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       'bg-gradient-to-r',
       category === 'NEEDS' && 'from-emerald-50 to-emerald-100/50 border-b border-emerald-200',
       category === 'WANTS' && 'from-amber-50 to-amber-100/50 border-b border-amber-200',
-      category === 'SAVINGS' && 'from-sky-50 to-sky-100/50 border-b border-sky-200'
+      category === 'SAVINGS' && 'from-sky-50 to-sky-100/50 border-b border-sky-200',
+      category === 'EXTRA' && 'from-violet-50 to-violet-100/50 border-b border-violet-200'
     )}>
       <div className="flex items-center gap-2">
         <h3 className={cn('font-semibold', colors.text)}>{title}</h3>

@@ -1,5 +1,5 @@
 import { DEFAULT_BUDGET_RULE, WARNING_THRESHOLDS } from '@budget/shared';
-import type { CategorySummary, Category } from '@budget/shared';
+import type { CategorySummary, BudgetCategory } from '@budget/shared';
 
 /**
  * Generate period key from year and month (YYYY-MM format)
@@ -67,7 +67,7 @@ export function getSpendingStatus(percentage: number): 'ok' | 'warning' | 'dange
  * Build category summary
  */
 export function buildCategorySummary(
-  category: Category,
+  category: BudgetCategory,
   targetAmount: number,
   actualAmount: number
 ): CategorySummary {

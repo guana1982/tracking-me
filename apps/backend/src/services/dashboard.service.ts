@@ -63,8 +63,10 @@ export class DashboardService {
     );
 
     // Get expense totals by category (user-scoped)
+    // EXTRA is tracked separately and never enters totalSpent or the category summaries
     const expenseTotals = await expenseService.getTotalsByCategory(periodKey, userId);
     const totalSpent = expenseTotals.NEEDS + expenseTotals.WANTS + expenseTotals.SAVINGS;
+    const extraSpent = expenseTotals.EXTRA;
 
     // Calculate reallocations impact (add to SAVINGS, subtract from NEEDS)
     const reallocations = period?.reallocations || [];
@@ -104,6 +106,7 @@ export class DashboardService {
       totalIncome: roundCurrency(totalIncome),
       totalSpent: roundCurrency(totalSpent),
       unallocatedIncome: roundCurrency(unallocatedIncome),
+      extraSpent: roundCurrency(extraSpent),
       categories,
       reallocationPreview,
       recentExpenses,
@@ -227,7 +230,7 @@ export class DashboardService {
       fixedOnly?: boolean
     ) =>
       expenses
-        .filter((e) => e.category !== 'SAVINGS')
+        .filter((e) => e.category !== 'SAVINGS' && e.category !== 'EXTRA')
         .filter((e) => fixedOnly === undefined || Boolean(e.isFixed) === fixedOnly)
         .reduce((sum, e) => sum + e.amount, 0);
 

@@ -255,6 +255,7 @@ export class ExpenseService {
       NEEDS: totals.find((t: { category: string }) => t.category === 'NEEDS')?._sum.amount ?? 0,
       WANTS: totals.find((t: { category: string }) => t.category === 'WANTS')?._sum.amount ?? 0,
       SAVINGS: totals.find((t: { category: string }) => t.category === 'SAVINGS')?._sum.amount ?? 0,
+      EXTRA: totals.find((t: { category: string }) => t.category === 'EXTRA')?._sum.amount ?? 0,
     };
   }
 

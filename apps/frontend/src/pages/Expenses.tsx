@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Wallet,
   PiggyBank,
+  Plane,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -24,9 +25,10 @@ const categoryIcons = {
   NEEDS: ShoppingBag,
   WANTS: Wallet,
   SAVINGS: PiggyBank,
+  EXTRA: Plane,
 };
 
-const categories: (Category | undefined)[] = [undefined, 'NEEDS', 'WANTS', 'SAVINGS'];
+const categories: (Category | undefined)[] = [undefined, 'NEEDS', 'WANTS', 'SAVINGS', 'EXTRA'];
 
 export function Expenses() {
   const { periodKey } = usePeriodStore();

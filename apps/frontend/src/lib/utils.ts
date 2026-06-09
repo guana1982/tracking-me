@@ -99,6 +99,13 @@ export function getCategoryColor(category: Category): {
         border: 'border-sky-200',
         fill: '#0EA5E9', // Sky-500
       };
+    case 'EXTRA':
+      return {
+        bg: 'bg-violet-50',
+        text: 'text-violet-700',
+        border: 'border-violet-200',
+        fill: '#8B5CF6', // Violet-500
+      };
   }
 }
 
@@ -110,6 +117,8 @@ export function getCategoryLabel(category: Category): string {
       return 'Svago';
     case 'SAVINGS':
       return 'Risparmi';
+    case 'EXTRA':
+      return 'Extra';
   }
 }
 

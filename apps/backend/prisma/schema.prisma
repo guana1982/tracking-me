@@ -142,11 +142,12 @@ model Income {
   @@map("incomes")
 }
 
-// Category enum
+// Category enum (EXTRA is tracked outside the 65/25/10 budget)
 enum Category {
   NEEDS
   WANTS
   SAVINGS
+  EXTRA
 }
 
 // Tricount type enum for shared expenses

@@ -1,4 +1,4 @@
-import type { Category } from './constants';
+import type { BudgetCategory, Category } from './constants';
 
 // Base entity with common fields
 export interface BaseEntity {
@@ -200,9 +200,9 @@ export interface CreateReallocationDTO {
 
 // ============= Dashboard DTOs =============
 
-// Category summary for dashboard
+// Category summary for dashboard (budget categories only — EXTRA is tracked separately)
 export interface CategorySummary {
-  category: Category;
+  category: BudgetCategory;
   targetAmount: number; // Budget target based on percentage
   actualAmount: number; // Total spent
   remaining: number; // Target - Actual (can be negative)
@@ -215,8 +215,9 @@ export interface DashboardSummaryDTO {
   monthPeriod: MonthPeriodDTO;
   budgetRule: BudgetRuleDTO;
   totalIncome: number;
-  totalSpent: number;
+  totalSpent: number; // budget categories only (EXTRA excluded)
   unallocatedIncome: number; // Income not yet budgeted
+  extraSpent: number; // EXTRA expenses total, tracked outside the budget
   categories: CategorySummary[];
   reallocationPreview?: ReallocationPreviewDTO;
   recentExpenses: ExpenseDTO[];

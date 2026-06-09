@@ -1,6 +1,7 @@
 import { usePeriodStore } from '../hooks/usePeriod';
 import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
+import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
@@ -25,6 +26,8 @@ function getExpenseCategoryLabel(category: ExpenseDTO['category']): string {
       return 'Svago';
     case 'SAVINGS':
       return 'Risparmi';
+    case 'EXTRA':
+      return 'Extra';
   }
 }
 
@@ -148,6 +151,7 @@ export function Dashboard() {
   const needsExpenses = recentExpenses.filter((e) => e.category === 'NEEDS');
   const wantsExpenses = recentExpenses.filter((e) => e.category === 'WANTS');
   const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
+  const extraExpenses = recentExpenses.filter((e) => e.category === 'EXTRA');
 
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 space-y-3 xl:space-y-4 md:h-full md:flex md:flex-col md:space-y-3">
@@ -156,6 +160,7 @@ export function Dashboard() {
         <BudgetChart
           categories={categories}
           totalIncome={totalIncome}
+          extraSpent={data.extraSpent}
           compact
           showStats
           savingsHistory={savingsHistory}
@@ -204,7 +209,7 @@ export function Dashboard() {
       </div>
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:flex-1 md:min-h-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:flex-1 md:min-h-0">
         {/* Necessità Column */}
         <div className="space-y-4 md:flex md:flex-col md:min-h-0">
           <div className="flex-shrink-0">
@@ -247,6 +252,21 @@ export function Dashboard() {
             category="SAVINGS"
             emptyMessage="Nessun risparmio"
             reallocations={reallocations}
+            isClosed={isClosed}
+          />
+        </div>
+
+        {/* Extra & Vacanze Column - tracked outside the 65/25/10 budget */}
+        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
+          <div className="flex-shrink-0">
+            <ExtraCard spent={data.extraSpent} count={extraExpenses.length} />
+          </div>
+          <ExpensesList
+            expenses={extraExpenses}
+            periodKey={periodKey}
+            title="Extra & Vacanze"
+            category="EXTRA"
+            emptyMessage="Nessuna spesa extra"
             isClosed={isClosed}
           />
         </div>
