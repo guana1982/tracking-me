@@ -336,6 +336,7 @@ export function CashFlow() {
   const [showTotalTrend, setShowTotalTrend] = useState(true);
   const [visibleTrendKeys, setVisibleTrendKeys] = useState<Set<string>>(new Set());
   const [showSmoothedLine, setShowSmoothedLine] = useState(false);
+  const [showRawLine, setShowRawLine] = useState(true);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1275,9 +1276,11 @@ export function CashFlow() {
                         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                           <p className="text-[10px] text-slate-500">{point.dateLabel}</p>
                           <p className="text-xs font-semibold text-slate-900">{point.checkLabel}</p>
-                          <p className="text-xs font-bold" style={{ color: trendLineColor }}>
-                            {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
-                          </p>
+                          {showRawLine && (
+                            <p className="text-xs font-bold" style={{ color: trendLineColor }}>
+                              {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
+                            </p>
+                          )}
                           {smoothing.active && showSmoothedLine && point.trendSmooth !== undefined && (
                             <p className="text-[10px] font-semibold" style={{ color: SMOOTHED_LINE_COLOR }}>
                               Media mobile 30g: {formatCurrency(Number(point.trendSmooth))}
@@ -1308,7 +1311,9 @@ export function CashFlow() {
                       isAnimationActive={false}
                     />
                   )}
-                  <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
+                  {showRawLine && (
+                    <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
+                  )}
                   {trendRegression && (
                     <Line
                       type="linear"
@@ -1326,25 +1331,43 @@ export function CashFlow() {
               </ResponsiveContainer>
             </div>
           )}
-          {hasVisibleTrendSeries && smoothing.active && (
-            <div className="mt-1.5 flex items-center gap-2">
+          {hasVisibleTrendSeries && trendData.length >= 2 && (
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                aria-pressed={showSmoothedLine}
-                onClick={() => setShowSmoothedLine((prev) => !prev)}
+                aria-pressed={showRawLine}
+                onClick={() => setShowRawLine((prev) => !prev)}
                 className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0"
-                title="Mostra/nascondi la media mobile a 30g sul grafico (non cambia le statistiche)"
+                title="Mostra/nascondi la linea principale sul grafico"
               >
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: SMOOTHED_LINE_COLOR }} />
-                <span className="text-[10px] text-slate-600">MM 30g</span>
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: trendLineColor }} />
+                <span className="text-[10px] text-slate-600">{trendLineLabel}</span>
                 <span
                   className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
-                  style={{ backgroundColor: showSmoothedLine ? SMOOTHED_LINE_COLOR : '#cbd5e1' }}
+                  style={{ backgroundColor: showRawLine ? trendLineColor : '#cbd5e1' }}
                 >
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showSmoothedLine ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showRawLine ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
                 </span>
               </button>
-              {showSmoothedLine && (
+              {smoothing.active && (
+                <button
+                  type="button"
+                  aria-pressed={showSmoothedLine}
+                  onClick={() => setShowSmoothedLine((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0"
+                  title="Mostra/nascondi la media mobile a 30g sul grafico (non cambia le statistiche)"
+                >
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: SMOOTHED_LINE_COLOR }} />
+                  <span className="text-[10px] text-slate-600">MM 30g</span>
+                  <span
+                    className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                    style={{ backgroundColor: showSmoothedLine ? SMOOTHED_LINE_COLOR : '#cbd5e1' }}
+                  >
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showSmoothedLine ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  </span>
+                </button>
+              )}
+              {smoothing.active && showSmoothedLine && (
                 <span className="text-[10px] text-slate-400">Media mobile 30g — patrimonio ripulito dal ciclo mensile dello stipendio.</span>
               )}
             </div>
