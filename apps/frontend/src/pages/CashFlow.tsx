@@ -441,6 +441,27 @@ export function CashFlow() {
 
   const latestRow = rowsWithMetrics[0] ?? null;
   const positiveDiffCount = rowsWithMetrics.filter((row) => (row.diffTotal ?? 0) > 0).length;
+
+  // Average monthly savings = trend of the NET total over time (regression on
+  // actual elapsed days), independent of the chart selection. Robust to the
+  // monthly salary cycle and to noisy endpoints.
+  const monthlySavings = useMemo<{ perMonth: number; months: number } | null>(() => {
+    const points = rowsWithMetrics.slice().reverse(); // chronological ascending
+    const n = points.length;
+    if (n < 2) return null;
+    const t0 = +new Date(points[0].date);
+    const xs = points.map((p) => (+new Date(p.date) - t0) / 86_400_000); // days
+    const ys = points.map((p) => p.total);
+    const sumX = xs.reduce((s, x) => s + x, 0);
+    const sumY = ys.reduce((s, y) => s + y, 0);
+    const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+    const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+    const denom = n * sumX2 - sumX * sumX;
+    if (denom === 0) return null;
+    const slopePerDay = (n * sumXY - sumX * sumY) / denom;
+    const daysPerMonth = 365.25 / 12;
+    return { perMonth: slopePerDay * daysPerMonth, months: xs[n - 1] / daysPerMonth };
+  }, [rowsWithMetrics]);
   const trendData = useMemo(
     () =>
       rowsWithMetrics
@@ -1032,7 +1053,25 @@ export function CashFlow() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
+        <div className="card !p-3">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Risparmio medio / mese</p>
+          {monthlySavings ? (
+            <div className="flex items-baseline gap-2">
+              <p className={`text-lg font-bold tabular-nums ${monthlySavings.perMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {monthlySavings.perMonth >= 0 ? '+' : ''}{formatCurrency(monthlySavings.perMonth)}
+              </p>
+              <span
+                className="text-[10px] text-slate-400 tabular-nums"
+                title="Trend del patrimonio netto totale (regressione sui giorni). Stima quanto accantoni in media al mese."
+              >
+                su {monthlySavings.months.toFixed(1)} mesi
+              </span>
+            </div>
+          ) : (
+            <p className="text-lg font-bold text-slate-400 tabular-nums">—</p>
+          )}
+        </div>
         <div className="card !p-3">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Check totali</p>
           <p className="text-lg font-bold text-slate-900 tabular-nums">{rowsWithMetrics.length}</p>
