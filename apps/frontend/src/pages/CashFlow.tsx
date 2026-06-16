@@ -472,9 +472,16 @@ export function CashFlow() {
   const trendLineLabel = showTotalTrend ? 'Totale' : 'Selezione';
   const trendLineColor = showTotalTrend ? '#2563eb' : '#0f766e';
 
-  // Least-squares linear regression on the plotted series: robust trend
-  // direction over the whole period, insensitive to noisy endpoints.
-  const trendRegression = useMemo<{ slope: number; intercept: number; changePct: number | null } | null>(() => {
+  // Least-squares linear regression + at-a-glance stats on the plotted series:
+  // robust trend direction over the whole period, insensitive to noisy endpoints.
+  const trendRegression = useMemo<{
+    slope: number;
+    intercept: number;
+    changePct: number | null;
+    r2: number;
+    absChange: number;
+    maxDrawdownPct: number | null;
+  } | null>(() => {
     const ys = trendData.map((point) => Number(point.selectedTotal));
     const n = ys.length;
     if (n < 2) return null;
@@ -489,7 +496,28 @@ export function CashFlow() {
     const fittedStart = intercept;
     const fittedEnd = intercept + slope * (n - 1);
     const changePct = fittedStart !== 0 ? ((fittedEnd - fittedStart) / Math.abs(fittedStart)) * 100 : null;
-    return { slope, intercept, changePct };
+
+    // R²: how well the linear trend explains the series (1 = perfect, ~0 = lateral/noisy).
+    const mean = sumY / n;
+    const ssTot = ys.reduce((sum, y) => sum + (y - mean) ** 2, 0);
+    const ssRes = ys.reduce((sum, y, i) => sum + (y - (intercept + slope * i)) ** 2, 0);
+    const r2 = ssTot === 0 ? 1 : Math.max(0, 1 - ssRes / ssTot);
+
+    // Absolute change first -> last (concrete euro delta over the period).
+    const absChange = ys[n - 1] - ys[0];
+
+    // Max drawdown: worst peak-to-trough drop along the period.
+    let peak = ys[0];
+    let maxDrawdownPct = 0;
+    ys.forEach((y) => {
+      if (y > peak) peak = y;
+      if (peak > 0) {
+        const dd = ((y - peak) / peak) * 100;
+        if (dd < maxDrawdownPct) maxDrawdownPct = dd;
+      }
+    });
+
+    return { slope, intercept, changePct, r2, absChange, maxDrawdownPct };
   }, [trendData]);
 
   // Plotted dataset augmented with the regression line value per point.
@@ -961,14 +989,41 @@ export function CashFlow() {
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
           <div className="flex items-center gap-2 mb-2">
-            {hasVisibleTrendSeries && trendChangePct !== null && (
-              <span
-                className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0 ${trendChangePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                title={`Trend ${trendLineLabel} (regressione lineare sull'intero periodo)`}
-              >
-                {trendChangePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                {trendChangePct >= 0 ? '+' : ''}{trendChangePct.toFixed(1)}%
-              </span>
+            {hasVisibleTrendSeries && trendRegression && (
+              <div className="flex items-center gap-2 shrink-0">
+                {trendChangePct !== null && (
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums ${trendChangePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                    title={`Trend ${trendLineLabel} (regressione lineare sull'intero periodo)`}
+                  >
+                    {trendChangePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                    {trendChangePct >= 0 ? '+' : ''}{trendChangePct.toFixed(1)}%
+                  </span>
+                )}
+                <span
+                  className={`hidden sm:inline-flex items-baseline gap-1 text-[10px] tabular-nums ${trendRegression.absChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                  title="Variazione assoluta dal primo all'ultimo check del periodo"
+                >
+                  <span className="text-slate-400 font-medium uppercase tracking-wide">Δ</span>
+                  {trendRegression.absChange >= 0 ? '+' : ''}{formatCurrency(trendRegression.absChange)}
+                </span>
+                {trendRegression.maxDrawdownPct !== null && trendRegression.maxDrawdownPct < 0 && (
+                  <span
+                    className="hidden md:inline-flex items-baseline gap-1 text-[10px] tabular-nums text-red-600"
+                    title="Max drawdown: calo massimo da un picco nel periodo"
+                  >
+                    <span className="text-slate-400 font-medium uppercase tracking-wide">DD</span>
+                    {trendRegression.maxDrawdownPct.toFixed(1)}%
+                  </span>
+                )}
+                <span
+                  className="hidden md:inline-flex items-baseline gap-1 text-[10px] tabular-nums text-slate-500"
+                  title="R²: solidità del trend (1 = netto, vicino a 0 = laterale/rumoroso)"
+                >
+                  <span className="text-slate-400 font-medium uppercase tracking-wide">R²</span>
+                  {trendRegression.r2.toFixed(2)}
+                </span>
+              </div>
             )}
             <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
