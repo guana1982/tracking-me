@@ -124,22 +124,44 @@ function signedCurrency(value: number): string {
   return `${value >= 0 ? '+' : ''}${formatCurrency(value)}`;
 }
 
-// Plain-language reading that reconciles the two views: monthly savings (actual
-// end-of-month snapshots) vs the underlying trend (regression on all checks).
-function savingsVerdict(saving: number | null, trendPct: number | null): string {
-  if (saving === null || trendPct === null) return 'Servono più mesi completi per un giudizio affidabile.';
+// Plain-language reading built ENTIRELY from the data: it states the sign of the
+// two views (monthly savings = end-of-month snapshots; trend = regression on all
+// checks) and names the bucket that drives it up / down using the actual €/month.
+// No hard-coded causes — every clause is derived from the numbers.
+function savingsVerdict(
+  saving: number | null,
+  trendPct: number | null,
+  perMonth: { azionario: number; obbligazionario: number; liquidita: number } | null
+): string {
+  if (saving === null || trendPct === null || !perMonth) {
+    return 'Servono più mesi completi per un giudizio affidabile.';
+  }
   const s = saving >= 0;
   const t = trendPct >= 0;
-  if (s && t) {
-    return 'Crescita solida: accantoni in media ogni mese e la traiettoria di fondo del patrimonio sale. Le due letture concordano.';
-  }
-  if (!s && t) {
-    return 'Sostanzialmente in pari. Nei mesi recenti le spese una-tantum hanno superato gli accantonamenti (risparmio medio negativo), ma la traiettoria di fondo resta in lieve salita: il calo è dovuto al timing delle spese, non a un peggioramento strutturale. Smaltite le spese straordinarie, dovrebbe tornare positivo.';
-  }
-  if (s && !t) {
-    return 'Accantoni liquidità, ma il patrimonio totale tende a scendere: probabili perdite su azionario/obbligazionario che superano i risparmi. Controlla la composizione qui sotto.';
-  }
-  return 'In calo su entrambe le letture: spese e/o mercato stanno erodendo il patrimonio. Vale la pena rivedere spese e allocazione.';
+
+  let head: string;
+  if (s && t) head = 'Crescita confermata: risparmio mensile e traiettoria di fondo sono entrambi positivi.';
+  else if (!s && t) head = 'Quadro misto: mese su mese il patrimonio è in calo, ma la traiettoria di fondo (su tutti i check) resta positiva.';
+  else if (s && !t) head = 'Quadro misto: accantoni mese su mese, ma la traiettoria di fondo è in calo.';
+  else head = 'In calo: sia il risparmio mensile sia la traiettoria di fondo sono negativi.';
+
+  const sorted = [
+    { label: 'Azionario', v: perMonth.azionario },
+    { label: 'Obbligazionario', v: perMonth.obbligazionario },
+    { label: 'Liquidità', v: perMonth.liquidita },
+  ].sort((a, b) => b.v - a.v);
+  const top = sorted[0];
+  const bottom = sorted[sorted.length - 1];
+
+  let attr = '';
+  if (top.v > 0) attr += ` A spingere in alto è soprattutto ${top.label} (${signedCurrency(top.v)}/mese).`;
+  if (bottom.v < 0) attr += ` A frenare di più è ${bottom.label} (${signedCurrency(bottom.v)}/mese).`;
+
+  const note = s !== t
+    ? ' I due numeri divergono per il metodo di calcolo: il risparmio confronta pochi saldi di fine mese (sensibili al giorno del check), il trend è la regressione su tutti i punti.'
+    : '';
+
+  return head + attr + note;
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -1869,7 +1891,7 @@ export function CashFlow() {
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      {savingsVerdict(savingsBreakdown.totalPerMonth, savingsBreakdown.netTrendPct)}
+                      {savingsVerdict(savingsBreakdown.totalPerMonth, savingsBreakdown.netTrendPct, savingsBreakdown.perMonth)}
                     </p>
                   </div>
 
