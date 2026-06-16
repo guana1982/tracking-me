@@ -446,13 +446,23 @@ export function CashFlow() {
     [rowsWithMetrics, activeColumns, showTotalTrend, visibleTrendKeys]
   );
 
+  const toggleTotalTrend = () => {
+    const willEnable = !showTotalTrend;
+    setShowTotalTrend(willEnable);
+    // "Totale" is mutually exclusive with the per-column series.
+    if (willEnable) setVisibleTrendKeys(new Set());
+  };
+
   const toggleTrendKey = (key: string) => {
+    const willAdd = !visibleTrendKeys.has(key);
     setVisibleTrendKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    // Selecting any per-column series turns "Totale" off.
+    if (willAdd) setShowTotalTrend(false);
   };
 
   const getTrendColor = (key: string, index: number): string =>
@@ -461,6 +471,15 @@ export function CashFlow() {
   const hasVisibleTrendSeries = showTotalTrend || visibleTrendKeys.size > 0;
   const trendLineLabel = showTotalTrend ? 'Totale' : 'Selezione';
   const trendLineColor = showTotalTrend ? '#2563eb' : '#0f766e';
+
+  // Overall % change of the plotted series across the whole selected period.
+  const trendPeriodChange = useMemo<number | null>(() => {
+    if (trendData.length < 2) return null;
+    const first = Number(trendData[0].selectedTotal);
+    const last = Number(trendData[trendData.length - 1].selectedTotal);
+    if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) return null;
+    return ((last - first) / Math.abs(first)) * 100;
+  }, [trendData]);
 
   const trendYDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
@@ -921,14 +940,24 @@ export function CashFlow() {
               )}
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
-          <div className="flex items-center justify-end gap-1.5 mb-2 overflow-x-auto pb-1 scrollbar-thin">
+          <div className="flex items-center gap-2 mb-2">
+            {hasVisibleTrendSeries && trendPeriodChange !== null && (
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0 ${trendPeriodChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                title={`Variazione ${trendLineLabel} sull'intero periodo`}
+              >
+                {trendPeriodChange >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {trendPeriodChange >= 0 ? '+' : ''}{trendPeriodChange.toFixed(1)}%
+              </span>
+            )}
+            <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
               <button
                 type="button"
                 aria-pressed={showTotalTrend}
-                onClick={() => setShowTotalTrend((prev) => !prev)}
+                onClick={toggleTotalTrend}
                 className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${showTotalTrend ? 'bg-blue-600' : 'bg-slate-300'}`}
               >
                 <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showTotalTrend ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
@@ -953,6 +982,7 @@ export function CashFlow() {
                 </label>
               );
             })}
+            </div>
           </div>
           {trendData.length < 2 ? (
             <p className="text-xs text-slate-500">Aggiungi almeno 2 check per visualizzare il trend.</p>
