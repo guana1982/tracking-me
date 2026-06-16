@@ -472,14 +472,34 @@ export function CashFlow() {
   const trendLineLabel = showTotalTrend ? 'Totale' : 'Selezione';
   const trendLineColor = showTotalTrend ? '#2563eb' : '#0f766e';
 
-  // Overall % change of the plotted series across the whole selected period.
-  const trendPeriodChange = useMemo<number | null>(() => {
-    if (trendData.length < 2) return null;
-    const first = Number(trendData[0].selectedTotal);
-    const last = Number(trendData[trendData.length - 1].selectedTotal);
-    if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) return null;
-    return ((last - first) / Math.abs(first)) * 100;
+  // Least-squares linear regression on the plotted series: robust trend
+  // direction over the whole period, insensitive to noisy endpoints.
+  const trendRegression = useMemo<{ slope: number; intercept: number; changePct: number | null } | null>(() => {
+    const ys = trendData.map((point) => Number(point.selectedTotal));
+    const n = ys.length;
+    if (n < 2) return null;
+    const sumX = ((n - 1) * n) / 2;
+    const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
+    const sumY = ys.reduce((sum, y) => sum + y, 0);
+    const sumXY = ys.reduce((sum, y, i) => sum + i * y, 0);
+    const denom = n * sumX2 - sumX * sumX;
+    if (denom === 0) return null;
+    const slope = (n * sumXY - sumX * sumY) / denom;
+    const intercept = (sumY - slope * sumX) / n;
+    const fittedStart = intercept;
+    const fittedEnd = intercept + slope * (n - 1);
+    const changePct = fittedStart !== 0 ? ((fittedEnd - fittedStart) / Math.abs(fittedStart)) * 100 : null;
+    return { slope, intercept, changePct };
   }, [trendData]);
+
+  // Plotted dataset augmented with the regression line value per point.
+  const chartData = useMemo(() => {
+    if (!trendRegression) return trendData;
+    const { slope, intercept } = trendRegression;
+    return trendData.map((point, i) => ({ ...point, trendFit: intercept + slope * i }));
+  }, [trendData, trendRegression]);
+
+  const trendChangePct = trendRegression?.changePct ?? null;
 
   const trendYDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
@@ -941,13 +961,13 @@ export function CashFlow() {
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
           <div className="flex items-center gap-2 mb-2">
-            {hasVisibleTrendSeries && trendPeriodChange !== null && (
+            {hasVisibleTrendSeries && trendChangePct !== null && (
               <span
-                className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0 ${trendPeriodChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                title={`Variazione ${trendLineLabel} sull'intero periodo`}
+                className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums shrink-0 ${trendChangePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                title={`Trend ${trendLineLabel} (regressione lineare sull'intero periodo)`}
               >
-                {trendPeriodChange >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                {trendPeriodChange >= 0 ? '+' : ''}{trendPeriodChange.toFixed(1)}%
+                {trendChangePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {trendChangePct >= 0 ? '+' : ''}{trendChangePct.toFixed(1)}%
               </span>
             )}
             <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
@@ -991,7 +1011,7 @@ export function CashFlow() {
           ) : (
             <div className="h-52 xl:h-auto xl:min-h-[260px] xl:flex-1">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="dateLabel" tick={{ fill: '#64748b', fontSize: 11, dy: 8 }} axisLine={false} tickLine={false} minTickGap={20} />
                   <YAxis domain={trendYDomain} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => { if (v >= 1000 || v <= -1000) { const k = v / 1000; return k % 1 === 0 ? `${k}k` : `${k.toFixed(1)}k`; } return String(v); }} width={52} tickCount={5} />
@@ -1021,6 +1041,19 @@ export function CashFlow() {
                     }}
                   />
                   <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
+                  {trendRegression && (
+                    <Line
+                      type="linear"
+                      dataKey="trendFit"
+                      name="Trend"
+                      stroke={trendChangePct !== null && trendChangePct < 0 ? '#dc2626' : '#16a34a'}
+                      strokeWidth={1.4}
+                      strokeDasharray="5 4"
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
