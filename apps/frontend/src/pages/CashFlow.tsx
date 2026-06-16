@@ -1160,11 +1160,20 @@ export function CashFlow() {
             <Maximize2 className="w-3 h-3 text-slate-300 group-hover:text-sky-500 transition-colors" />
           </div>
           {savingsBreakdown?.totalPerMonth != null ? (
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
               <p className={`text-lg font-bold tabular-nums ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}
               </p>
-              <span className="text-[10px] text-sky-600 tabular-nums">dettagli →</span>
+              {savingsBreakdown.netTrendPct != null && (
+                <span
+                  className={`inline-flex items-center gap-0.5 text-[10px] tabular-nums ${savingsBreakdown.netTrendPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                  title="Trend del patrimonio reale (regressione sui giorni). È il dato 'grezzo': il grafico mostra il trend sulla media mobile, quindi può differire di poco."
+                >
+                  {savingsBreakdown.netTrendPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {savingsBreakdown.netTrendPct >= 0 ? '+' : ''}{savingsBreakdown.netTrendPct.toFixed(1)}%
+                  <span className="text-slate-400 font-normal">trend reale</span>
+                </span>
+              )}
             </div>
           ) : (
             <p className="text-lg font-bold text-slate-400 tabular-nums">—</p>
@@ -1180,12 +1189,6 @@ export function CashFlow() {
             <p className="text-lg font-bold text-slate-900 tabular-nums">
               {latestRow ? formatCurrency(latestRow.total) : formatCurrency(0)}
             </p>
-            {latestRow?.diffTotal !== null && latestRow?.diffTotal !== undefined && latestRow.total - latestRow.diffTotal !== 0 && (
-              <span className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${latestRow.diffTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {latestRow.diffTotal >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {latestRow.diffTotal >= 0 ? '+' : ''}{((latestRow.diffTotal / Math.abs(latestRow.total - latestRow.diffTotal)) * 100).toFixed(1)}%
-              </span>
-            )}
           </div>
         </div>
         <div className="card !p-3">
