@@ -1160,28 +1160,30 @@ export function CashFlow() {
             <Maximize2 className="w-3 h-3 text-slate-300 group-hover:text-sky-500 transition-colors" />
           </div>
           {savingsBreakdown?.totalPerMonth != null ? (
-            <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
+            <div className="flex items-baseline gap-2">
               <p className={`text-lg font-bold tabular-nums ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}
               </p>
-              {savingsBreakdown.netTrendPct != null && (
-                <span
-                  className={`inline-flex items-center gap-0.5 text-[10px] tabular-nums ${savingsBreakdown.netTrendPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                  title="Trend del patrimonio reale (regressione sui giorni). È il dato 'grezzo': il grafico mostra il trend sulla media mobile, quindi può differire di poco."
-                >
-                  {savingsBreakdown.netTrendPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {savingsBreakdown.netTrendPct >= 0 ? '+' : ''}{savingsBreakdown.netTrendPct.toFixed(1)}%
-                  <span className="text-slate-400 font-normal">trend reale</span>
-                </span>
-              )}
+              <span className="text-[10px] text-sky-600 tabular-nums">dettagli →</span>
             </div>
           ) : (
             <p className="text-lg font-bold text-slate-400 tabular-nums">—</p>
           )}
         </button>
         <div className="card !p-3">
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">Check totali</p>
-          <p className="text-lg font-bold text-slate-900 tabular-nums">{rowsWithMetrics.length}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-500" title="Trend del patrimonio reale (regressione sui giorni). Dato 'grezzo': il grafico usa la media mobile, quindi può differire di poco.">Trend reale</p>
+          {savingsBreakdown?.netTrendPct != null ? (
+            <div className="flex items-baseline gap-1">
+              {savingsBreakdown.netTrendPct >= 0
+                ? <TrendingUp className="w-4 h-4 text-emerald-600 self-center" />
+                : <TrendingDown className="w-4 h-4 text-red-600 self-center" />}
+              <p className={`text-lg font-bold tabular-nums ${savingsBreakdown.netTrendPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {savingsBreakdown.netTrendPct >= 0 ? '+' : ''}{savingsBreakdown.netTrendPct.toFixed(1)}%
+              </p>
+            </div>
+          ) : (
+            <p className="text-lg font-bold text-slate-400 tabular-nums">—</p>
+          )}
         </div>
         <div className="card !p-3">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Ultimo Tot Attuale</p>
