@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -106,6 +106,17 @@ const LEGACY_COLUMN_KEYS = new Set([
 ]);
 
 const STOCK_KEYS = new Set(['etfLordo', 'rendimentoLordo']);
+const MONTH_LABELS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+
+function monthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split('-');
+  const idx = Number(month) - 1;
+  return `${MONTH_LABELS_IT[idx] ?? month} ${year}`;
+}
+
+function signedCurrency(value: number): string {
+  return `${value >= 0 ? '+' : ''}${formatCurrency(value)}`;
+}
 
 const today = new Date().toISOString().slice(0, 10);
 const INITIAL_SETTINGS: CashFlowSettings = { commissionPerEtf: 12, etfCount: 12 };
@@ -318,6 +329,7 @@ export function CashFlow() {
   const [isChartsOpen, setIsChartsOpen] = useState(true);
   const [showTotalTrend, setShowTotalTrend] = useState(true);
   const [visibleTrendKeys, setVisibleTrendKeys] = useState<Set<string>>(new Set());
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -433,6 +445,7 @@ export function CashFlow() {
               .filter((col) => visibleTrendKeys.has(col.key))
               .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
           const point: Record<string, string | number> = {
+            date: row.date,
             dateLabel: formatDate(row.date),
             checkLabel: row.checkLabel,
             total: row.total,
@@ -528,6 +541,125 @@ export function CashFlow() {
   }, [trendData, trendRegression]);
 
   const trendChangePct = trendRegression?.changePct ?? null;
+
+  // Full statistics for the details modal, computed on the currently plotted series.
+  const detailedStats = useMemo(() => {
+    if (trendData.length < 2 || !trendRegression) return null;
+    const points = trendData;
+    const n = points.length;
+    const first = points[0];
+    const last = points[n - 1];
+    const values = points.map((p) => Number(p.selectedTotal));
+    const startVal = values[0];
+    const endVal = values[n - 1];
+    const startDate = String(first.date);
+    const endDate = String(last.date);
+    const days = Math.max(0, Math.round((+new Date(endDate) - +new Date(startDate)) / 86_400_000));
+
+    const absChange = endVal - startVal;
+    const pctChange = startVal !== 0 ? (absChange / Math.abs(startVal)) * 100 : null;
+
+    // Annualized return (CAGR) when both ends are positive.
+    const cagr = days > 0 && startVal > 0 && endVal > 0
+      ? (Math.pow(endVal / startVal, 365 / days) - 1) * 100
+      : null;
+
+    // Per-check deltas: best/worst single move + volatility of % moves.
+    let best: { delta: number; label: string; date: string } | null = null;
+    let worst: { delta: number; label: string; date: string } | null = null;
+    const pctMoves: number[] = [];
+    for (let i = 1; i < n; i += 1) {
+      const delta = values[i] - values[i - 1];
+      const entry = { delta, label: String(points[i].checkLabel), date: String(points[i].date) };
+      if (!best || delta > best.delta) best = entry;
+      if (!worst || delta < worst.delta) worst = entry;
+      if (values[i - 1] !== 0) pctMoves.push((delta / Math.abs(values[i - 1])) * 100);
+    }
+    const meanMove = pctMoves.reduce((s, v) => s + v, 0) / (pctMoves.length || 1);
+    const volatility = pctMoves.length > 0
+      ? Math.sqrt(pctMoves.reduce((s, v) => s + (v - meanMove) ** 2, 0) / pctMoves.length)
+      : 0;
+
+    // Min / Max with dates.
+    let minPoint = { value: values[0], date: startDate };
+    let maxPoint = { value: values[0], date: startDate };
+    values.forEach((v, i) => {
+      if (v < minPoint.value) minPoint = { value: v, date: String(points[i].date) };
+      if (v > maxPoint.value) maxPoint = { value: v, date: String(points[i].date) };
+    });
+
+    // Max drawdown (peak -> trough) with dates and euro amount.
+    let peakVal = values[0];
+    let peakDate = startDate;
+    let drawdown = { pct: 0, amount: 0, peakDate, troughDate: startDate };
+    values.forEach((v, i) => {
+      if (v > peakVal) {
+        peakVal = v;
+        peakDate = String(points[i].date);
+      }
+      if (peakVal > 0) {
+        const ddPct = ((v - peakVal) / peakVal) * 100;
+        if (ddPct < drawdown.pct) {
+          drawdown = { pct: ddPct, amount: v - peakVal, peakDate, troughDate: String(points[i].date) };
+        }
+      }
+    });
+
+    // Monthly: last value of each month + month-over-month change.
+    const monthMap = new Map<string, number>();
+    points.forEach((p) => {
+      monthMap.set(String(p.date).slice(0, 7), Number(p.selectedTotal));
+    });
+    const monthly = [...monthMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, value], idx, arr) => {
+        const prev = idx > 0 ? arr[idx - 1][1] : null;
+        const delta = prev === null ? null : value - prev;
+        const deltaPct = prev !== null && prev !== 0 ? (delta! / Math.abs(prev)) * 100 : null;
+        return { month, value, delta, deltaPct };
+      });
+    const monthlyMaxAbs = Math.max(...monthly.map((m) => Math.abs(m.delta ?? 0)), 1);
+
+    // Attribution: per-column contribution to the period change.
+    const attrColumns = showTotalTrend
+      ? activeColumns
+      : activeColumns.filter((col) => visibleTrendKeys.has(col.key));
+    const attribution = attrColumns
+      .map((col) => {
+        const delta = Number(last[col.key] ?? 0) - Number(first[col.key] ?? 0);
+        // Match the "Totale" formula: rendimentoLordo enters net at -26% tax.
+        const contribution = showTotalTrend && col.key === 'rendimentoLordo' ? -0.26 * delta : delta;
+        return { key: col.key, label: col.label, contribution };
+      })
+      .filter((item) => Math.abs(item.contribution) >= 0.005)
+      .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+    const attributionMaxAbs = Math.max(...attribution.map((a) => Math.abs(a.contribution)), 1);
+
+    return {
+      n,
+      startVal,
+      endVal,
+      startDate,
+      endDate,
+      days,
+      absChange,
+      pctChange,
+      cagr,
+      volatility,
+      best,
+      worst,
+      minPoint,
+      maxPoint,
+      drawdown,
+      monthly,
+      monthlyMaxAbs,
+      attribution,
+      attributionMaxAbs,
+      r2: trendRegression.r2,
+      regChangePct: trendRegression.changePct,
+      slopePerCheck: trendRegression.slope,
+    };
+  }, [trendData, trendRegression, showTotalTrend, visibleTrendKeys, activeColumns]);
 
   const trendYDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
@@ -1023,6 +1155,15 @@ export function CashFlow() {
                   <span className="text-slate-400 font-medium uppercase tracking-wide">R²</span>
                   {trendRegression.r2.toFixed(2)}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsStatsModalOpen(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 hover:text-sky-700 hover:underline"
+                  title="Apri statistiche dettagliate dell'andamento"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">Statistiche</span>
+                </button>
               </div>
             )}
             <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
@@ -1261,6 +1402,156 @@ export function CashFlow() {
           </>
         )}
       </div>
+
+      {isStatsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setIsStatsModalOpen(false)} />
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-sky-600" />
+                  Statistiche andamento — {trendLineLabel}
+                </h3>
+                {detailedStats && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {formatDate(detailedStats.startDate)} → {formatDate(detailedStats.endDate)} · {detailedStats.n} check · {detailedStats.days} giorni
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStatsModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto space-y-5">
+              {!detailedStats ? (
+                <p className="text-sm text-slate-500">Servono almeno 2 check per calcolare le statistiche.</p>
+              ) : (
+                <>
+                  {/* A) KPI di periodo */}
+                  <section>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Riepilogo periodo</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Valore iniziale → finale</p>
+                        <p className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(detailedStats.startVal)} → {formatCurrency(detailedStats.endVal)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Variazione periodo</p>
+                        <p className={`text-sm font-bold tabular-nums ${detailedStats.absChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {signedCurrency(detailedStats.absChange)}{detailedStats.pctChange !== null ? ` (${detailedStats.pctChange >= 0 ? '+' : ''}${detailedStats.pctChange.toFixed(1)}%)` : ''}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Trend (regressione)</p>
+                        <p className={`text-sm font-bold tabular-nums ${detailedStats.regChangePct !== null && detailedStats.regChangePct < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {detailedStats.regChangePct !== null ? `${detailedStats.regChangePct >= 0 ? '+' : ''}${detailedStats.regChangePct.toFixed(1)}%` : 'N/A'}
+                          <span className="text-[10px] font-normal text-slate-400"> · {signedCurrency(detailedStats.slopePerCheck)}/check</span>
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Rendimento annuo (CAGR)</p>
+                        <p className={`text-sm font-bold tabular-nums ${detailedStats.cagr === null ? 'text-slate-400' : detailedStats.cagr >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {detailedStats.cagr === null ? 'N/A' : `${detailedStats.cagr >= 0 ? '+' : ''}${detailedStats.cagr.toFixed(1)}%`}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Volatilità · R²</p>
+                        <p className="text-sm font-bold text-slate-900 tabular-nums">±{detailedStats.volatility.toFixed(1)}% <span className="text-[10px] font-normal text-slate-400">· R² {detailedStats.r2.toFixed(2)}</span></p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Max drawdown</p>
+                        <p className="text-sm font-bold text-red-600 tabular-nums">
+                          {detailedStats.drawdown.pct.toFixed(1)}% <span className="text-[10px] font-normal text-slate-400">({signedCurrency(detailedStats.drawdown.amount)})</span>
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Minimo periodo</p>
+                        <p className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(detailedStats.minPoint.value)}</p>
+                        <p className="text-[10px] text-slate-400">{formatDate(detailedStats.minPoint.date)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Massimo periodo</p>
+                        <p className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(detailedStats.maxPoint.value)}</p>
+                        <p className="text-[10px] text-slate-400">{formatDate(detailedStats.maxPoint.date)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Miglior / peggior check</p>
+                        <p className="text-sm font-bold tabular-nums">
+                          <span className="text-emerald-600">{detailedStats.best ? signedCurrency(detailedStats.best.delta) : 'N/A'}</span>
+                          <span className="text-slate-300"> / </span>
+                          <span className="text-red-600">{detailedStats.worst ? signedCurrency(detailedStats.worst.delta) : 'N/A'}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* B) Andamento mensile */}
+                  <section>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Andamento mensile (mese su mese)</h4>
+                    <div className="space-y-1">
+                      {detailedStats.monthly.map((m) => {
+                        const widthPct = Math.min(100, (Math.abs(m.delta ?? 0) / detailedStats.monthlyMaxAbs) * 100);
+                        const positive = (m.delta ?? 0) >= 0;
+                        return (
+                          <div key={m.month} className="flex items-center gap-2 text-xs">
+                            <span className="w-16 shrink-0 text-slate-500 capitalize">{monthLabel(m.month)}</span>
+                            <span className="w-20 shrink-0 text-right tabular-nums font-medium text-slate-700">{formatCurrency(m.value)}</span>
+                            <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div className={`h-full rounded-full ${positive ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${widthPct}%` }} />
+                              </div>
+                              <span className={`w-24 shrink-0 text-right tabular-nums ${m.delta === null ? 'text-slate-400' : positive ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {m.delta === null ? '—' : `${signedCurrency(m.delta)}${m.deltaPct !== null ? ` (${m.deltaPct >= 0 ? '+' : ''}${m.deltaPct.toFixed(0)}%)` : ''}`}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {/* C) Attribuzione per voce */}
+                  {detailedStats.attribution.length > 0 && (
+                    <section>
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                        Contributo per voce alla variazione di periodo
+                      </h4>
+                      <div className="space-y-1">
+                        {detailedStats.attribution.map((item) => {
+                          const widthPct = Math.min(100, (Math.abs(item.contribution) / detailedStats.attributionMaxAbs) * 100);
+                          const positive = item.contribution >= 0;
+                          return (
+                            <div key={item.key} className="flex items-center gap-2 text-xs">
+                              <span className="w-24 shrink-0 truncate text-slate-600" title={item.label}>{item.label}</span>
+                              <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                                <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                  <div className={`h-full rounded-full ${positive ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${widthPct}%` }} />
+                                </div>
+                                <span className={`w-24 shrink-0 text-right tabular-nums font-medium ${positive ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {signedCurrency(item.contribution)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Δ di ogni voce dal primo all'ultimo check del periodo{showTotalTrend ? ' (rendimento al netto del 26%)' : ''}.
+                      </p>
+                    </section>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isColumnsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
