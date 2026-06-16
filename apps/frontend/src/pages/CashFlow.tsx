@@ -335,6 +335,7 @@ export function CashFlow() {
   const [isChartsOpen, setIsChartsOpen] = useState(true);
   const [showTotalTrend, setShowTotalTrend] = useState(true);
   const [visibleTrendKeys, setVisibleTrendKeys] = useState<Set<string>>(new Set());
+  const [showSmoothedLine, setShowSmoothedLine] = useState(true);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1220,6 +1221,21 @@ export function CashFlow() {
               </div>
             )}
             <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
+            {smoothing.active && (
+              <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0" title="Mostra/nascondi la media mobile a 30g sul grafico (non cambia le statistiche)">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: SMOOTHED_LINE_COLOR }} />
+                <span className="text-[10px] text-slate-600">MM 30g</span>
+                <button
+                  type="button"
+                  aria-pressed={showSmoothedLine}
+                  onClick={() => setShowSmoothedLine((prev) => !prev)}
+                  className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                  style={{ backgroundColor: showSmoothedLine ? SMOOTHED_LINE_COLOR : '#cbd5e1' }}
+                >
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showSmoothedLine ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                </button>
+              </label>
+            )}
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
@@ -1277,7 +1293,7 @@ export function CashFlow() {
                           <p className="text-xs font-bold" style={{ color: trendLineColor }}>
                             {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
                           </p>
-                          {smoothing.active && point.trendSmooth !== undefined && (
+                          {smoothing.active && showSmoothedLine && point.trendSmooth !== undefined && (
                             <p className="text-[10px] font-semibold" style={{ color: SMOOTHED_LINE_COLOR }}>
                               Media mobile 30g: {formatCurrency(Number(point.trendSmooth))}
                             </p>
@@ -1294,7 +1310,7 @@ export function CashFlow() {
                       );
                     }}
                   />
-                  {smoothing.active && (
+                  {smoothing.active && showSmoothedLine && (
                     <Line
                       type="monotone"
                       dataKey="trendSmooth"
@@ -1325,7 +1341,7 @@ export function CashFlow() {
               </ResponsiveContainer>
             </div>
           )}
-          {hasVisibleTrendSeries && smoothing.active && (
+          {hasVisibleTrendSeries && smoothing.active && showSmoothedLine && (
             <p className="mt-1 text-[10px] text-slate-400">
               <span className="inline-block w-3 h-0.5 align-middle rounded" style={{ backgroundColor: SMOOTHED_LINE_COLOR }} /> Media mobile 30g — patrimonio ripulito dal ciclo mensile dello stipendio.
             </p>
