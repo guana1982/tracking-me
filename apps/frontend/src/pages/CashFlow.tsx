@@ -106,6 +106,12 @@ const LEGACY_COLUMN_KEYS = new Set([
 ]);
 
 const STOCK_KEYS = new Set(['etfLordo', 'rendimentoLordo']);
+// Deseasonalization: a ~1-month centered moving average removes the monthly
+// salary sawtooth so the trend stats reflect the underlying trajectory.
+const SMOOTHING_WINDOW_DAYS = 30;
+const SMOOTHING_MIN_SPAN_DAYS = 45;
+const SMOOTHING_MIN_POINTS = 4;
+const SMOOTHED_LINE_COLOR = '#8b5cf6';
 const MONTH_LABELS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 
 function monthLabel(monthKey: string): string {
@@ -485,8 +491,38 @@ export function CashFlow() {
   const trendLineLabel = showTotalTrend ? 'Totale' : 'Selezione';
   const trendLineColor = showTotalTrend ? '#2563eb' : '#0f766e';
 
-  // Least-squares linear regression + at-a-glance stats on the plotted series:
-  // robust trend direction over the whole period, insensitive to noisy endpoints.
+  // Centered ~1-month moving average that strips the monthly salary cycle.
+  const smoothing = useMemo<{ active: boolean; smoothed: number[]; cycleAmplitude: number }>(() => {
+    const n = trendData.length;
+    const raw = trendData.map((point) => Number(point.selectedTotal));
+    if (n === 0) return { active: false, smoothed: raw, cycleAmplitude: 0 };
+    const dates = trendData.map((point) => +new Date(String(point.date)));
+    const spanDays = (dates[n - 1] - dates[0]) / 86_400_000;
+    const active = n >= SMOOTHING_MIN_POINTS && spanDays >= SMOOTHING_MIN_SPAN_DAYS;
+    if (!active) return { active: false, smoothed: raw, cycleAmplitude: 0 };
+
+    const half = (SMOOTHING_WINDOW_DAYS / 2) * 86_400_000;
+    const smoothed = dates.map((center, i) => {
+      let sum = 0;
+      let count = 0;
+      for (let j = 0; j < n; j += 1) {
+        if (Math.abs(dates[j] - center) <= half) {
+          sum += raw[j];
+          count += 1;
+        }
+      }
+      return count > 0 ? sum / count : raw[i];
+    });
+
+    // Typical monthly swing = peak-to-peak of the residual around the smoothed trend.
+    const residuals = raw.map((v, i) => v - smoothed[i]);
+    const cycleAmplitude = Math.max(...residuals) - Math.min(...residuals);
+    return { active: true, smoothed, cycleAmplitude };
+  }, [trendData]);
+
+  // Least-squares linear regression + at-a-glance stats. Computed on the
+  // deseasonalized (smoothed) series so the monthly salary cycle does not
+  // bias the trend, drawdown or period change.
   const trendRegression = useMemo<{
     slope: number;
     intercept: number;
@@ -495,7 +531,7 @@ export function CashFlow() {
     absChange: number;
     maxDrawdownPct: number | null;
   } | null>(() => {
-    const ys = trendData.map((point) => Number(point.selectedTotal));
+    const ys = smoothing.smoothed;
     const n = ys.length;
     if (n < 2) return null;
     const sumX = ((n - 1) * n) / 2;
@@ -531,14 +567,18 @@ export function CashFlow() {
     });
 
     return { slope, intercept, changePct, r2, absChange, maxDrawdownPct };
-  }, [trendData]);
+  }, [smoothing]);
 
-  // Plotted dataset augmented with the regression line value per point.
+  // Plotted dataset augmented with the regression line + smoothed value per point.
   const chartData = useMemo(() => {
     if (!trendRegression) return trendData;
     const { slope, intercept } = trendRegression;
-    return trendData.map((point, i) => ({ ...point, trendFit: intercept + slope * i }));
-  }, [trendData, trendRegression]);
+    return trendData.map((point, i) => ({
+      ...point,
+      trendFit: intercept + slope * i,
+      ...(smoothing.active ? { trendSmooth: smoothing.smoothed[i] } : {}),
+    }));
+  }, [trendData, trendRegression, smoothing]);
 
   const trendChangePct = trendRegression?.changePct ?? null;
 
@@ -556,12 +596,21 @@ export function CashFlow() {
     const endDate = String(last.date);
     const days = Math.max(0, Math.round((+new Date(endDate) - +new Date(startDate)) / 86_400_000));
 
-    const absChange = endVal - startVal;
-    const pctChange = startVal !== 0 ? (absChange / Math.abs(startVal)) * 100 : null;
+    // Deseasonalized series (smoothed) drives the trend-related figures.
+    const sValues = smoothing.smoothed;
+    const sStart = sValues[0];
+    const sEnd = sValues[n - 1];
 
-    // Annualized return (CAGR) when both ends are positive.
-    const cagr = days > 0 && startVal > 0 && endVal > 0
-      ? (Math.pow(endVal / startVal, 365 / days) - 1) * 100
+    // Period change: deseasonalized when smoothing is active, else raw endpoints.
+    const absChange = smoothing.active ? sEnd - sStart : endVal - startVal;
+    const changeBase = smoothing.active ? sStart : startVal;
+    const pctChange = changeBase !== 0 ? (absChange / Math.abs(changeBase)) * 100 : null;
+
+    // Annualized return (CAGR) on the (deseasonalized) endpoints when positive.
+    const cagrStart = smoothing.active ? sStart : startVal;
+    const cagrEnd = smoothing.active ? sEnd : endVal;
+    const cagr = days > 0 && cagrStart > 0 && cagrEnd > 0
+      ? (Math.pow(cagrEnd / cagrStart, 365 / days) - 1) * 100
       : null;
 
     // Per-check deltas: best/worst single move + volatility of % moves.
@@ -588,11 +637,13 @@ export function CashFlow() {
       if (v > maxPoint.value) maxPoint = { value: v, date: String(points[i].date) };
     });
 
-    // Max drawdown (peak -> trough) with dates and euro amount.
-    let peakVal = values[0];
+    // Max drawdown (peak -> trough) on the deseasonalized series, so the
+    // regular pre-salary dip is not counted as a real loss.
+    const ddValues = smoothing.active ? sValues : values;
+    let peakVal = ddValues[0];
     let peakDate = startDate;
     let drawdown = { pct: 0, amount: 0, peakDate, troughDate: startDate };
-    values.forEach((v, i) => {
+    ddValues.forEach((v, i) => {
       if (v > peakVal) {
         peakVal = v;
         peakDate = String(points[i].date);
@@ -658,8 +709,10 @@ export function CashFlow() {
       r2: trendRegression.r2,
       regChangePct: trendRegression.changePct,
       slopePerCheck: trendRegression.slope,
+      smoothingActive: smoothing.active,
+      cycleAmplitude: smoothing.cycleAmplitude,
     };
-  }, [trendData, trendRegression, showTotalTrend, visibleTrendKeys, activeColumns]);
+  }, [trendData, trendRegression, smoothing, showTotalTrend, visibleTrendKeys, activeColumns]);
 
   const trendYDomain = useMemo<[number, number]>(() => {
     const values: number[] = [];
@@ -1126,7 +1179,7 @@ export function CashFlow() {
                 {trendChangePct !== null && (
                   <span
                     className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums ${trendChangePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                    title={`Trend ${trendLineLabel} (regressione lineare sull'intero periodo)`}
+                    title={`Trend ${trendLineLabel} — regressione lineare${smoothing.active ? ' sulla media mobile 30g (destagionalizzato)' : " sull'intero periodo"}`}
                   >
                     {trendChangePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                     {trendChangePct >= 0 ? '+' : ''}{trendChangePct.toFixed(1)}%
@@ -1134,7 +1187,7 @@ export function CashFlow() {
                 )}
                 <span
                   className={`hidden sm:inline-flex items-baseline gap-1 text-[10px] tabular-nums ${trendRegression.absChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                  title="Variazione assoluta dal primo all'ultimo check del periodo"
+                  title={smoothing.active ? 'Variazione destagionalizzata sul periodo (media mobile 30g)' : "Variazione assoluta dal primo all'ultimo check del periodo"}
                 >
                   <span className="text-slate-400 font-medium uppercase tracking-wide">Δ</span>
                   {trendRegression.absChange >= 0 ? '+' : ''}{formatCurrency(trendRegression.absChange)}
@@ -1142,7 +1195,7 @@ export function CashFlow() {
                 {trendRegression.maxDrawdownPct !== null && trendRegression.maxDrawdownPct < 0 && (
                   <span
                     className="hidden md:inline-flex items-baseline gap-1 text-[10px] tabular-nums text-red-600"
-                    title="Max drawdown: calo massimo da un picco nel periodo"
+                    title={smoothing.active ? 'Max drawdown sul trend destagionalizzato (esclude il calo ciclico pre-stipendio)' : 'Max drawdown: calo massimo da un picco nel periodo'}
                   >
                     <span className="text-slate-400 font-medium uppercase tracking-wide">DD</span>
                     {trendRegression.maxDrawdownPct.toFixed(1)}%
@@ -1224,6 +1277,11 @@ export function CashFlow() {
                           <p className="text-xs font-bold" style={{ color: trendLineColor }}>
                             {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
                           </p>
+                          {smoothing.active && point.trendSmooth !== undefined && (
+                            <p className="text-[10px] font-semibold" style={{ color: SMOOTHED_LINE_COLOR }}>
+                              Media mobile 30g: {formatCurrency(Number(point.trendSmooth))}
+                            </p>
+                          )}
                           {!showTotalTrend && activeColumns.map((col, idx) => {
                             if (!visibleTrendKeys.has(col.key)) return null;
                             return (
@@ -1236,6 +1294,19 @@ export function CashFlow() {
                       );
                     }}
                   />
+                  {smoothing.active && (
+                    <Line
+                      type="monotone"
+                      dataKey="trendSmooth"
+                      name="Media mobile 30g"
+                      stroke={SMOOTHED_LINE_COLOR}
+                      strokeWidth={2.4}
+                      strokeOpacity={0.85}
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
                   <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
                   {trendRegression && (
                     <Line
@@ -1253,6 +1324,11 @@ export function CashFlow() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+          )}
+          {hasVisibleTrendSeries && smoothing.active && (
+            <p className="mt-1 text-[10px] text-slate-400">
+              <span className="inline-block w-3 h-0.5 align-middle rounded" style={{ backgroundColor: SMOOTHED_LINE_COLOR }} /> Media mobile 30g — patrimonio ripulito dal ciclo mensile dello stipendio.
+            </p>
           )}
         </div>
           </div>
@@ -1433,6 +1509,12 @@ export function CashFlow() {
                 <p className="text-sm text-slate-500">Servono almeno 2 check per calcolare le statistiche.</p>
               ) : (
                 <>
+                  {detailedStats.smoothingActive && (
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-slate-600">
+                      <span className="font-semibold text-violet-700">Serie destagionalizzata.</span>{' '}
+                      Trend, variazione e drawdown sono calcolati su una <span className="font-medium">media mobile a 30 giorni</span> (linea viola sul grafico), così il ciclo mensile dello stipendio non altera l'andamento di fondo. L'oscillazione mensile attesa è riportata come <span className="font-medium">Ampiezza ciclo</span>.
+                    </div>
+                  )}
                   {/* A) KPI di periodo */}
                   <section>
                     <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Riepilogo periodo</h4>
@@ -1442,7 +1524,7 @@ export function CashFlow() {
                         <p className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(detailedStats.startVal)} → {formatCurrency(detailedStats.endVal)}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 p-2.5">
-                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Variazione periodo</p>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Variazione periodo{detailedStats.smoothingActive ? ' (destag.)' : ''}</p>
                         <p className={`text-sm font-bold tabular-nums ${detailedStats.absChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {signedCurrency(detailedStats.absChange)}{detailedStats.pctChange !== null ? ` (${detailedStats.pctChange >= 0 ? '+' : ''}${detailedStats.pctChange.toFixed(1)}%)` : ''}
                         </p>
@@ -1461,11 +1543,20 @@ export function CashFlow() {
                         </p>
                       </div>
                       <div className="rounded-xl border border-slate-200 p-2.5">
-                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Volatilità · R²</p>
-                        <p className="text-sm font-bold text-slate-900 tabular-nums">±{detailedStats.volatility.toFixed(1)}% <span className="text-[10px] font-normal text-slate-400">· R² {detailedStats.r2.toFixed(2)}</span></p>
+                        {detailedStats.smoothingActive ? (
+                          <>
+                            <p className="text-[10px] uppercase tracking-wide text-slate-500" title="Oscillazione mensile attesa (ciclo stipendio), non un rischio">Ampiezza ciclo · R²</p>
+                            <p className="text-sm font-bold text-violet-700 tabular-nums">{formatCurrency(detailedStats.cycleAmplitude)} <span className="text-[10px] font-normal text-slate-400">· R² {detailedStats.r2.toFixed(2)}</span></p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[10px] uppercase tracking-wide text-slate-500">Volatilità · R²</p>
+                            <p className="text-sm font-bold text-slate-900 tabular-nums">±{detailedStats.volatility.toFixed(1)}% <span className="text-[10px] font-normal text-slate-400">· R² {detailedStats.r2.toFixed(2)}</span></p>
+                          </>
+                        )}
                       </div>
                       <div className="rounded-xl border border-slate-200 p-2.5">
-                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Max drawdown</p>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Max drawdown{detailedStats.smoothingActive ? ' (destag.)' : ''}</p>
                         <p className="text-sm font-bold text-red-600 tabular-nums">
                           {detailedStats.drawdown.pct.toFixed(1)}% <span className="text-[10px] font-normal text-slate-400">({signedCurrency(detailedStats.drawdown.amount)})</span>
                         </p>
