@@ -124,6 +124,24 @@ function signedCurrency(value: number): string {
   return `${value >= 0 ? '+' : ''}${formatCurrency(value)}`;
 }
 
+// Plain-language reading that reconciles the two views: monthly savings (actual
+// end-of-month snapshots) vs the underlying trend (regression on all checks).
+function savingsVerdict(saving: number | null, trendPct: number | null): string {
+  if (saving === null || trendPct === null) return 'Servono più mesi completi per un giudizio affidabile.';
+  const s = saving >= 0;
+  const t = trendPct >= 0;
+  if (s && t) {
+    return 'Crescita solida: accantoni in media ogni mese e la traiettoria di fondo del patrimonio sale. Le due letture concordano.';
+  }
+  if (!s && t) {
+    return 'Sostanzialmente in pari. Nei mesi recenti le spese una-tantum hanno superato gli accantonamenti (risparmio medio negativo), ma la traiettoria di fondo resta in lieve salita: il calo è dovuto al timing delle spese, non a un peggioramento strutturale. Smaltite le spese straordinarie, dovrebbe tornare positivo.';
+  }
+  if (s && !t) {
+    return 'Accantoni liquidità, ma il patrimonio totale tende a scendere: probabili perdite su azionario/obbligazionario che superano i risparmi. Controlla la composizione qui sotto.';
+  }
+  return 'In calo su entrambe le letture: spese e/o mercato stanno erodendo il patrimonio. Vale la pena rivedere spese e allocazione.';
+}
+
 const today = new Date().toISOString().slice(0, 10);
 const INITIAL_SETTINGS: CashFlowSettings = { commissionPerEtf: 12, etfCount: 12 };
 const LEGACY_DIFF_LABELS: Record<string, string> = {
@@ -493,7 +511,28 @@ export function CashFlow() {
       : null;
     const totalPerMonth = monthsUsed > 0 ? mean('total') : null;
 
-    return { perMonth, totalPerMonth, monthly, monthsUsed, lastInProgress, lastMonthKey };
+    // Underlying trend of the net total: regression over all checks (elapsed
+    // days), as % over the period. Robust to endpoint timing — this is the
+    // "direction" figure, complementary to the snapshot-based monthly average.
+    let netTrendPct: number | null = null;
+    const t0 = +new Date(points[0].date);
+    const xs = points.map((p) => (+new Date(p.date) - t0) / 86_400_000);
+    const ys = points.map((p) => p.total);
+    const nP = points.length;
+    const sX = xs.reduce((s, x) => s + x, 0);
+    const sY = ys.reduce((s, y) => s + y, 0);
+    const sXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+    const sX2 = xs.reduce((s, x) => s + x * x, 0);
+    const den = nP * sX2 - sX * sX;
+    if (den !== 0) {
+      const slope = (nP * sXY - sX * sY) / den;
+      const intercept = (sY - slope * sX) / nP;
+      const fittedStart = intercept;
+      const fittedEnd = intercept + slope * xs[nP - 1];
+      if (fittedStart !== 0) netTrendPct = ((fittedEnd - fittedStart) / Math.abs(fittedStart)) * 100;
+    }
+
+    return { perMonth, totalPerMonth, monthly, monthsUsed, lastInProgress, lastMonthKey, netTrendPct };
   }, [rowsWithMetrics, activeColumns, settings]);
   const trendData = useMemo(
     () =>
@@ -1810,6 +1849,30 @@ export function CashFlow() {
                 <p className="text-sm text-slate-500">Servono almeno 2 check per il calcolo.</p>
               ) : (
                 <>
+                  {/* Come leggere: due metriche + verdetto dinamico */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold text-slate-700 mb-2">Come leggere questi numeri</p>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5">
+                        <p className="text-[9px] uppercase tracking-wide text-slate-400" title="Media delle variazioni dei saldi di fine mese (mesi completi). Sensibile alle spese del singolo mese.">Risparmio medio / mese</p>
+                        <p className={`text-sm font-bold tabular-nums ${savingsBreakdown.totalPerMonth != null && savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {savingsBreakdown.totalPerMonth == null ? '—' : `${savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}${formatCurrency(savingsBreakdown.totalPerMonth)}`}
+                        </p>
+                        <p className="text-[9px] text-slate-400">saldi di fine mese</p>
+                      </div>
+                      <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5">
+                        <p className="text-[9px] uppercase tracking-wide text-slate-400" title="Pendenza della regressione su tutti i check: la direzione di fondo del patrimonio, robusta al timing.">Trend di fondo</p>
+                        <p className={`text-sm font-bold tabular-nums ${savingsBreakdown.netTrendPct != null && savingsBreakdown.netTrendPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {savingsBreakdown.netTrendPct == null ? '—' : `${savingsBreakdown.netTrendPct >= 0 ? '+' : ''}${savingsBreakdown.netTrendPct.toFixed(1)}%`}
+                        </p>
+                        <p className="text-[9px] text-slate-400">regressione su tutti i check</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      {savingsVerdict(savingsBreakdown.totalPerMonth, savingsBreakdown.netTrendPct)}
+                    </p>
+                  </div>
+
                   {/* Composizione del risparmio medio/mese */}
                   {savingsBreakdown.perMonth && savingsBreakdown.totalPerMonth != null && (
                   <section>
