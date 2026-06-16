@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3, Maximize2 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -338,6 +338,7 @@ export function CashFlow() {
   const [showSmoothedLine, setShowSmoothedLine] = useState(false);
   const [showRawLine, setShowRawLine] = useState(true);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [isSavingsModalOpen, setIsSavingsModalOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -462,6 +463,65 @@ export function CashFlow() {
     const daysPerMonth = 365.25 / 12;
     return { perMonth: slopePerDay * daysPerMonth, months: xs[n - 1] / daysPerMonth };
   }, [rowsWithMetrics]);
+
+  // Where the monthly savings come from: split the net total into 3 buckets
+  // (Azionario / Obbligazionario / Liquidità) and regress each over time so the
+  // per-bucket €/month sum exactly to the total trend. Plus a month-by-month
+  // breakdown using the last check of each calendar month.
+  const savingsBreakdown = useMemo(() => {
+    const points = rowsWithMetrics.slice().reverse(); // chronological ascending
+    const n = points.length;
+    if (n < 2) return null;
+    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+    const obblActive = activeColumns.some((c) => c.key === 'webankObbl');
+    const baseCols = activeColumns.filter((c) => !STOCK_KEYS.has(c.key));
+
+    const buckets = (row: CashFlowRow) => {
+      const azionario = getRowValue(row, 'etfLordo') - getRowValue(row, 'rendimentoLordo') * 0.26 - commissionTotal;
+      const obbligazionario = obblActive ? getRowValue(row, 'webankObbl') : 0;
+      const base = baseCols.reduce((s, c) => s + getRowValue(row, c.key), 0);
+      const liquidita = base - obbligazionario;
+      return { azionario, obbligazionario, liquidita, total: base + azionario };
+    };
+
+    const t0 = +new Date(points[0].date);
+    const xs = points.map((p) => (+new Date(p.date) - t0) / 86_400_000);
+    const sumX = xs.reduce((s, x) => s + x, 0);
+    const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+    const denom = n * sumX2 - sumX * sumX;
+    const daysPerMonth = 365.25 / 12;
+    const slopePerMonth = (ys: number[]) => {
+      if (denom === 0) return 0;
+      const sumY = ys.reduce((s, y) => s + y, 0);
+      const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+      return ((n * sumXY - sumX * sumY) / denom) * daysPerMonth;
+    };
+
+    const series = points.map(buckets);
+    const perMonth = {
+      azionario: slopePerMonth(series.map((s) => s.azionario)),
+      obbligazionario: slopePerMonth(series.map((s) => s.obbligazionario)),
+      liquidita: slopePerMonth(series.map((s) => s.liquidita)),
+    };
+    const totalPerMonth = perMonth.azionario + perMonth.obbligazionario + perMonth.liquidita;
+
+    const byMonth = new Map<string, { date: string; b: ReturnType<typeof buckets> }>();
+    points.forEach((p) => byMonth.set(String(p.date).slice(0, 7), { date: String(p.date), b: buckets(p) }));
+    const monthsArr = [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const monthly = monthsArr.map(([month, cur], idx) => {
+      const prev = idx > 0 ? monthsArr[idx - 1][1].b : null;
+      return {
+        month,
+        date: cur.date,
+        total: prev ? cur.b.total - prev.total : null,
+        azionario: prev ? cur.b.azionario - prev.azionario : null,
+        obbligazionario: prev ? cur.b.obbligazionario - prev.obbligazionario : null,
+        liquidita: prev ? cur.b.liquidita - prev.liquidita : null,
+      };
+    });
+
+    return { perMonth, totalPerMonth, monthly, months: xs[n - 1] / daysPerMonth };
+  }, [rowsWithMetrics, activeColumns, settings]);
   const trendData = useMemo(
     () =>
       rowsWithMetrics
@@ -1054,24 +1114,28 @@ export function CashFlow() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
-        <div className="card !p-3">
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">Risparmio medio / mese</p>
+        <button
+          type="button"
+          onClick={() => monthlySavings && setIsSavingsModalOpen(true)}
+          disabled={!monthlySavings}
+          className="card !p-3 text-left w-full group transition-colors hover:border-sky-300 hover:bg-sky-50/30 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:border-inherit"
+          title="Apri il dettaglio: risparmio mese per mese e da dove deriva"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Risparmio medio / mese</p>
+            <Maximize2 className="w-3 h-3 text-slate-300 group-hover:text-sky-500 transition-colors" />
+          </div>
           {monthlySavings ? (
             <div className="flex items-baseline gap-2">
               <p className={`text-lg font-bold tabular-nums ${monthlySavings.perMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {monthlySavings.perMonth >= 0 ? '+' : ''}{formatCurrency(monthlySavings.perMonth)}
               </p>
-              <span
-                className="text-[10px] text-slate-400 tabular-nums"
-                title="Trend del patrimonio netto totale (regressione sui giorni). Stima quanto accantoni in media al mese."
-              >
-                su {monthlySavings.months.toFixed(1)} mesi
-              </span>
+              <span className="text-[10px] text-sky-600 tabular-nums">dettagli →</span>
             </div>
           ) : (
             <p className="text-lg font-bold text-slate-400 tabular-nums">—</p>
           )}
-        </div>
+        </button>
         <div className="card !p-3">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Check totali</p>
           <p className="text-lg font-bold text-slate-900 tabular-nums">{rowsWithMetrics.length}</p>
@@ -1740,6 +1804,132 @@ export function CashFlow() {
                       </p>
                     </section>
                   )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isSavingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setIsSavingsModalOpen(false)} />
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-sky-600" />
+                  Risparmio mensile e composizione
+                </h3>
+                {savingsBreakdown && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Media <span className={`font-semibold ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}/mese</span> · su {savingsBreakdown.months.toFixed(1)} mesi
+                  </p>
+                )}
+              </div>
+              <button type="button" onClick={() => setIsSavingsModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto space-y-5">
+              {!savingsBreakdown ? (
+                <p className="text-sm text-slate-500">Servono almeno 2 check per il calcolo.</p>
+              ) : (
+                <>
+                  {/* Composizione del risparmio medio/mese */}
+                  <section>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Da dove arriva (media €/mese)</h4>
+                    <div className="space-y-2.5">
+                      {([
+                        { key: 'azionario', label: 'Azionario (ETF)', color: '#6366f1', value: savingsBreakdown.perMonth.azionario },
+                        { key: 'obbligazionario', label: 'Obbligazionario (BTP)', color: '#f59e0b', value: savingsBreakdown.perMonth.obbligazionario },
+                        { key: 'liquidita', label: 'Liquidità (tuoi risparmi)', color: '#0ea5e9', value: savingsBreakdown.perMonth.liquidita },
+                      ] as const).map((bucket) => {
+                        const maxAbs = Math.max(
+                          Math.abs(savingsBreakdown.perMonth.azionario),
+                          Math.abs(savingsBreakdown.perMonth.obbligazionario),
+                          Math.abs(savingsBreakdown.perMonth.liquidita),
+                          1
+                        );
+                        const scale = Math.min(1, Math.abs(bucket.value) / maxAbs);
+                        const positive = bucket.value >= 0;
+                        const pct = Math.abs(savingsBreakdown.totalPerMonth) > 0.5
+                          ? (bucket.value / savingsBreakdown.totalPerMonth) * 100
+                          : null;
+                        return (
+                          <div key={bucket.key} className="flex items-center gap-2 text-xs">
+                            <span className="w-40 shrink-0 flex items-center gap-1.5 text-slate-600">
+                              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: bucket.color }} />
+                              {bucket.label}
+                            </span>
+                            <div className="relative flex-1 h-2 rounded bg-slate-100 min-w-0">
+                              <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-300" />
+                              <div
+                                className={`absolute top-0 bottom-0 ${positive ? 'rounded-r bg-emerald-500' : 'rounded-l bg-red-500'}`}
+                                style={positive ? { left: '50%', width: `${scale * 50}%` } : { right: '50%', width: `${scale * 50}%` }}
+                              />
+                            </div>
+                            <span className={`w-20 shrink-0 text-right tabular-nums font-semibold ${positive ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {signedCurrency(bucket.value)}
+                            </span>
+                            <span className="w-12 shrink-0 text-right tabular-nums text-slate-400">
+                              {pct === null ? '—' : `${pct >= 0 ? '' : ''}${pct.toFixed(0)}%`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      Le percentuali sono il contributo di ogni voce alla crescita media (sommano a 100%; un valore negativo significa che la voce ha frenato il risparmio).
+                    </p>
+                  </section>
+
+                  {/* Mese per mese */}
+                  <section>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Mese per mese (variazione reale)</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="text-[10px] uppercase tracking-wide text-slate-400">
+                          <tr>
+                            <th className="text-left font-medium py-1 pr-2">Mese</th>
+                            <th className="text-right font-medium py-1 px-2">Risparmio</th>
+                            <th className="text-right font-medium py-1 px-2">Azionario</th>
+                            <th className="text-right font-medium py-1 px-2">Obblig.</th>
+                            <th className="text-right font-medium py-1 pl-2">Liquidità</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {savingsBreakdown.monthly.map((m, idx) => {
+                            const isLast = idx === savingsBreakdown.monthly.length - 1;
+                            const cell = (v: number | null) =>
+                              v === null ? <span className="text-slate-300">—</span> : (
+                                <span className={v >= 0 ? 'text-emerald-600' : 'text-red-600'}>{signedCurrency(v)}</span>
+                              );
+                            return (
+                              <tr key={m.month} className="border-t border-slate-100">
+                                <td className="py-1.5 pr-2 text-slate-600 capitalize">
+                                  {monthLabel(m.month)}
+                                  {isLast && <span className="ml-1 text-[9px] text-amber-500" title="Mese in corso / parziale">•</span>}
+                                </td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{cell(m.total)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums">{cell(m.azionario)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums">{cell(m.obbligazionario)}</td>
+                                <td className="py-1.5 pl-2 text-right tabular-nums">{cell(m.liquidita)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      Variazione tra il saldo di fine mese (ultimo check del mese). <span className="text-amber-500">•</span> = mese in corso/parziale. I singoli mesi oscillano più della media in alto, che è il trend ripulito.
+                    </p>
+                  </section>
+
+                  <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-slate-600">
+                    <span className="font-semibold text-violet-700">Nota.</span> La voce «Azionario» mescola <span className="font-medium">rendimento di mercato</span> e <span className="font-medium">nuovi versamenti</span> in ETF: se sposti risparmi dalla liquidità agli ETF, parte di questa crescita è denaro tuo, non solo guadagno di mercato.
+                  </div>
                 </>
               )}
             </div>
