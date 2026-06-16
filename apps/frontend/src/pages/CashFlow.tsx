@@ -687,6 +687,7 @@ export function CashFlow() {
       .filter((item) => Math.abs(item.contribution) >= 0.005)
       .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
     const attributionMaxAbs = Math.max(...attribution.map((a) => Math.abs(a.contribution)), 1);
+    const attributionTotal = attribution.reduce((sum, item) => sum + item.contribution, 0);
 
     return {
       n,
@@ -708,6 +709,7 @@ export function CashFlow() {
       monthlyMaxAbs,
       attribution,
       attributionMaxAbs,
+      attributionTotal,
       r2: trendRegression.r2,
       regChangePct: trendRegression.changePct,
       slopePerCheck: trendRegression.slope,
@@ -730,12 +732,27 @@ export function CashFlow() {
       return { groups: [] as AllocationGroupSlice[], columns: [] as AllocationColumnSlice[], total: 0 };
     }
 
-    const pieColumns = activeColumns.filter((column) => column.showInPie);
+    // Exclude rendimentoLordo from the pie: it is the (gross) gain already
+    // contained in etfLordo, so showing it as its own slice would double-count
+    // the equity. The etfLordo slice uses its NET value (matching the Totale
+    // formula) so the slices reconcile with the net portfolio.
+    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+    const pieValueFor = (column: CashFlowColumn): number => {
+      if (column.key === 'etfLordo') {
+        const rendimentoLordo = getRowValue(latestRow, 'rendimentoLordo');
+        return getRowValue(latestRow, 'etfLordo') - (rendimentoLordo * 26 / 100) - commissionTotal;
+      }
+      return getRowValue(latestRow, column.key);
+    };
+
+    const pieColumns = activeColumns.filter(
+      (column) => column.showInPie && column.key !== 'rendimentoLordo'
+    );
 
     const valuedColumns: ValuedColumn[] = pieColumns
       .map((column) => ({
         column,
-        value: Math.max(0, getRowValue(latestRow, column.key)),
+        value: Math.max(0, pieValueFor(column)),
       }))
       .filter((entry) => entry.value > 0);
 
@@ -803,7 +820,7 @@ export function CashFlow() {
     });
 
     return { groups, columns: columnsData, total };
-  }, [activeColumns, classifications, latestRow]);
+  }, [activeColumns, classifications, latestRow, settings]);
 
   const renderColumnPieLabel = useMemo(() => {
     const slotsBySide: Record<'left' | 'right', Array<{ index: number; y: number }>> = {
@@ -1026,10 +1043,10 @@ export function CashFlow() {
             <p className="text-lg font-bold text-slate-900 tabular-nums">
               {latestRow ? formatCurrency(latestRow.total) : formatCurrency(0)}
             </p>
-            {latestRow?.diffTotal !== null && latestRow?.diffTotal !== undefined && (
+            {latestRow?.diffTotal !== null && latestRow?.diffTotal !== undefined && latestRow.total - latestRow.diffTotal !== 0 && (
               <span className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${latestRow.diffTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {latestRow.diffTotal >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {latestRow.diffTotal >= 0 ? '+' : ''}{((latestRow.diffTotal / (latestRow.total - latestRow.diffTotal)) * 100).toFixed(1)}%
+                {latestRow.diffTotal >= 0 ? '+' : ''}{((latestRow.diffTotal / Math.abs(latestRow.total - latestRow.diffTotal)) * 100).toFixed(1)}%
               </span>
             )}
           </div>
@@ -1106,7 +1123,7 @@ export function CashFlow() {
         <div className="pr-4 xl:border-r xl:border-slate-200">
           <p className="text-xs font-semibold text-slate-800 mb-1">Suddivisione Ultimo Check</p>
           <p className="text-[10px] text-slate-500">Totale allocato: {formatCurrency(allocationChart.total)}</p>
-          <p className="text-[10px] text-slate-400 mb-2">Classificazioni sopra, etichette ordinate accanto agli spicchi.</p>
+          <p className="text-[10px] text-slate-400 mb-2">ETF al netto (tasse + commissioni); il centro coincide con la somma delle fette.</p>
           {allocationChart.columns.length === 0 ? (
             <p className="text-xs text-slate-500">Nessun dato disponibile.</p>
           ) : (
@@ -1167,7 +1184,7 @@ export function CashFlow() {
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-3">
                   <p className="text-sm font-bold text-slate-700 tabular-nums whitespace-nowrap">
-                    {formatCurrency(latestRow?.total ?? 0)}
+                    {formatCurrency(allocationChart.total)}
                   </p>
                 </div>
               </div>
@@ -1652,9 +1669,14 @@ export function CashFlow() {
                   {/* C) Attribuzione per voce */}
                   {detailedStats.attribution.length > 0 && (
                     <section>
-                      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                        Contributo per voce alla variazione di periodo
-                      </h4>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Contributo per voce alla variazione di periodo
+                        </h4>
+                        <span className={`text-[11px] font-semibold tabular-nums ${detailedStats.attributionTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          Totale: {signedCurrency(detailedStats.attributionTotal)}
+                        </span>
+                      </div>
                       <div className="space-y-1">
                         {detailedStats.attribution.map((item) => {
                           const widthPct = Math.min(100, (Math.abs(item.contribution) / detailedStats.attributionMaxAbs) * 100);
@@ -1675,7 +1697,7 @@ export function CashFlow() {
                         })}
                       </div>
                       <p className="text-[10px] text-slate-400 mt-1.5">
-                        Δ di ogni voce dal primo all'ultimo check del periodo{showTotalTrend ? ' (rendimento al netto del 26%)' : ''}.
+                        Δ grezzo di ogni voce dal primo all'ultimo check del periodo{showTotalTrend ? ' (rendimento al netto del 26%)' : ''}. Le barre sommano al «Totale» qui sopra, non alla variazione destagionalizzata in cima.
                       </p>
                     </section>
                   )}
