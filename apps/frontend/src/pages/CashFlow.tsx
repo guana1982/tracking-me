@@ -1887,43 +1887,43 @@ export function CashFlow() {
 
                   {/* Mese per mese */}
                   <section>
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Mese per mese (variazione reale)</h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="text-[10px] uppercase tracking-wide text-slate-400">
-                          <tr>
-                            <th className="text-left font-medium py-1 pr-2">Mese</th>
-                            <th className="text-right font-medium py-1 px-2">Risparmio</th>
-                            <th className="text-right font-medium py-1 px-2">Azionario</th>
-                            <th className="text-right font-medium py-1 px-2">Obblig.</th>
-                            <th className="text-right font-medium py-1 pl-2">Liquidità</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {savingsBreakdown.monthly.map((m, idx) => {
-                            const isLast = idx === savingsBreakdown.monthly.length - 1;
-                            const cell = (v: number | null) =>
-                              v === null ? <span className="text-slate-300">—</span> : (
-                                <span className={v >= 0 ? 'text-emerald-600' : 'text-red-600'}>{signedCurrency(v)}</span>
-                              );
-                            return (
-                              <tr key={m.month} className="border-t border-slate-100">
-                                <td className="py-1.5 pr-2 text-slate-600 capitalize">
-                                  {monthLabel(m.month)}
-                                  {isLast && <span className="ml-1 text-[9px] text-amber-500" title="Mese in corso / parziale">•</span>}
-                                </td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-semibold">{cell(m.total)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums">{cell(m.azionario)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums">{cell(m.obbligazionario)}</td>
-                                <td className="py-1.5 pl-2 text-right tabular-nums">{cell(m.liquidita)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Quanto hai accantonato, mese per mese</h4>
+                    <p className="text-[10px] text-slate-400 mb-2">Variazione del patrimonio netto in ogni mese e da quale fonte arriva.</p>
+                    <div className="space-y-1.5">
+                      {savingsBreakdown.monthly.filter((m) => m.total !== null).map((m, idx, arr) => {
+                        const isLast = idx === arr.length - 1;
+                        const total = m.total as number;
+                        const sources = [
+                          { label: 'Azionario', color: '#6366f1', value: m.azionario as number },
+                          { label: 'Obblig.', color: '#f59e0b', value: m.obbligazionario as number },
+                          { label: 'Liquidità', color: '#0ea5e9', value: m.liquidita as number },
+                        ];
+                        return (
+                          <div key={m.month} className="rounded-lg border border-slate-200 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-slate-700 capitalize flex items-center gap-1">
+                                {monthLabel(m.month)}
+                                {isLast && <span className="text-[9px] font-normal text-amber-500" title="Mese in corso / parziale">• in corso</span>}
+                              </span>
+                              <span className={`text-sm font-bold tabular-nums ${total >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {signedCurrency(total)}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+                              {sources.map((s) => (
+                                <span key={s.label} className="inline-flex items-center gap-1">
+                                  <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.color }} />
+                                  {s.label}
+                                  <span className={`tabular-nums font-medium ${s.value >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{signedCurrency(s.value)}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-2">
-                      Variazione tra il saldo di fine mese (ultimo check del mese). <span className="text-amber-500">•</span> = mese in corso/parziale. I singoli mesi oscillano più della media in alto, che è il trend ripulito.
+                      Confronto tra i saldi di fine mese. I singoli mesi oscillano (stipendi, spese, mercato) più della media in alto, che è il trend ripulito.
                     </p>
                   </section>
 
