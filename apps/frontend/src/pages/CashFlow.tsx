@@ -443,35 +443,15 @@ export function CashFlow() {
   const latestRow = rowsWithMetrics[0] ?? null;
   const positiveDiffCount = rowsWithMetrics.filter((row) => (row.diffTotal ?? 0) > 0).length;
 
-  // Average monthly savings = trend of the NET total over time (regression on
-  // actual elapsed days), independent of the chart selection. Robust to the
-  // monthly salary cycle and to noisy endpoints.
-  const monthlySavings = useMemo<{ perMonth: number; months: number } | null>(() => {
-    const points = rowsWithMetrics.slice().reverse(); // chronological ascending
-    const n = points.length;
-    if (n < 2) return null;
-    const t0 = +new Date(points[0].date);
-    const xs = points.map((p) => (+new Date(p.date) - t0) / 86_400_000); // days
-    const ys = points.map((p) => p.total);
-    const sumX = xs.reduce((s, x) => s + x, 0);
-    const sumY = ys.reduce((s, y) => s + y, 0);
-    const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
-    const sumX2 = xs.reduce((s, x) => s + x * x, 0);
-    const denom = n * sumX2 - sumX * sumX;
-    if (denom === 0) return null;
-    const slopePerDay = (n * sumXY - sumX * sumY) / denom;
-    const daysPerMonth = 365.25 / 12;
-    return { perMonth: slopePerDay * daysPerMonth, months: xs[n - 1] / daysPerMonth };
-  }, [rowsWithMetrics]);
-
-  // Where the monthly savings come from: split the net total into 3 buckets
-  // (Azionario / Obbligazionario / Liquidità) and regress each over time so the
-  // per-bucket €/month sum exactly to the total trend. Plus a month-by-month
-  // breakdown using the last check of each calendar month.
+  // Monthly savings & where they come from. Everything is built from the same
+  // month-over-month deltas (end-of-month balances) so every figure reconciles
+  // with the per-month list. The net total is split into 3 buckets
+  // (Azionario / Obbligazionario / Liquidità) whose deltas sum to the total.
+  // The headline average is the mean over COMPLETE months (the in-progress
+  // current month is shown but excluded from the average).
   const savingsBreakdown = useMemo(() => {
     const points = rowsWithMetrics.slice().reverse(); // chronological ascending
-    const n = points.length;
-    if (n < 2) return null;
+    if (points.length < 2) return null;
     const commissionTotal = settings.commissionPerEtf * settings.etfCount;
     const obblActive = activeColumns.some((c) => c.key === 'webankObbl');
     const baseCols = activeColumns.filter((c) => !STOCK_KEYS.has(c.key));
@@ -483,27 +463,6 @@ export function CashFlow() {
       const liquidita = base - obbligazionario;
       return { azionario, obbligazionario, liquidita, total: base + azionario };
     };
-
-    const t0 = +new Date(points[0].date);
-    const xs = points.map((p) => (+new Date(p.date) - t0) / 86_400_000);
-    const sumX = xs.reduce((s, x) => s + x, 0);
-    const sumX2 = xs.reduce((s, x) => s + x * x, 0);
-    const denom = n * sumX2 - sumX * sumX;
-    const daysPerMonth = 365.25 / 12;
-    const slopePerMonth = (ys: number[]) => {
-      if (denom === 0) return 0;
-      const sumY = ys.reduce((s, y) => s + y, 0);
-      const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
-      return ((n * sumXY - sumX * sumY) / denom) * daysPerMonth;
-    };
-
-    const series = points.map(buckets);
-    const perMonth = {
-      azionario: slopePerMonth(series.map((s) => s.azionario)),
-      obbligazionario: slopePerMonth(series.map((s) => s.obbligazionario)),
-      liquidita: slopePerMonth(series.map((s) => s.liquidita)),
-    };
-    const totalPerMonth = perMonth.azionario + perMonth.obbligazionario + perMonth.liquidita;
 
     const byMonth = new Map<string, { date: string; b: ReturnType<typeof buckets> }>();
     points.forEach((p) => byMonth.set(String(p.date).slice(0, 7), { date: String(p.date), b: buckets(p) }));
@@ -520,7 +479,21 @@ export function CashFlow() {
       };
     });
 
-    return { perMonth, totalPerMonth, monthly, months: xs[n - 1] / daysPerMonth };
+    const lastMonthKey = monthsArr[monthsArr.length - 1][0];
+    const lastInProgress = lastMonthKey === today.slice(0, 7);
+
+    const deltas = monthly.filter((m) => m.total !== null);
+    const complete = lastInProgress ? deltas.filter((m) => m.month !== lastMonthKey) : deltas;
+    const monthsUsed = complete.length;
+    const mean = (sel: 'azionario' | 'obbligazionario' | 'liquidita' | 'total') =>
+      monthsUsed > 0 ? complete.reduce((s, m) => s + (m[sel] as number), 0) / monthsUsed : 0;
+
+    const perMonth = monthsUsed > 0
+      ? { azionario: mean('azionario'), obbligazionario: mean('obbligazionario'), liquidita: mean('liquidita') }
+      : null;
+    const totalPerMonth = monthsUsed > 0 ? mean('total') : null;
+
+    return { perMonth, totalPerMonth, monthly, monthsUsed, lastInProgress, lastMonthKey };
   }, [rowsWithMetrics, activeColumns, settings]);
   const trendData = useMemo(
     () =>
@@ -1116,8 +1089,8 @@ export function CashFlow() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
         <button
           type="button"
-          onClick={() => monthlySavings && setIsSavingsModalOpen(true)}
-          disabled={!monthlySavings}
+          onClick={() => savingsBreakdown?.totalPerMonth != null && setIsSavingsModalOpen(true)}
+          disabled={savingsBreakdown?.totalPerMonth == null}
           className="card !p-3 text-left w-full group transition-colors hover:border-sky-300 hover:bg-sky-50/30 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:border-inherit"
           title="Apri il dettaglio: risparmio mese per mese e da dove deriva"
         >
@@ -1125,10 +1098,10 @@ export function CashFlow() {
             <p className="text-[10px] uppercase tracking-wide text-slate-500">Risparmio medio / mese</p>
             <Maximize2 className="w-3 h-3 text-slate-300 group-hover:text-sky-500 transition-colors" />
           </div>
-          {monthlySavings ? (
+          {savingsBreakdown?.totalPerMonth != null ? (
             <div className="flex items-baseline gap-2">
-              <p className={`text-lg font-bold tabular-nums ${monthlySavings.perMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {monthlySavings.perMonth >= 0 ? '+' : ''}{formatCurrency(monthlySavings.perMonth)}
+              <p className={`text-lg font-bold tabular-nums ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}
               </p>
               <span className="text-[10px] text-sky-600 tabular-nums">dettagli →</span>
             </div>
@@ -1821,9 +1794,9 @@ export function CashFlow() {
                   <BarChart3 className="w-4 h-4 text-sky-600" />
                   Risparmio mensile e composizione
                 </h3>
-                {savingsBreakdown && (
+                {savingsBreakdown?.totalPerMonth != null && (
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Media <span className={`font-semibold ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}/mese</span> · su {savingsBreakdown.months.toFixed(1)} mesi
+                    Media <span className={`font-semibold ${savingsBreakdown.totalPerMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{savingsBreakdown.totalPerMonth >= 0 ? '+' : ''}{formatCurrency(savingsBreakdown.totalPerMonth)}/mese</span> · su {savingsBreakdown.monthsUsed} {savingsBreakdown.monthsUsed === 1 ? 'mese completo' : 'mesi completi'}
                   </p>
                 )}
               </div>
@@ -1838,24 +1811,21 @@ export function CashFlow() {
               ) : (
                 <>
                   {/* Composizione del risparmio medio/mese */}
+                  {savingsBreakdown.perMonth && savingsBreakdown.totalPerMonth != null && (
                   <section>
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Da dove arriva (media €/mese)</h4>
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Da dove arriva (media €/mese, mesi completi)</h4>
                     <div className="space-y-2.5">
                       {([
                         { key: 'azionario', label: 'Azionario (ETF)', color: '#6366f1', value: savingsBreakdown.perMonth.azionario },
                         { key: 'obbligazionario', label: 'Obbligazionario (BTP)', color: '#f59e0b', value: savingsBreakdown.perMonth.obbligazionario },
                         { key: 'liquidita', label: 'Liquidità (tuoi risparmi)', color: '#0ea5e9', value: savingsBreakdown.perMonth.liquidita },
                       ] as const).map((bucket) => {
-                        const maxAbs = Math.max(
-                          Math.abs(savingsBreakdown.perMonth.azionario),
-                          Math.abs(savingsBreakdown.perMonth.obbligazionario),
-                          Math.abs(savingsBreakdown.perMonth.liquidita),
-                          1
-                        );
+                        const pm = savingsBreakdown.perMonth!;
+                        const maxAbs = Math.max(Math.abs(pm.azionario), Math.abs(pm.obbligazionario), Math.abs(pm.liquidita), 1);
                         const scale = Math.min(1, Math.abs(bucket.value) / maxAbs);
                         const positive = bucket.value >= 0;
-                        const pct = Math.abs(savingsBreakdown.totalPerMonth) > 0.5
-                          ? (bucket.value / savingsBreakdown.totalPerMonth) * 100
+                        const pct = Math.abs(savingsBreakdown.totalPerMonth!) > 0.5
+                          ? (bucket.value / savingsBreakdown.totalPerMonth!) * 100
                           : null;
                         return (
                           <div key={bucket.key} className="flex items-center gap-2 text-xs">
@@ -1881,9 +1851,10 @@ export function CashFlow() {
                       })}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-2">
-                      Le percentuali sono il contributo di ogni voce alla crescita media (sommano a 100%; un valore negativo significa che la voce ha frenato il risparmio).
+                      Le percentuali sono il contributo di ogni voce alla media (sommano a 100%; un valore negativo significa che la voce ha frenato il risparmio).
                     </p>
                   </section>
+                  )}
 
                   {/* Mese per mese */}
                   <section>
@@ -1923,7 +1894,7 @@ export function CashFlow() {
                       })}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-2">
-                      Confronto tra i saldi di fine mese. I singoli mesi oscillano (stipendi, spese, mercato) più della media in alto, che è il trend ripulito.
+                      Confronto tra i saldi di fine mese. La media in alto è la media di questi mesi (escluso quello in corso): sommando i mesi completi e dividendo per il loro numero ottieni lo stesso valore.
                     </p>
                   </section>
 
