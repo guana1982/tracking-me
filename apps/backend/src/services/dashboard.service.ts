@@ -82,12 +82,17 @@ export class DashboardService {
       buildCategorySummary('SAVINGS', targets.savings, expenseTotals.SAVINGS + totalReallocatedToSavings),
     ];
 
-    // Calculate reallocation preview
+    // Calculate reallocation preview, net of reallocations already executed
+    // from each source category so the same remainder can't be transferred twice
     const needsCategory = categories.find((c) => c.category === 'NEEDS')!;
     const wantsCategory = categories.find((c) => c.category === 'WANTS')!;
+    const sumReallocatedFrom = (category: string) =>
+      reallocations
+        .filter((r: { fromCategory: string }) => r.fromCategory === category)
+        .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0);
     const reallocationPreview = this.buildReallocationPreview(
-      needsCategory.remaining,
-      wantsCategory.remaining,
+      needsCategory.remaining - sumReallocatedFrom('NEEDS'),
+      wantsCategory.remaining - sumReallocatedFrom('WANTS'),
       budgetRule.cutoffDay,
       budgetRule.autoReallocateNeedsRemainder,
       periodKey

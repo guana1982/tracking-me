@@ -36,6 +36,7 @@ export class ReallocationService {
       include: {
         incomes: true,
         budgetRule: true,
+        reallocations: true,
       },
     });
 
@@ -63,8 +64,16 @@ export class ReallocationService {
 
     // Get expense totals
     const expenseTotals = await expenseService.getTotalsByCategory(periodKey, userId);
-    const needsRemainder = targets.needs - expenseTotals.NEEDS;
-    const wantsRemainder = targets.wants - expenseTotals.WANTS;
+
+    // Subtract reallocations already executed from each source category,
+    // otherwise the same remainder could be transferred multiple times
+    const sumReallocatedFrom = (category: string) =>
+      period.reallocations
+        .filter((r: { fromCategory: string }) => r.fromCategory === category)
+        .reduce((sum: number, r: { amount: number }) => sum + r.amount, 0);
+
+    const needsRemainder = targets.needs - expenseTotals.NEEDS - sumReallocatedFrom('NEEDS');
+    const wantsRemainder = targets.wants - expenseTotals.WANTS - sumReallocatedFrom('WANTS');
 
     // Check if reallocation is available (either NEEDS or WANTS has remainder)
     const isAfterCutoff = isPastCutoffDay(budgetRule.cutoffDay, periodKey);
