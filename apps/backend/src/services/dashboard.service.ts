@@ -141,11 +141,17 @@ export class DashboardService {
         .filter((r) => r.toCategory === 'SAVINGS')
         .reduce((sum, r) => sum + r.amount, 0);
 
+      // SAVINGS transfers stay liquid on the savings account: money spent from
+      // there (EXTRA) is no longer saved, so net it out to get real savings
+      const extraSpent = period.expenses
+        .filter((e) => e.category === 'EXTRA')
+        .reduce((sum, e) => sum + e.amount, 0);
+
       return {
         periodKey: period.periodKey,
         month: period.month,
         year: period.year,
-        savings: roundCurrency(savingsExpenses + reallocatedToSavings),
+        savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
       };
     });
 
@@ -203,7 +209,11 @@ export class DashboardService {
       const reallocatedToSavings = p.reallocations
         .filter((r) => r.toCategory === 'SAVINGS')
         .reduce((sum, r) => sum + r.amount, 0);
-      const savings = savingsExpenses + reallocatedToSavings;
+      // Net of EXTRA: money spent from the savings account is not saved
+      const extraSpent = p.expenses
+        .filter((e: { category: string }) => e.category === 'EXTRA')
+        .reduce((sum: number, e: { amount: number }) => sum + e.amount, 0);
+      const savings = savingsExpenses + reallocatedToSavings - extraSpent;
       const savingsRate = income > 0 ? savings / income : 0;
       return { period: p, income, savings, savingsRate };
     });

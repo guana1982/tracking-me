@@ -69,7 +69,9 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
       return (
         <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
           <p className="text-xs font-medium text-slate-900">{label}</p>
-          <p className="text-xs text-sky-600">{formatCurrency(payload[0].value)}</p>
+          <p className={`text-xs ${payload[0].value < 0 ? 'text-red-600' : 'text-sky-600'}`}>
+            {formatCurrency(payload[0].value)}
+          </p>
         </div>
       );
     }
@@ -246,7 +248,11 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                     {barData.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'}
+                        fill={
+                          entry.risparmio < 0
+                            ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
+                            : entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'
+                        }
                         opacity={entry.periodKey === periodKey ? 1 : 0.7}
                       />
                     ))}
