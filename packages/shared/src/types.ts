@@ -238,6 +238,23 @@ export interface ReallocationPreviewDTO {
   isAfterCutoff: boolean;
 }
 
+// Carry-over preview — deficits (over-budget NEEDS/WANTS) that can be carried
+// to the next month as auto-generated expenses
+export interface CarryoverPreviewDTO {
+  nextPeriodKey: string;
+  needsDeficit: number; // over-budget amount on NEEDS (0 if within budget)
+  wantsDeficit: number; // over-budget amount on WANTS (0 if within budget)
+  needsCarried: boolean; // deficit already carried to next month
+  wantsCarried: boolean;
+  pendingTotal: number; // total deficit not yet carried
+  isAfterCutoff: boolean;
+  available: boolean; // pendingTotal > 0
+}
+
+export interface CreateCarryoverDTO {
+  category?: 'NEEDS' | 'WANTS'; // omit to carry all pending deficits
+}
+
 // Savings history for bar chart and cumulative totals
 export interface MonthlySavingsDTO {
   periodKey: string;

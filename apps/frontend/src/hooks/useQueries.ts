@@ -46,6 +46,8 @@ export const queryKeys = {
   reallocations: (periodKey: string) => ['reallocations', periodKey] as const,
   reallocationPreview: (periodKey: string) =>
     ['reallocationPreview', periodKey] as const,
+  carryoverPreview: (periodKey: string) =>
+    ['carryoverPreview', periodKey] as const,
   fixedExpenses: (category?: FixedExpenseCategory) =>
     ['fixedExpenses', category ?? 'all'] as const,
   cashFlowChecks: ['cashFlowChecks'] as const,
@@ -321,6 +323,33 @@ export function useReallocationPreview(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.reallocationPreview(periodKey),
     queryFn: () => reallocationsApi.getPreview(periodKey),
+  });
+}
+
+export function useCarryoverPreview(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.carryoverPreview(periodKey),
+    queryFn: () => reallocationsApi.getCarryoverPreview(periodKey),
+  });
+}
+
+export function useCreateCarryover(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (category?: 'NEEDS' | 'WANTS') =>
+      reallocationsApi.createCarryover(periodKey, category ? { category } : {}),
+    onSuccess: () => {
+      // The carry-over writes expenses into the NEXT period, so invalidate
+      // whole families rather than just the current periodKey
+      queryClient.invalidateQueries({ queryKey: ['carryoverPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsPace'] });
+      queryClient.invalidateQueries({ queryKey: ['reallocationPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['periods'] });
+    },
   });
 }
 

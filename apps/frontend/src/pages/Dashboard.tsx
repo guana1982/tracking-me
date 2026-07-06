@@ -1,12 +1,12 @@
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
-import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download } from 'lucide-react';
-import { cn, formatCurrency } from '../lib/utils';
+import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download, ArrowRightCircle } from 'lucide-react';
+import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 import { buildExpensesCsv, downloadCsv } from '../lib/csv';
 
 export function Dashboard() {
@@ -16,9 +16,11 @@ export function Dashboard() {
   const { data: savingsPace } = useSavingsPace(periodKey);
   const { data: reallocations } = useReallocations(periodKey);
   const { data: reallocationPreview } = useReallocationPreview(periodKey);
+  const { data: carryoverPreview } = useCarryoverPreview(periodKey);
   const { data: monthPeriod } = usePeriod(periodKey);
   const createReallocation = useCreateReallocation(periodKey);
   const deleteReallocation = useDeleteReallocation(periodKey);
+  const createCarryover = useCreateCarryover(periodKey);
   const closeMonth = useCloseMonth(periodKey);
   const reopenMonth = useReopenMonth(periodKey);
 
@@ -62,6 +64,26 @@ export function Dashboard() {
             ? 'Riallocazione manuale - Necessità'
             : 'Riallocazione manuale - Svago',
         }),
+    };
+  };
+
+  // Per-card carry-over: registers a category's over-budget deficit as a
+  // fixed expense of the NEXT month. Shown after the cutoff, like the
+  // reallocation; the backend marker makes it idempotent, so once carried
+  // the button disappears.
+  const nextPeriodLabel = carryoverPreview ? formatPeriodKey(carryoverPreview.nextPeriodKey) : '';
+
+  const cardCarryover = (from: 'NEEDS' | 'WANTS') => {
+    if (isClosed || !carryoverPreview?.isAfterCutoff) return undefined;
+    const carried = from === 'NEEDS' ? carryoverPreview.needsCarried : carryoverPreview.wantsCarried;
+    const amount = from === 'NEEDS' ? carryoverPreview.needsDeficit : carryoverPreview.wantsDeficit;
+    if (carried || amount <= 0) return undefined;
+
+    return {
+      amount,
+      nextPeriodLabel,
+      isPending: createCarryover.isPending,
+      onCarry: () => createCarryover.mutate(from),
     };
   };
 
@@ -208,6 +230,25 @@ export function Dashboard() {
         </div>
       )}
 
+      {/* Carry-over button - carries all pending over-budget deficits to next month */}
+      {carryoverPreview?.isAfterCutoff && carryoverPreview.available && (
+        <div className="flex-shrink-0">
+          <button
+            onClick={() => createCarryover.mutate(undefined)}
+            disabled={createCarryover.isPending}
+            title="Registra gli sforamenti come spese fisse del mese successivo, riducendone il budget disponibile"
+            className="w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {createCarryover.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ArrowRightCircle className="w-4 h-4" />
+            )}
+            Riporta {formatCurrency(carryoverPreview.pendingTotal)} di sforamento a {nextPeriodLabel}
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-shrink-0 justify-end">
         <button
           type="button"
@@ -226,7 +267,7 @@ export function Dashboard() {
         {/* Necessità Column */}
         <div className="space-y-4 md:flex md:flex-col md:min-h-0">
           <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} />
+            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} carryover={cardCarryover('NEEDS')} />
           </div>
           <ExpensesList
             expenses={needsExpenses}
@@ -241,7 +282,7 @@ export function Dashboard() {
         {/* Svago Column */}
         <div className="space-y-4 md:flex md:flex-col md:min-h-0">
           <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} />
+            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} carryover={cardCarryover('WANTS')} />
           </div>
           <ExpensesList
             expenses={wantsExpenses}

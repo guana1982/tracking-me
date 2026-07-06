@@ -19,6 +19,8 @@ import type {
   ReallocationDTO,
   CreateReallocationDTO,
   ReallocationPreviewDTO,
+  CarryoverPreviewDTO,
+  CreateCarryoverDTO,
   CashFlowCheckDTO,
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
@@ -243,6 +245,15 @@ export const reallocationsApi = {
 
   getPreview: (periodKey: string) =>
     fetchApi<ReallocationPreviewDTO>(`/reallocations/period/${periodKey}/preview`),
+
+  getCarryoverPreview: (periodKey: string) =>
+    fetchApi<CarryoverPreviewDTO>(`/reallocations/period/${periodKey}/carryover/preview`),
+
+  createCarryover: (periodKey: string, data: CreateCarryoverDTO = {}) =>
+    fetchApi<ExpenseDTO[]>(`/reallocations/period/${periodKey}/carryover`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   create: (periodKey: string, data: CreateReallocationDTO) =>
     fetchApi<ReallocationDTO>(`/reallocations/period/${periodKey}`, {

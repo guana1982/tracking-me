@@ -1,6 +1,6 @@
 import { cn, formatCurrency, getCategoryColor, getCategoryLabel } from '../lib/utils';
 import type { CategorySummary } from '@budget/shared';
-import { ShoppingBag, Wallet, PiggyBank, Loader2 } from 'lucide-react';
+import { ShoppingBag, Wallet, PiggyBank, Loader2, ArrowRightCircle } from 'lucide-react';
 
 interface CategoryCardProps {
   summary: CategorySummary;
@@ -8,6 +8,14 @@ interface CategoryCardProps {
   reallocation?: {
     amount: number;
     onMove: () => void;
+    isPending: boolean;
+  };
+  // When set, renders a button that carries the category's over-budget
+  // deficit to the next month (as an auto-generated fixed expense)
+  carryover?: {
+    amount: number;
+    nextPeriodLabel: string;
+    onCarry: () => void;
     isPending: boolean;
   };
 }
@@ -18,7 +26,7 @@ const categoryIcons = {
   SAVINGS: PiggyBank,
 };
 
-export function CategoryCard({ summary, reallocation }: CategoryCardProps) {
+export function CategoryCard({ summary, reallocation, carryover }: CategoryCardProps) {
   const { category, targetAmount, actualAmount, remaining, percentage, status } = summary;
   const colors = getCategoryColor(category);
   const Icon = categoryIcons[category];
@@ -103,6 +111,23 @@ export function CategoryCard({ summary, reallocation }: CategoryCardProps) {
             <PiggyBank className="w-3.5 h-3.5" />
           )}
           Sposta {formatCurrency(reallocation.amount)} nei Risparmi
+        </button>
+      )}
+
+      {/* Carry over-budget deficit to next month */}
+      {carryover && (
+        <button
+          onClick={carryover.onCarry}
+          disabled={carryover.isPending}
+          title="Registra lo sforamento come spesa fissa del mese successivo, riducendone il budget disponibile"
+          className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 py-1.5 px-3 text-xs font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {carryover.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <ArrowRightCircle className="w-3.5 h-3.5" />
+          )}
+          Riporta {formatCurrency(carryover.amount)} a {carryover.nextPeriodLabel}
         </button>
       )}
     </div>
