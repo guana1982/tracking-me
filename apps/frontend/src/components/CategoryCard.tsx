@@ -1,9 +1,15 @@
 import { cn, formatCurrency, getCategoryColor, getCategoryLabel } from '../lib/utils';
 import type { CategorySummary } from '@budget/shared';
-import { ShoppingBag, Wallet, PiggyBank } from 'lucide-react';
+import { ShoppingBag, Wallet, PiggyBank, Loader2 } from 'lucide-react';
 
 interface CategoryCardProps {
   summary: CategorySummary;
+  // When set, renders a button that moves the category's leftover to SAVINGS
+  reallocation?: {
+    amount: number;
+    onMove: () => void;
+    isPending: boolean;
+  };
 }
 
 const categoryIcons = {
@@ -12,7 +18,7 @@ const categoryIcons = {
   SAVINGS: PiggyBank,
 };
 
-export function CategoryCard({ summary }: CategoryCardProps) {
+export function CategoryCard({ summary, reallocation }: CategoryCardProps) {
   const { category, targetAmount, actualAmount, remaining, percentage, status } = summary;
   const colors = getCategoryColor(category);
   const Icon = categoryIcons[category];
@@ -82,6 +88,23 @@ export function CategoryCard({ summary }: CategoryCardProps) {
           {isOverBudget ? '-' : '+'}{formatCurrency(Math.abs(remaining))}
         </div>
       </div>
+
+      {/* Move leftover to SAVINGS */}
+      {reallocation && (
+        <button
+          onClick={reallocation.onMove}
+          disabled={reallocation.isPending}
+          title="Crea una riallocazione verso i Risparmi: il bonifico reale resta a carico tuo"
+          className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 py-1.5 px-3 text-xs font-semibold text-white hover:bg-sky-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {reallocation.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <PiggyBank className="w-3.5 h-3.5" />
+          )}
+          Sposta {formatCurrency(reallocation.amount)} nei Risparmi
+        </button>
+      )}
     </div>
   );
 }

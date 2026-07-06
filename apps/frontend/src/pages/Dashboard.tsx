@@ -89,6 +89,31 @@ export function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  // Per-card reallocation: moves a single category's leftover to SAVINGS.
+  // Shown after the cutoff, like the global button; remainders are already
+  // net of executed reallocations so the button disappears once used.
+  const cardReallocation = (from: 'NEEDS' | 'WANTS') => {
+    if (isClosed || !reallocationPreview?.isAfterCutoff) return undefined;
+    const amount = from === 'NEEDS'
+      ? reallocationPreview.needsRemainder
+      : reallocationPreview.wantsRemainder;
+    if (amount <= 0) return undefined;
+
+    return {
+      amount,
+      isPending: createReallocation.isPending,
+      onMove: () =>
+        createReallocation.mutate({
+          fromCategory: from,
+          toCategory: 'SAVINGS',
+          amount,
+          reason: from === 'NEEDS'
+            ? 'Riallocazione manuale - Necessità'
+            : 'Riallocazione manuale - Svago',
+        }),
+    };
+  };
+
   const handleReallocation = async () => {
     if (hasReallocation) {
       // Undo all reallocations
@@ -250,7 +275,7 @@ export function Dashboard() {
         {/* Necessità Column */}
         <div className="space-y-4 md:flex md:flex-col md:min-h-0">
           <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} />
+            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} />
           </div>
           <ExpensesList
             expenses={needsExpenses}
@@ -265,7 +290,7 @@ export function Dashboard() {
         {/* Svago Column */}
         <div className="space-y-4 md:flex md:flex-col md:min-h-0">
           <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} />
+            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} />
           </div>
           <ExpensesList
             expenses={wantsExpenses}
