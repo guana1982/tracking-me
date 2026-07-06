@@ -11,6 +11,7 @@ import type {
   CreateIncomeDTO,
   UpdateIncomeDTO,
   ExpenseDTO,
+  ExpenseWithPeriodDTO,
   CreateExpenseDTO,
   UpdateExpenseDTO,
   PaginatedResponse,
@@ -210,6 +211,12 @@ export const expensesApi = {
       `/expenses/period/${periodKey}${query ? `?${query}` : ''}`
     );
   },
+
+  getAllForPeriod: (periodKey: string) =>
+    fetchApi<ExpenseDTO[]>(`/expenses/period/${periodKey}/all`),
+
+  getAllGlobal: () =>
+    fetchApi<ExpenseWithPeriodDTO[]>('/expenses/all'),
 
   create: (periodKey: string, data: CreateExpenseDTO) =>
     fetchApi<ExpenseDTO>(`/expenses/period/${periodKey}`, {

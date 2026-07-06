@@ -7,47 +7,7 @@ import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
 import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download } from 'lucide-react';
 import { cn, formatCurrency } from '../lib/utils';
-import type { ExpenseDTO } from '@budget/shared';
-
-function csvCell(value: string | number | null | undefined): string {
-  const text = value === null || value === undefined ? '' : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function csvAmount(value: number): string {
-  return value.toFixed(2).replace('.', ',');
-}
-
-function getExpenseCategoryLabel(category: ExpenseDTO['category']): string {
-  switch (category) {
-    case 'NEEDS':
-      return 'Necessita';
-    case 'WANTS':
-      return 'Svago';
-    case 'SAVINGS':
-      return 'Risparmi';
-    case 'EXTRA':
-      return 'Extra';
-  }
-}
-
-function buildExpensesCsv(expenses: ExpenseDTO[]): string {
-  const headers = ['Data', 'Categoria', 'Descrizione', 'Importo', 'Fissa', 'Tricount', 'Note'];
-  const lines = [
-    headers.map(csvCell).join(';'),
-    ...expenses.map((expense) => [
-      expense.date.slice(0, 10),
-      getExpenseCategoryLabel(expense.category),
-      expense.label,
-      csvAmount(expense.amount),
-      expense.isFixed ? 'Si' : 'No',
-      expense.tricountType ?? '',
-      expense.notes ?? '',
-    ].map(csvCell).join(';')),
-  ];
-
-  return lines.join('\r\n');
-}
+import { buildExpensesCsv, downloadCsv } from '../lib/csv';
 
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
@@ -77,16 +37,7 @@ export function Dashboard() {
   const handleExportExpensesCsv = () => {
     if (!data?.recentExpenses.length) return;
 
-    const csv = buildExpensesCsv(data.recentExpenses);
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `spese-${periodKey}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadCsv(buildExpensesCsv(data.recentExpenses), `spese-${periodKey}.csv`);
   };
 
   // Per-card reallocation: moves a single category's leftover to SAVINGS.

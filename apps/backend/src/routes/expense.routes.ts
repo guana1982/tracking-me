@@ -48,6 +48,43 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Get all expenses for a period without pagination (for exports)
+  fastify.get<{ Params: { periodKey: string } }>(
+    '/period/:periodKey/all',
+    {
+      schema: {
+        tags: ['Expenses'],
+        summary: 'Get all expenses for a period (no pagination, for exports)',
+        params: {
+          type: 'object',
+          properties: {
+            periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+          },
+          required: ['periodKey'],
+        },
+      },
+      handler: async (request) => {
+        const { periodKey } = request.params;
+        periodKeySchema.parse(periodKey);
+
+        const expenses = await expenseService.getAllByPeriodKey(periodKey, request.authUser!.id);
+        return { success: true, data: expenses };
+      },
+    }
+  );
+
+  // Get all expenses across all periods (for exports)
+  fastify.get('/all', {
+    schema: {
+      tags: ['Expenses'],
+      summary: 'Get all expenses across all periods (for exports)',
+    },
+    handler: async (request) => {
+      const expenses = await expenseService.getAllByUser(request.authUser!.id);
+      return { success: true, data: expenses };
+    },
+  });
+
   // Get expense by ID
   fastify.get<{ Params: { id: string } }>('/:id', {
     schema: {

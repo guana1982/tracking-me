@@ -127,6 +127,11 @@ export interface ExpenseDTO {
   createdAt: string;
 }
 
+// Expense enriched with its budget period, for cross-period exports
+export interface ExpenseWithPeriodDTO extends ExpenseDTO {
+  periodKey: string;
+}
+
 export interface CreateExpenseDTO {
   date: string; // ISO date string
   category: Category;

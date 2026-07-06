@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { ExpenseDTO, CreateExpenseDTO, UpdateExpenseDTO, ExpenseFilters, PaginatedResponse } from '@budget/shared';
+import type { ExpenseDTO, ExpenseWithPeriodDTO, CreateExpenseDTO, UpdateExpenseDTO, ExpenseFilters, PaginatedResponse } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import type { Category } from '@budget/shared';
 import { monthPeriodService } from './month-period.service.js';
@@ -83,6 +83,24 @@ export class ExpenseService {
     }
 
     return period.expenses.map(this.toDTO);
+  }
+
+  /**
+   * Get all expenses for a user across all periods (no pagination, for exports)
+   */
+  async getAllByUser(userId: string): Promise<ExpenseWithPeriodDTO[]> {
+    const expenses = await prisma.expense.findMany({
+      where: { monthPeriod: { userId } },
+      include: {
+        monthPeriod: { select: { periodKey: true } },
+      },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return expenses.map((expense) => ({
+      ...this.toDTO(expense),
+      periodKey: expense.monthPeriod.periodKey,
+    }));
   }
 
   /**
