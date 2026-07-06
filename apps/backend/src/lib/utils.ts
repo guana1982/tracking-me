@@ -80,7 +80,8 @@ export function buildCategorySummary(
     actualAmount: Math.round(actualAmount * 100) / 100,
     remaining: Math.round(remaining * 100) / 100,
     percentage: Math.round(percentage * 100) / 100,
-    status: getSpendingStatus(percentage),
+    // For SAVINGS higher is better: exceeding the target is a win, never a warning
+    status: category === 'SAVINGS' ? 'ok' : getSpendingStatus(percentage),
   };
 }
 

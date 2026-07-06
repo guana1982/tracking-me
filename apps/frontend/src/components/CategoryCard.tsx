@@ -31,6 +31,10 @@ export function CategoryCard({ summary, reallocation, carryover }: CategoryCardP
   const colors = getCategoryColor(category);
   const Icon = categoryIcons[category];
   const isOverBudget = remaining < 0;
+  // For SAVINGS the meaning flips: going "over budget" means saving MORE
+  // than the target — a win, not a deficit
+  const isSavings = category === 'SAVINGS';
+  const isOverSavingsTarget = isSavings && isOverBudget;
 
   return (
     <div className={cn('card py-3 shadow-sm', colors.bg, colors.border, 'border')}>
@@ -84,16 +88,30 @@ export function CategoryCard({ summary, reallocation, carryover }: CategoryCardP
           </div>
         </div>
 
-        {/* Remaining badge */}
+        {/* Remaining badge — for SAVINGS the colors flip: above target is a win,
+            below target is neutral ("still missing") rather than "available" */}
         <div
           className={cn(
             'px-3 py-1.5 rounded-lg text-sm font-bold',
-            isOverBudget
-              ? 'bg-red-100 text-red-700'
-              : 'bg-green-100 text-green-700'
+            isOverSavingsTarget
+              ? 'bg-emerald-100 text-emerald-700'
+              : isSavings
+                ? 'bg-slate-100 text-slate-600'
+                : isOverBudget
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-green-100 text-green-700'
           )}
+          title={
+            isOverSavingsTarget
+              ? `Stai risparmiando ${formatCurrency(Math.abs(remaining))} più dell'obiettivo del mese`
+              : isSavings
+                ? `Mancano ${formatCurrency(Math.abs(remaining))} all'obiettivo del mese`
+                : undefined
+          }
         >
-          {isOverBudget ? '-' : '+'}{formatCurrency(Math.abs(remaining))}
+          {isOverSavingsTarget
+            ? `+${formatCurrency(Math.abs(remaining))} extra`
+            : `${isOverBudget ? '-' : isSavings ? '' : '+'}${formatCurrency(Math.abs(remaining))}`}
         </div>
       </div>
 
