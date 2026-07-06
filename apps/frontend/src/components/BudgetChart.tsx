@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts';
-import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
+import { getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
@@ -86,6 +86,16 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
       risparmio: m.savings,
       periodKey: m.periodKey,
     })) ?? [];
+
+    // Average over complete months only (in-progress and future periods excluded),
+    // same convention as the Cash Flow page's "Risparmio medio / mese"
+    const liveCurrentKey = getCurrentPeriodKey();
+    const completedMonths = savingsHistory?.months.filter(
+      (m: { periodKey: string }) => m.periodKey < liveCurrentKey
+    ) ?? [];
+    const avgMonthlySavings = completedMonths.length > 0
+      ? completedMonths.reduce((sum: number, m: { savings: number }) => sum + m.savings, 0) / completedMonths.length
+      : null;
 
     return (
       <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
@@ -205,6 +215,14 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                   {formatCurrency(savingsHistory.previousMonthsTotal)}
                 </p>
               </div>
+              {avgMonthlySavings !== null && (
+                <div className="text-center" title={`Media dei risparmi netti sui ${completedMonths.length} mesi completi (mese in corso escluso)`}>
+                  <p className="text-xs text-slate-500">Media / mese</p>
+                  <p className={`text-lg font-bold ${avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(avgMonthlySavings)}
+                  </p>
+                </div>
+              )}
               <div className="text-right">
                 <p className="text-xs text-slate-500">Totale risparmi</p>
                 <p className="text-lg font-bold text-sky-700">
@@ -240,6 +258,14 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                     tickFormatter={(v) => `${v}`}
                   />
                   <Tooltip content={<BarChartTooltip />} />
+                  {avgMonthlySavings !== null && (
+                    <ReferenceLine
+                      y={avgMonthlySavings}
+                      stroke="#059669"
+                      strokeDasharray="4 4"
+                      label={{ value: 'media', position: 'insideTopRight', fontSize: 9, fill: '#059669' }}
+                    />
+                  )}
                   <Bar
                     dataKey="risparmio"
                     radius={[3, 3, 0, 0]}
