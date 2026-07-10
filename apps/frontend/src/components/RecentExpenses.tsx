@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
-import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat } from 'lucide-react';
+import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat, Check } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense, useSpendingCategories } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 import { FixedExpensesModal } from './FixedExpensesModal';
@@ -45,6 +45,29 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const spendingCategoryById = new Map(
     (spendingCategories ?? []).map((cat) => [cat.id, cat])
   );
+
+  // Popover to re-classify an expense from its badge. Fixed-positioned from the
+  // badge rect so it isn't clipped by the list's overflow scroll container
+  const [picker, setPicker] = useState<{ expenseId: string; x: number; y: number } | null>(null);
+
+  const openPicker = (event: React.MouseEvent<HTMLButtonElement>, expenseId: string) => {
+    event.stopPropagation();
+    if (isClosed) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPicker({ expenseId, x: rect.left, y: rect.bottom + 4 });
+  };
+
+  const handleSelectSpendingCategory = async (
+    expenseId: string,
+    spendingCategoryId: string | null
+  ) => {
+    setPicker(null);
+    try {
+      await updateExpense.mutateAsync({ id: expenseId, data: { spendingCategoryId } });
+    } catch (error) {
+      console.error('Failed to change spending category:', error);
+    }
+  };
 
   useEffect(() => {
     if (editing && editing.id !== editingIdRef.current && inputRef.current) {
@@ -490,14 +513,23 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                           const name = spendingCategory?.name ?? 'Altro';
                           const color = spendingCategory?.color ?? '#94a3b8';
                           return (
-                            <span
-                              className="flex-shrink-0 max-w-[7rem] truncate px-1.5 py-0.5 text-[10px] font-medium rounded"
+                            <button
+                              type="button"
+                              onClick={(event) => openPicker(event, expense.id)}
+                              className={cn(
+                                'flex-shrink-0 max-w-[7rem] truncate px-1.5 py-0.5 text-[10px] font-medium rounded transition-all',
+                                !isClosed && 'cursor-pointer hover:ring-1 hover:ring-current'
+                              )}
                               // 12% alpha background derived from the category color
                               style={{ backgroundColor: `${color}1f`, color }}
-                              title={`Classificazione: ${name}`}
+                              title={
+                                isClosed
+                                  ? `Classificazione: ${name}`
+                                  : `Classificazione: ${name} — clicca per cambiarla`
+                              }
                             >
                               {name}
-                            </span>
+                            </button>
                           );
                         })()}
                       </div>
@@ -665,6 +697,62 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           {formatCurrency(grandTotal)}
         </span>
       </div>
+
+      {/* Spending-category picker popover, anchored to the clicked badge */}
+      {picker && (() => {
+        const pickerExpense = expenses.find((e) => e.id === picker.expenseId);
+        if (!pickerExpense) return null;
+        return (
+          <div className="fixed inset-0 z-50" onClick={() => setPicker(null)}>
+            <div
+              className="absolute w-56 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl py-1"
+              style={{
+                left: Math.max(8, Math.min(picker.x, window.innerWidth - 232)),
+                top: Math.min(picker.y, window.innerHeight - 296),
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                Classificazione
+              </p>
+              <button
+                type="button"
+                onClick={() => handleSelectSpendingCategory(pickerExpense.id, null)}
+                title="Torna alla classificazione automatica dalla descrizione"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-500 italic hover:bg-slate-50 transition-colors"
+              >
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-slate-300" />
+                <span className="flex-1 text-left truncate">Altro (auto)</span>
+                {pickerExpense.spendingCategoryId === null && (
+                  <Check className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                )}
+              </button>
+              {(spendingCategories ?? []).map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => handleSelectSpendingCategory(pickerExpense.id, cat.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors',
+                    pickerExpense.spendingCategoryId === cat.id
+                      ? 'font-semibold text-slate-800'
+                      : 'text-slate-600'
+                  )}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span className="flex-1 text-left truncate">{cat.name}</span>
+                  {pickerExpense.spendingCategoryId === cat.id && (
+                    <Check className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <QuickAddModal
         isOpen={isAddModalOpen}
