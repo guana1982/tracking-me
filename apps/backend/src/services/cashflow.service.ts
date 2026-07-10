@@ -218,7 +218,15 @@ export class CashFlowService {
       position: data.position ?? current.position,
       isActive: data.isActive ?? current.isActive,
       showInPie: data.showInPie ?? current.showInPie,
+      // Explicit null clears the fiscal netting config
+      taxRatePct: data.taxRatePct !== undefined ? data.taxRatePct : current.taxRatePct ?? null,
+      gainColumnKey:
+        data.gainColumnKey !== undefined ? data.gainColumnKey : current.gainColumnKey ?? null,
     };
+
+    if (next.gainColumnKey === key) {
+      throw new AppError('A column cannot use itself as gain column', 400, 'VALIDATION_ERROR');
+    }
 
     if (!next.label) {
       throw new AppError('Column label is required', 400, 'VALIDATION_ERROR');
@@ -483,6 +491,8 @@ export class CashFlowService {
         const positionValue = (entry as { position?: unknown }).position;
         const isActiveValue = (entry as { isActive?: unknown }).isActive;
         const showInPieValue = (entry as { showInPie?: unknown }).showInPie;
+        const taxRatePctValue = (entry as { taxRatePct?: unknown }).taxRatePct;
+        const gainColumnKeyValue = (entry as { gainColumnKey?: unknown }).gainColumnKey;
 
         const key =
           typeof keyValue === 'string' && COLUMN_KEY_REGEX.test(keyValue) ? keyValue : '';
@@ -493,10 +503,21 @@ export class CashFlowService {
             : index;
         const isActive = typeof isActiveValue === 'boolean' ? isActiveValue : true;
         const showInPie = typeof showInPieValue === 'boolean' ? showInPieValue : true;
+        const taxRatePct =
+          typeof taxRatePctValue === 'number' &&
+          Number.isFinite(taxRatePctValue) &&
+          taxRatePctValue >= 0 &&
+          taxRatePctValue <= 100
+            ? taxRatePctValue
+            : null;
+        const gainColumnKey =
+          typeof gainColumnKeyValue === 'string' && COLUMN_KEY_REGEX.test(gainColumnKeyValue)
+            ? gainColumnKeyValue
+            : null;
 
         if (!key || !label || seen.has(key)) return;
         seen.add(key);
-        result.push({ key, label, position, isActive, showInPie });
+        result.push({ key, label, position, isActive, showInPie, taxRatePct, gainColumnKey });
       });
     }
 

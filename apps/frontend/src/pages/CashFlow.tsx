@@ -1,6 +1,6 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3, Maximize2, Percent } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -384,7 +384,7 @@ export function CashFlow() {
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [columnsModalTab, setColumnsModalTab] = useState<'columns' | 'classifications'>('columns');
+  const [columnsModalTab, setColumnsModalTab] = useState<'columns' | 'classifications' | 'fiscal'>('columns');
   const [isCompactTable, setIsCompactTable] = useState(false);
   const [form, setForm] = useState<FormState>({ checkLabel: '', date: today, notes: '', values: {} });
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -404,6 +404,28 @@ export function CashFlow() {
     [classificationsData]
   );
   const activeColumns = useMemo(() => columns.filter((column) => column.isActive), [columns]);
+
+  // Fiscal netting (generalizes the etfLordo/rendimentoLordo special case):
+  // columns configured with taxRatePct + gainColumnKey contribute to every
+  // total as value − gain × rate; their gain columns are excluded from sums
+  // to avoid double counting
+  const gainColumnKeys = useMemo(
+    () =>
+      new Set(
+        columns
+          .map((column) => column.gainColumnKey)
+          .filter((key): key is string => Boolean(key))
+      ),
+    [columns]
+  );
+
+  const netRowValue = (row: CashFlowRow, column: CashFlowColumn): number => {
+    const raw = getRowValue(row, column.key);
+    if (column.gainColumnKey && column.taxRatePct != null) {
+      return raw - (getRowValue(row, column.gainColumnKey) * column.taxRatePct) / 100;
+    }
+    return raw;
+  };
 
   useEffect(() => {
     if (settingsData) {
@@ -437,8 +459,8 @@ export function CashFlow() {
 
     const computeTotal = (row: CashFlowRow) => {
       const baseSum = activeColumns
-        .filter((col) => !STOCK_KEYS.has(col.key))
-        .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
+        .filter((col) => !STOCK_KEYS.has(col.key) && !gainColumnKeys.has(col.key))
+        .reduce((sum, col) => sum + netRowValue(row, col), 0);
       const etfLordo = getRowValue(row, 'etfLordo');
       const rendimentoLordo = getRowValue(row, 'rendimentoLordo');
       const tasseComm = (rendimentoLordo * 26 / 100) + commissionTotal;
@@ -494,12 +516,14 @@ export function CashFlow() {
     if (points.length < 2) return null;
     const commissionTotal = settings.commissionPerEtf * settings.etfCount;
     const obblActive = activeColumns.some((c) => c.key === 'webankObbl');
-    const baseCols = activeColumns.filter((c) => !STOCK_KEYS.has(c.key));
+    const baseCols = activeColumns.filter(
+      (c) => !STOCK_KEYS.has(c.key) && !gainColumnKeys.has(c.key)
+    );
 
     const buckets = (row: CashFlowRow) => {
       const azionario = getRowValue(row, 'etfLordo') - getRowValue(row, 'rendimentoLordo') * 0.26 - commissionTotal;
       const obbligazionario = obblActive ? getRowValue(row, 'webankObbl') : 0;
-      const base = baseCols.reduce((s, c) => s + getRowValue(row, c.key), 0);
+      const base = baseCols.reduce((s, c) => s + netRowValue(row, c), 0);
       const liquidita = base - obbligazionario;
       return { azionario, obbligazionario, liquidita, total: base + azionario };
     };
@@ -857,11 +881,14 @@ export function CashFlow() {
         const rendimentoLordo = getRowValue(latestRow, 'rendimentoLordo');
         return getRowValue(latestRow, 'etfLordo') - (rendimentoLordo * 26 / 100) - commissionTotal;
       }
-      return getRowValue(latestRow, column.key);
+      return netRowValue(latestRow, column);
     };
 
     const pieColumns = activeColumns.filter(
-      (column) => column.showInPie && column.key !== 'rendimentoLordo'
+      (column) =>
+        column.showInPie &&
+        column.key !== 'rendimentoLordo' &&
+        !gainColumnKeys.has(column.key)
     );
 
     const valuedColumns: ValuedColumn[] = pieColumns
@@ -2020,6 +2047,14 @@ export function CashFlow() {
                   <Tags className="w-3.5 h-3.5" />
                   Classificazioni
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setColumnsModalTab('fiscal')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${columnsModalTab === 'fiscal' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <Percent className="w-3.5 h-3.5" />
+                  Fiscalità
+                </button>
               </div>
               <button
                 type="button"
@@ -2332,6 +2367,90 @@ export function CashFlow() {
                   </div>
                 )}
               </div>
+              </>}
+
+              {columnsModalTab === 'fiscal' && <>
+                <p className="text-sm text-slate-500">
+                  Qui configuri il <strong>netto fiscale</strong> di uno strumento: se una colonna
+                  contiene il valore lordo (es. XEON) e un'altra il suo rendimento lordo maturato,
+                  imposta aliquota e colonna rendimento. Ovunque (totale, torta, KPI) lo strumento
+                  contribuirà come <em>valore − rendimento × aliquota</em>, e la colonna
+                  rendimento sarà esclusa dai totali per non contare due volte. ETF e RENDIM.
+                  LORDO sono già gestiti in automatico (26% + commissioni PAC). Per i fondi
+                  monetari su titoli di stato (XEON) l'aliquota effettiva è ~13,4%.
+                </p>
+                <div className="space-y-2">
+                  {columns
+                    .filter(
+                      (column) =>
+                        column.isActive &&
+                        column.key !== 'etfLordo' &&
+                        column.key !== 'rendimentoLordo'
+                    )
+                    .map((column) => {
+                      const isGainForOther = gainColumnKeys.has(column.key);
+                      return (
+                        <div
+                          key={`${column.key}-${column.taxRatePct ?? ''}`}
+                          className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-slate-900">{column.label}</span>
+                            {isGainForOther && (
+                              <span className="ml-2 text-xs text-teal-600">
+                                colonna rendimento (esclusa dai totali)
+                              </span>
+                            )}
+                          </div>
+                          {!isGainForOther && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-slate-500">Aliquota %</label>
+                              <input
+                                className="input h-9 w-20"
+                                inputMode="decimal"
+                                defaultValue={column.taxRatePct ?? ''}
+                                placeholder="13,4"
+                                onBlur={(e) => {
+                                  const raw = e.target.value.trim().replace(',', '.');
+                                  const parsed = raw === '' ? null : Number.parseFloat(raw);
+                                  if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return;
+                                  if (parsed !== (column.taxRatePct ?? null)) {
+                                    updateColumn.mutate({ key: column.key, data: { taxRatePct: parsed } });
+                                  }
+                                }}
+                              />
+                              <label className="text-xs text-slate-500">Colonna rendimento</label>
+                              <select
+                                className="input h-9 w-44"
+                                value={column.gainColumnKey ?? ''}
+                                onChange={(e) =>
+                                  updateColumn.mutate({
+                                    key: column.key,
+                                    data: { gainColumnKey: e.target.value || null },
+                                  })
+                                }
+                              >
+                                <option value="">— nessuna (valore già netto)</option>
+                                {columns
+                                  .filter(
+                                    (other) =>
+                                      other.key !== column.key &&
+                                      other.key !== 'etfLordo' &&
+                                      other.key !== 'rendimentoLordo' &&
+                                      !other.gainColumnKey
+                                  )
+                                  .map((other) => (
+                                    <option key={other.key} value={other.key}>
+                                      {other.label}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
               </>}
             </div>
           </div>

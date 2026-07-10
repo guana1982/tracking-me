@@ -221,13 +221,17 @@ export const updateCashFlowColumnSchema = z
     position: z.number().int().min(0).optional(),
     isActive: z.boolean().optional(),
     showInPie: z.boolean().optional(),
+    taxRatePct: z.number().min(0).max(100).nullable().optional(),
+    gainColumnKey: z.string().min(1).max(80).nullable().optional(),
   })
   .refine(
     (data) =>
       data.label !== undefined ||
       data.position !== undefined ||
       data.isActive !== undefined ||
-      data.showInPie !== undefined,
+      data.showInPie !== undefined ||
+      data.taxRatePct !== undefined ||
+      data.gainColumnKey !== undefined,
     {
       message: 'At least one field must be provided',
     }

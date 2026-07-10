@@ -61,21 +61,36 @@ export class KpiService {
     // ── Wealth KPIs (cash-flow checks) ───────────────────────────
     // Same valuation as the cash-flow page total: rendimentoLordo is the gain
     // already contained in etfLordo (summing it would double-count the equity),
-    // and etfLordo is netted of the 26% tax on the gain and of PAC commissions
+    // and etfLordo is netted of the 26% tax on the gain and of PAC commissions.
+    // Columns with a fiscal config (taxRatePct + gainColumnKey, e.g. XEON at
+    // 13.4%) are netted the same way, and their gain columns are excluded
     const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+    const columnByKey = new Map<string, CashFlowColumnDTO>(
+      columns.map((c: CashFlowColumnDTO) => [c.key, c])
+    );
+    const gainKeys = new Set(
+      columns
+        .map((c: CashFlowColumnDTO) => c.gainColumnKey)
+        .filter((key: string | null | undefined): key is string => Boolean(key))
+    );
     const valueFor = (check: CashFlowCheckDTO, key: string): number => {
-      if (key === 'rendimentoLordo') return 0;
+      if (key === 'rendimentoLordo' || gainKeys.has(key)) return 0;
       const raw = check.values[key] ?? 0;
       if (key === 'etfLordo') {
         const rendimento = check.values['rendimentoLordo'] ?? 0;
         return raw - rendimento * 0.26 - commissionTotal;
+      }
+      const column = columnByKey.get(key);
+      if (column?.gainColumnKey && column.taxRatePct != null) {
+        const gain = check.values[column.gainColumnKey] ?? 0;
+        return raw - (gain * column.taxRatePct) / 100;
       }
       return raw;
     };
 
     const countedKeys = new Set(
       columns
-        .filter((c: CashFlowColumnDTO) => c.isActive && c.showInPie)
+        .filter((c: CashFlowColumnDTO) => c.isActive && c.showInPie && !gainKeys.has(c.key))
         .map((c: CashFlowColumnDTO) => c.key)
     );
     const sumKeys = (check: CashFlowCheckDTO, keys: Set<string>): number =>
