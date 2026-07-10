@@ -7,7 +7,8 @@ import {
   useSpendingCategories,
 } from '../hooks/useQueries';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
-import { Vault, ChevronDown, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Vault, ChevronDown, ChevronRight, Loader2, Plus, Trash2, Info } from 'lucide-react';
+import { InfoModal } from './InfoModal';
 
 // Sinking funds ("accantonamenti"): irregular expenses paid in monthly
 // installments. Each fund accrues monthlyAmount per period and is drained by
@@ -21,6 +22,7 @@ export function SinkingFundsCard() {
   const deleteFund = useDeleteSinkingFund();
 
   const [expanded, setExpanded] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
   const [editingAmountValue, setEditingAmountValue] = useState('');
   const [newName, setNewName] = useState('');
@@ -75,35 +77,77 @@ export function SinkingFundsCard() {
   return (
     <div className="card py-3 shadow-sm bg-white border border-slate-200">
       {/* Accordion header */}
-      <button
-        onClick={() => setExpanded((prev) => !prev)}
-        className="w-full flex items-center gap-2 text-left"
-        title={expanded ? 'Chiudi gli accantonamenti' : 'Apri gli accantonamenti'}
-      >
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        )}
-        <div className="p-1.5 rounded-lg bg-teal-50 flex-shrink-0">
-          <Vault className="w-4 h-4 text-teal-600" />
-        </div>
-        <h3 className="font-semibold text-sm text-slate-700">Accantonamenti</h3>
-        {funds && funds.length > 0 && (
-          <span className="text-xs text-slate-400 truncate">
-            {funds.length} {funds.length === 1 ? 'fondo' : 'fondi'} ·{' '}
-            {formatCurrency(totalMonthly)}/mese · saldo{' '}
-            <span className={cn('font-semibold', totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-              {formatCurrency(totalBalance)}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setExpanded((prev) => !prev)}
+          className="flex flex-1 items-center gap-2 text-left min-w-0"
+          title={expanded ? 'Chiudi gli accantonamenti' : 'Apri gli accantonamenti'}
+        >
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          )}
+          <div className="p-1.5 rounded-lg bg-teal-50 flex-shrink-0">
+            <Vault className="w-4 h-4 text-teal-600" />
+          </div>
+          <h3 className="font-semibold text-sm text-slate-700">Accantonamenti</h3>
+          {funds && funds.length > 0 && (
+            <span className="text-xs text-slate-400 truncate">
+              {funds.length} {funds.length === 1 ? 'fondo' : 'fondi'} ·{' '}
+              {formatCurrency(totalMonthly)}/mese · saldo{' '}
+              <span className={cn('font-semibold', totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                {formatCurrency(totalBalance)}
+              </span>
             </span>
-          </span>
-        )}
-        {funds && funds.length === 0 && (
-          <span className="text-xs text-slate-400">
-            ratealizza le spese irregolari (vacanze, bollo, regali...)
-          </span>
-        )}
-      </button>
+          )}
+          {funds && funds.length === 0 && (
+            <span className="text-xs text-slate-400">
+              ratealizza le spese irregolari (vacanze, bollo, regali...)
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setShowInfo(true)}
+          className="p-1 text-slate-300 hover:text-indigo-500 transition-colors flex-shrink-0"
+          title="Cosa sono gli accantonamenti e come si usano?"
+        >
+          <Info className="w-4 h-4" />
+        </button>
+      </div>
+
+      {showInfo && (
+        <InfoModal title="Accantonamenti" onClose={() => setShowInfo(false)}>
+          <p>
+            Le spese irregolari — la vacanza, il bollo dell'auto, i regali di Natale — non sono
+            imprevisti: sono spese certe che non sai solo <em>quando</em> arrivano. Se le paghi nel
+            mese in cui capitano, quel mese sfonda il budget. Un accantonamento le{' '}
+            <strong>ratealizza</strong>: metti da parte una piccola quota ogni mese, così quando la
+            spesa arriva è già "pagata".
+          </p>
+          <p>
+            <strong>Come funziona qui:</strong> crei un fondo con nome, rata mensile e una
+            categoria di spesa collegata (es. "Vacanze — 80 €/mese — categoria Vacanze &amp;
+            Viaggi"). Da quel momento il fondo accumula la rata a ogni mese e{' '}
+            <strong>si svuota da solo</strong>: ogni spesa che il classificatore mette in quella
+            categoria viene scalata dal fondo, senza che tu debba taggare nulla.
+          </p>
+          <p>
+            <strong>Come leggere il saldo:</strong>{' '}
+            <span className="text-emerald-600 font-medium">verde</span> = hai accantonato più di
+            quanto speso, la prossima spesa di quel tipo è coperta;{' '}
+            <span className="text-red-600 font-medium">rosso</span> = stai spendendo più della
+            rata, alzala (clicca sull'importo "€/mese" per modificarla) oppure accetta che quella
+            voce pesi sul budget.
+          </p>
+          <p>
+            <strong>Attenzione:</strong> i fondi sono contabili, non conti veri — i soldi restano
+            dove sono. Il fondo ti dice solo quanta parte della tua liquidità è già "impegnata"
+            per spese future. Come dimensionare la rata: guarda quanto hai speso in quella
+            categoria nell'ultimo anno e dividi per 12.
+          </p>
+        </InfoModal>
+      )}
 
       {expanded && (
         <div className="mt-3 space-y-3">
