@@ -26,6 +26,7 @@ model User {
   portfolioAssetClasses  PortfolioAssetClass[]
   portfolioInstruments   PortfolioInstrument[]
   spendingCategories     SpendingCategory[]
+  sinkingFunds           SinkingFund[]
 
   @@index([googleId])
   @@index([email])
@@ -195,13 +196,36 @@ model SpendingCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rules    CategoryRule[]
-  expenses Expense[]
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rules        CategoryRule[]
+  expenses     Expense[]
+  sinkingFunds SinkingFund[]
 
   @@unique([userId, name])
   @@index([userId])
   @@map("spending_categories")
+}
+
+// Sinking Fund - monthly accrual for irregular expenses (vacanze, bollo, regali...).
+// Balance is computed: months since startPeriodKey × monthlyAmount, minus every
+// expense classified under the linked SpendingCategory from startPeriodKey onwards
+model SinkingFund {
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String
+  monthlyAmount      Float
+  startPeriodKey     String   // YYYY-MM: accrual starts here, earlier expenses don't drain the fund
+  spendingCategoryId String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spendingCategory SpendingCategory @relation(fields: [spendingCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([spendingCategoryId])
+  @@map("sinking_funds")
 }
 
 // Category Rule - keyword (regex) that maps an expense label to a SpendingCategory.

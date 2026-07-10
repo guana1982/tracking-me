@@ -261,6 +261,63 @@ export interface SpendingBreakdownDTO {
   items: SpendingBreakdownItemDTO[]; // sorted by total desc
 }
 
+// ============= Sinking Fund DTOs =============
+// Monthly accruals for irregular expenses ("ratealizzare il capex"): the fund
+// accrues monthlyAmount each period from startPeriodKey and is drained by every
+// expense classified under the linked spending category
+
+export interface SinkingFundDTO {
+  id: string;
+  name: string;
+  monthlyAmount: number;
+  startPeriodKey: string;
+  spendingCategoryId: string;
+  spendingCategoryName: string;
+  spendingCategoryColor: string;
+  monthsAccrued: number; // periods from startPeriodKey to the current pay-cycle (inclusive)
+  totalAccrued: number; // monthsAccrued × monthlyAmount
+  totalSpent: number; // expenses in the linked category from startPeriodKey onwards
+  balance: number; // totalAccrued − totalSpent (negative = fund overdrawn)
+}
+
+export interface CreateSinkingFundDTO {
+  name: string;
+  monthlyAmount: number;
+  spendingCategoryId: string;
+  startPeriodKey?: string; // defaults to the current period
+}
+
+export interface UpdateSinkingFundDTO {
+  name?: string;
+  monthlyAmount?: number;
+  spendingCategoryId?: string;
+  startPeriodKey?: string;
+}
+
+// ============= KPI Panel DTOs =============
+// CFO-style indicators; null = not computable with the available data
+
+export interface KpiPanelDTO {
+  periodKey: string;
+  // Margine operativo: risparmio reale (SAVINGS + riallocazioni − EXTRA) / entrate
+  savingsRatePct: number | null;
+  savingsRateAvgPct: number | null; // average over up to 6 previous completed periods
+  // Leva operativa: spese fisse NEEDS+WANTS / entrate
+  fixedCostRatioPct: number | null;
+  fixedCostRatioAvgPct: number | null;
+  // Runway: liquidità / spesa media mensile (NEEDS+WANTS+EXTRA)
+  runwayMonths: number | null;
+  liquidity: number | null;
+  liquiditySource: 'classification' | 'total' | null; // 'total' = no "Liquidità" classification configured in cash-flow
+  avgMonthlySpend: number | null;
+  // Patrimonio (dall'ultimo check di cash-flow)
+  netWorth: number | null;
+  netWorthDate: string | null;
+  netWorthGrowthAnnualPct: number | null; // annualized vs the oldest usable check (≥ 60 days back)
+  investedSharePct: number | null; // classification "Invest*" / net worth
+  hasChecks: boolean;
+}
+
 // ============= Dashboard DTOs =============
 
 // Category summary for dashboard (budget categories only — EXTRA is tracked separately)

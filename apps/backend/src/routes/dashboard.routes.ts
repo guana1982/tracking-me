@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { dashboardService } from '../services/dashboard.service.js';
+import { kpiService } from '../services/kpi.service.js';
 import { periodKeySchema } from '@budget/shared';
 import { getCurrentPeriodKey } from '../lib/utils.js';
 
@@ -55,6 +56,27 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       periodKeySchema.parse(periodKey);
       const pace = await dashboardService.getSavingsPace(periodKey, request.authUser!.id);
       return { success: true, data: pace };
+    },
+  });
+
+  // Get CFO-style KPI panel for a period
+  fastify.get<{ Params: { periodKey: string } }>('/kpis/:periodKey', {
+    schema: {
+      tags: ['Dashboard'],
+      summary: 'Get KPI panel (savings rate, fixed cost ratio, runway, net worth)',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+    },
+    handler: async (request) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+      const kpis = await kpiService.getKpis(periodKey, request.authUser!.id);
+      return { success: true, data: kpis };
     },
   });
 

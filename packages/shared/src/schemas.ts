@@ -97,6 +97,34 @@ export const createCategoryRuleSchema = z.object({
   keyword: categoryKeywordSchema,
 });
 
+// Sinking fund schemas (monthly accruals for irregular expenses)
+const sinkingFundPeriodKeySchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+
+export const createSinkingFundSchema = z.object({
+  name: z.string().min(1).max(60).trim(),
+  monthlyAmount: z.number().positive().multipleOf(0.01),
+  spendingCategoryId: z.string().min(1),
+  startPeriodKey: sinkingFundPeriodKeySchema.optional(),
+});
+
+export const updateSinkingFundSchema = z
+  .object({
+    name: z.string().min(1).max(60).trim().optional(),
+    monthlyAmount: z.number().positive().multipleOf(0.01).optional(),
+    spendingCategoryId: z.string().min(1).optional(),
+    startPeriodKey: sinkingFundPeriodKeySchema.optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.monthlyAmount !== undefined ||
+      data.spendingCategoryId !== undefined ||
+      data.startPeriodKey !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
+
 // Fixed expense template schemas
 export const createFixedExpenseTemplateSchema = z.object({
   category: fixedExpenseCategorySchema,

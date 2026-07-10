@@ -27,6 +27,10 @@ import type {
   CreateCategoryRuleDTO,
   ReclassifyResultDTO,
   SpendingBreakdownDTO,
+  KpiPanelDTO,
+  SinkingFundDTO,
+  CreateSinkingFundDTO,
+  UpdateSinkingFundDTO,
   CashFlowCheckDTO,
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
@@ -138,6 +142,32 @@ export const dashboardApi = {
 
   getSavingsPace: (periodKey: string) =>
     fetchApi<SavingsPaceDTO>(`/dashboard/savings-pace/${periodKey}`),
+
+  getKpis: (periodKey: string) =>
+    fetchApi<KpiPanelDTO>(`/dashboard/kpis/${periodKey}`),
+};
+
+// Sinking funds (accantonamenti per spese irregolari)
+export const sinkingFundsApi = {
+  getAll: () =>
+    fetchApi<SinkingFundDTO[]>('/sinking-funds'),
+
+  create: (data: CreateSinkingFundDTO) =>
+    fetchApi<void>('/sinking-funds', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: UpdateSinkingFundDTO) =>
+    fetchApi<void>(`/sinking-funds/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/sinking-funds/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Month Periods

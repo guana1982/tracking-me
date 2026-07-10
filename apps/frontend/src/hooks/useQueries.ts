@@ -10,6 +10,7 @@ import {
   fixedExpensesApi,
   portfolioApi,
   spendingCategoriesApi,
+  sinkingFundsApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -33,6 +34,8 @@ import type {
   PortfolioHistoryHorizonDTO,
   CreateSpendingCategoryDTO,
   UpdateSpendingCategoryDTO,
+  CreateSinkingFundDTO,
+  UpdateSinkingFundDTO,
 } from '@budget/shared';
 
 // Query keys
@@ -53,6 +56,8 @@ export const queryKeys = {
     ['carryoverPreview', periodKey] as const,
   fixedExpenses: (category?: FixedExpenseCategory) =>
     ['fixedExpenses', category ?? 'all'] as const,
+  kpis: (periodKey: string) => ['kpis', periodKey] as const,
+  sinkingFunds: ['sinkingFunds'] as const,
   spendingCategories: ['spendingCategories'] as const,
   spendingBreakdown: (periodKey: string) =>
     ['spendingBreakdown', periodKey] as const,
@@ -85,6 +90,56 @@ export function useSavingsPace(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.savingsPace(periodKey),
     queryFn: () => dashboardApi.getSavingsPace(periodKey),
+  });
+}
+
+// KPI panel (CFO-style indicators)
+export function useKpis(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.kpis(periodKey),
+    queryFn: () => dashboardApi.getKpis(periodKey),
+  });
+}
+
+// Sinking funds (accantonamenti)
+export function useSinkingFunds() {
+  return useQuery({
+    queryKey: queryKeys.sinkingFunds,
+    queryFn: sinkingFundsApi.getAll,
+  });
+}
+
+export function useCreateSinkingFund() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateSinkingFundDTO) => sinkingFundsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
+    },
+  });
+}
+
+export function useUpdateSinkingFund() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateSinkingFundDTO }) =>
+      sinkingFundsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
+    },
+  });
+}
+
+export function useDeleteSinkingFund() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => sinkingFundsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
+    },
   });
 }
 
@@ -205,6 +260,8 @@ export function useCreateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
     },
   });
 }
@@ -220,6 +277,8 @@ export function useUpdateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
     },
   });
 }
@@ -234,6 +293,8 @@ export function useDeleteExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
     },
   });
 }
@@ -350,6 +411,7 @@ export function useReclassifyExpenses() {
       // Reclassification touches every period, invalidate whole families
       queryClient.invalidateQueries({ queryKey: ['spendingBreakdown'] });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
     },
   });
 }
