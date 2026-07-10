@@ -6,9 +6,8 @@ import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
 import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
-import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download, ArrowRightCircle } from 'lucide-react';
+import { Loader2, RefreshCw, Undo2, Lock, Unlock, ArrowRightCircle } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
-import { buildExpensesCsv, downloadCsv } from '../lib/csv';
 
 export function Dashboard() {
   const { periodKey } = usePeriodStore();
@@ -36,12 +35,6 @@ export function Dashboard() {
   // Check if we can show the reallocation button (after cutoff day and has available amount)
   const canShowReallocationButton = reallocationPreview?.isAfterCutoff &&
     (reallocationPreview?.suggestedAmount > 0 || hasReallocation);
-
-  const handleExportExpensesCsv = () => {
-    if (!data?.recentExpenses.length) return;
-
-    downloadCsv(buildExpensesCsv(data.recentExpenses), `spese-${periodKey}.csv`);
-  };
 
   // Per-card reallocation: moves a single category's leftover to SAVINGS.
   // Shown after the cutoff, like the global button; remainders are already
@@ -255,19 +248,6 @@ export function Dashboard() {
           </button>
         </div>
       )}
-
-      <div className="flex flex-shrink-0 justify-end">
-        <button
-          type="button"
-          onClick={handleExportExpensesCsv}
-          disabled={recentExpenses.length === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-          title="Esporta tutte le spese del mese in CSV"
-        >
-          <Download className="w-4 h-4" />
-          CSV spese mese
-        </button>
-      </div>
 
       {/* Category Cards + Expense Lists - Aligned in columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:flex-1 md:min-h-0">
