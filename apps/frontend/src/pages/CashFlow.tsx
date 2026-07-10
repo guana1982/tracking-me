@@ -584,30 +584,73 @@ export function CashFlow() {
 
     return { perMonth, totalPerMonth, monthly, monthsUsed, lastInProgress, lastMonthKey, netTrendPct };
   }, [rowsWithMetrics, activeColumns, settings]);
+  // Sum of a classification's active columns, valued NET (consistent with the
+  // Totale line). Internal transfers between accounts of the same class cancel
+  // out, so these lines are immune to money moved between own accounts.
+  const classificationSumFor = (row: CashFlowRow, cls: { columnKeys: string[] }): number =>
+    activeColumns
+      .filter((col) => cls.columnKeys.includes(col.key) && col.key !== 'rendimentoLordo')
+      .reduce(
+        (sum, col) => sum + (col.key === 'etfLordo' ? etfNetValue(row) : netRowValue(row, col)),
+        0
+      );
+
+  // Deduce internal transfers between two consecutive checks: two columns
+  // moving by (almost) the same amount in opposite directions is money moved
+  // between own accounts, not a real change in wealth. Heuristic: min 100 €,
+  // tolerance max(20 €, 5%) to absorb small same-day expenses.
+  const detectTransfers = (row: RowWithMetrics): string[] => {
+    const cols = activeColumns.filter((col) => col.key !== 'rendimentoLordo');
+    const found: string[] = [];
+    for (let i = 0; i < cols.length; i += 1) {
+      for (let j = i + 1; j < cols.length; j += 1) {
+        const a = row.diffByColumn[cols[i].key];
+        const b = row.diffByColumn[cols[j].key];
+        if (a === null || a === undefined || b === null || b === undefined) continue;
+        if (Math.abs(a) < 100 || a * b >= 0) continue;
+        if (Math.abs(a + b) > Math.max(20, Math.abs(a) * 0.05)) continue;
+        const from = a < 0 ? cols[i] : cols[j];
+        const to = a < 0 ? cols[j] : cols[i];
+        found.push(`${getPieShortLabel(from)} → ${getPieShortLabel(to)} ${formatCurrency(Math.abs(a))}`);
+      }
+    }
+    return found;
+  };
+
   const trendData = useMemo(
     () =>
       rowsWithMetrics
         .slice()
         .reverse()
         .map((row) => {
+          const selectedColumnsTotal = activeColumns
+            .filter((col) => visibleTrendKeys.has(col.key))
+            .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
+          const selectedClassificationsTotal = classifications
+            .filter((cls) => visibleTrendKeys.has(`cls:${cls.key}`))
+            .reduce((sum, cls) => sum + classificationSumFor(row, cls), 0);
           const selectedTotal = showTotalTrend
             ? row.total
-            : activeColumns
-              .filter((col) => visibleTrendKeys.has(col.key))
-              .reduce((sum, col) => sum + getRowValue(row, col.key), 0);
+            : selectedColumnsTotal + selectedClassificationsTotal;
+          const transfers = detectTransfers(row);
           const point: Record<string, string | number> = {
             date: row.date,
             dateLabel: formatDate(row.date),
             checkLabel: row.checkLabel,
             total: row.total,
             selectedTotal,
+            hasTransfer: transfers.length > 0 ? 1 : 0,
+            transferLabel: transfers.join(' · '),
           };
           activeColumns.forEach((col) => {
             point[col.key] = getRowValue(row, col.key);
           });
+          classifications.forEach((cls) => {
+            point[`cls:${cls.key}`] = classificationSumFor(row, cls);
+          });
           return point;
         }),
-    [rowsWithMetrics, activeColumns, showTotalTrend, visibleTrendKeys]
+    [rowsWithMetrics, activeColumns, classifications, showTotalTrend, visibleTrendKeys, settings]
   );
 
   const toggleTotalTrend = () => {
@@ -1423,6 +1466,32 @@ export function CashFlow() {
                 <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${showTotalTrend ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
               </button>
             </label>
+            {/* Classification series: transfer-invariant views (moving money
+                between accounts of the same class doesn't move these lines) */}
+            {classifications.map((cls, idx) => {
+              const key = `cls:${cls.key}`;
+              const color = CLASSIFICATION_COLORS[idx % CLASSIFICATION_COLORS.length];
+              const isOn = visibleTrendKeys.has(key);
+              return (
+                <label
+                  key={key}
+                  className="inline-flex items-center gap-1.5 select-none rounded-full border border-indigo-200 bg-indigo-50/50 px-2 py-0.5 shrink-0"
+                  title={`Somma (netta) delle colonne classificate "${cls.label}": i trasferimenti tra conti della stessa classe non muovono questa linea`}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] font-medium text-slate-700">{cls.label}</span>
+                  <button
+                    type="button"
+                    aria-pressed={isOn}
+                    onClick={() => toggleTrendKey(key)}
+                    className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                    style={{ backgroundColor: isOn ? color : '#cbd5e1' }}
+                  >
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${isOn ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+              );
+            })}
             {activeColumns.map((col, idx) => {
               const color = getTrendColor(col.key, idx);
               const isOn = visibleTrendKeys.has(col.key);
@@ -1475,6 +1544,15 @@ export function CashFlow() {
                               Media mobile 30g: {formatCurrency(Number(point.trendSmooth))}
                             </p>
                           )}
+                          {!showTotalTrend && classifications.map((cls, idx) => {
+                            const key = `cls:${cls.key}`;
+                            if (!visibleTrendKeys.has(key)) return null;
+                            return (
+                              <p key={key} className="text-[10px] font-semibold" style={{ color: CLASSIFICATION_COLORS[idx % CLASSIFICATION_COLORS.length] }}>
+                                {cls.label}: {formatCurrency(Number(point[key] ?? 0))}
+                              </p>
+                            );
+                          })}
                           {!showTotalTrend && activeColumns.map((col, idx) => {
                             if (!visibleTrendKeys.has(col.key)) return null;
                             return (
@@ -1483,6 +1561,11 @@ export function CashFlow() {
                               </p>
                             );
                           })}
+                          {Boolean(point.hasTransfer) && (
+                            <p className="mt-1 text-[10px] font-medium text-amber-600">
+                              ↔ Probabile trasferimento interno: {point.transferLabel}
+                            </p>
+                          )}
                         </div>
                       );
                     }}
@@ -1501,7 +1584,31 @@ export function CashFlow() {
                     />
                   )}
                   {showRawLine && (
-                    <Line type="monotone" dataKey="selectedTotal" name={trendLineLabel} stroke={trendLineColor} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="selectedTotal"
+                      name={trendLineLabel}
+                      stroke={trendLineColor}
+                      strokeWidth={1.8}
+                      // Amber dot on checks with a deduced internal transfer
+                      dot={(props: { cx?: number; cy?: number; index?: number; payload?: Record<string, unknown> }) => {
+                        if (!props.payload?.hasTransfer || props.cx === undefined || props.cy === undefined) {
+                          return <g key={`transfer-${props.index ?? 'x'}`} />;
+                        }
+                        return (
+                          <circle
+                            key={`transfer-${props.index ?? 'x'}`}
+                            cx={props.cx}
+                            cy={props.cy}
+                            r={3.5}
+                            fill="#f59e0b"
+                            stroke="#fff"
+                            strokeWidth={1.5}
+                          />
+                        );
+                      }}
+                      activeDot={{ r: 3, fill: trendLineColor, stroke: '#fff', strokeWidth: 2 }}
+                    />
                   )}
                   {trendRegression && (
                     <Line
@@ -1558,6 +1665,13 @@ export function CashFlow() {
               )}
               {smoothing.active && showSmoothedLine && (
                 <span className="text-[10px] text-slate-400">Media mobile 30g — patrimonio ripulito dal ciclo mensile dello stipendio.</span>
+              )}
+              {!showTotalTrend && [...visibleTrendKeys].some((key) => !key.startsWith('cls:')) && (
+                <span className="text-[10px] text-amber-600">
+                  I singoli conti includono i trasferimenti interni (patrimonio invariato): i pallini
+                  ambra segnalano i probabili giri tra conti. Per il quadro reale guarda Totale o le
+                  classificazioni.
+                </span>
               )}
             </div>
           )}
