@@ -5,6 +5,7 @@ import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
+import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
 import { Loader2, RefreshCw, Undo2, Lock, Unlock, Download, ArrowRightCircle } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 import { buildExpensesCsv, downloadCsv } from '../lib/csv';
@@ -324,6 +325,11 @@ export function Dashboard() {
             isClosed={isClosed}
           />
         </div>
+      </div>
+
+      {/* Spending breakdown by auto-classified category (Spesa, Bollette, Auto, ...) */}
+      <div className="flex-shrink-0">
+        <SpendingBreakdownCard periodKey={periodKey} />
       </div>
 
       {/* Close Month Button - visible after cutoff day; unlock happens from the banner above */}

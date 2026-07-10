@@ -174,6 +174,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
           notes: { type: 'string', maxLength: 500 },
           isFixed: { type: 'boolean' },
           tricountType: { type: ['string', 'null'], enum: ['IO', 'FRA', null] },
+          spendingCategoryId: { type: ['string', 'null'] },
         },
       },
     },

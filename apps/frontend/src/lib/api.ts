@@ -21,6 +21,12 @@ import type {
   ReallocationPreviewDTO,
   CarryoverPreviewDTO,
   CreateCarryoverDTO,
+  SpendingCategoryDTO,
+  CreateSpendingCategoryDTO,
+  UpdateSpendingCategoryDTO,
+  CreateCategoryRuleDTO,
+  ReclassifyResultDTO,
+  SpendingBreakdownDTO,
   CashFlowCheckDTO,
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
@@ -235,6 +241,48 @@ export const expensesApi = {
   delete: (id: string) =>
     fetchApi<void>(`/expenses/${id}`, {
       method: 'DELETE',
+    }),
+};
+
+// Spending categories (fine-grained expense classification)
+export const spendingCategoriesApi = {
+  getAll: () =>
+    fetchApi<SpendingCategoryDTO[]>('/spending-categories'),
+
+  getBreakdown: (periodKey: string) =>
+    fetchApi<SpendingBreakdownDTO>(`/spending-categories/breakdown/${periodKey}`),
+
+  create: (data: CreateSpendingCategoryDTO) =>
+    fetchApi<SpendingCategoryDTO>('/spending-categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: UpdateSpendingCategoryDTO) =>
+    fetchApi<void>(`/spending-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/spending-categories/${id}`, {
+      method: 'DELETE',
+    }),
+
+  addRule: (categoryId: string, data: CreateCategoryRuleDTO) =>
+    fetchApi<void>(`/spending-categories/${categoryId}/rules`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteRule: (ruleId: string) =>
+    fetchApi<void>(`/spending-categories/rules/${ruleId}`, {
+      method: 'DELETE',
+    }),
+
+  reclassify: () =>
+    fetchApi<ReclassifyResultDTO>('/spending-categories/reclassify', {
+      method: 'POST',
     }),
 };
 

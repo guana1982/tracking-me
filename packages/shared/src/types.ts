@@ -124,6 +124,8 @@ export interface ExpenseDTO {
   notes?: string | null;
   isFixed: boolean;
   tricountType: TricountType | null;
+  spendingCategoryId: string | null; // fine-grained classification (Spesa, Bollette, ...)
+  spendingCategoryManual: boolean; // true when the user overrode the auto classification
   createdAt: string;
 }
 
@@ -150,6 +152,7 @@ export interface UpdateExpenseDTO {
   notes?: string | null;
   isFixed?: boolean;
   tricountType?: TricountType | null;
+  spendingCategoryId?: string | null; // manual override (null = back to auto classification)
 }
 
 // Fixed Expense Template DTOs
@@ -201,6 +204,61 @@ export interface CreateReallocationDTO {
   toCategory: Category;
   amount: number;
   reason?: string;
+}
+
+// ============= Spending Category DTOs =============
+// Fine-grained expense classification (Spesa, Bollette, Auto, ...) assigned
+// automatically from the expense label via keyword rules
+
+export interface CategoryRuleDTO {
+  id: string;
+  keyword: string;
+  priority: number;
+}
+
+export interface SpendingCategoryDTO {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  rules: CategoryRuleDTO[];
+}
+
+export interface CreateSpendingCategoryDTO {
+  name: string;
+  color?: string;
+  keywords?: string[];
+}
+
+export interface UpdateSpendingCategoryDTO {
+  name?: string;
+  color?: string;
+}
+
+export interface CreateCategoryRuleDTO {
+  keyword: string;
+}
+
+// Result of re-running the classifier over the whole expense history
+export interface ReclassifyResultDTO {
+  classified: number; // expenses matched to a category
+  unclassified: number; // expenses with no matching rule
+  skippedManual: number; // manual overrides left untouched
+}
+
+// Per-category spending breakdown for a period ("Dove sono andati i soldi")
+export interface SpendingBreakdownItemDTO {
+  categoryId: string | null; // null = no rule matched
+  name: string; // 'Altro' for the null bucket
+  color: string;
+  total: number;
+  count: number;
+}
+
+export interface SpendingBreakdownDTO {
+  periodKey: string;
+  total: number; // NEEDS+WANTS+EXTRA spending (SAVINGS transfers excluded)
+  items: SpendingBreakdownItemDTO[]; // sorted by total desc
 }
 
 // ============= Dashboard DTOs =============

@@ -25,6 +25,7 @@ model User {
   investedPortfolio      InvestedPortfolio?
   portfolioAssetClasses  PortfolioAssetClass[]
   portfolioInstruments   PortfolioInstrument[]
+  spendingCategories     SpendingCategory[]
 
   @@index([googleId])
   @@index([email])
@@ -167,16 +168,57 @@ model Expense {
   notes         String?
   isFixed       Boolean       @default(false)  // Fixed monthly expense
   tricountType  TricountType?                  // Shared expense type (IO/FRA)
+  spendingCategoryId     String?               // Auto-assigned spending category (Spesa, Bollette, ...)
+  spendingCategoryManual Boolean @default(false) // True when the user overrode the auto classification
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   // Relations
-  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+  monthPeriod      MonthPeriod       @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+  spendingCategory SpendingCategory? @relation(fields: [spendingCategoryId], references: [id], onDelete: SetNull)
 
   @@index([monthPeriodId])
   @@index([category])
   @@index([date])
+  @@index([spendingCategoryId])
   @@map("expenses")
+}
+
+// Spending Category - fine-grained expense classification (Spesa, Bollette, Auto, ...)
+// Assigned automatically from the expense label via CategoryRule keywords
+model SpendingCategory {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#64748b")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rules    CategoryRule[]
+  expenses Expense[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("spending_categories")
+}
+
+// Category Rule - keyword (regex) that maps an expense label to a SpendingCategory.
+// Rules are evaluated in ascending priority order: the first match wins,
+// so user-added rules (priority 0) override the seeded dictionary
+model CategoryRule {
+  id                 String   @id @default(cuid())
+  spendingCategoryId String
+  keyword            String   // regex tested against the normalized label (lowercase, no accents)
+  priority           Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  spendingCategory SpendingCategory @relation(fields: [spendingCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([spendingCategoryId])
+  @@map("category_rules")
 }
 
 // Fixed Expense Template - recurring monthly defaults

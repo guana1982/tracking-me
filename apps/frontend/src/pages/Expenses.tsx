@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useExpenses, useDeleteExpense } from '../hooks/useQueries';
+import {
+  useExpenses,
+  useDeleteExpense,
+  useUpdateExpense,
+  useSpendingCategories,
+} from '../hooks/useQueries';
 import { expensesApi } from '../lib/api';
 import { buildExpensesCsv, downloadCsv } from '../lib/csv';
 import {
@@ -42,6 +47,12 @@ export function Expenses() {
 
   const { data, isLoading } = useExpenses(periodKey, filters);
   const deleteExpense = useDeleteExpense(periodKey);
+  const updateExpense = useUpdateExpense(periodKey);
+  const { data: spendingCategories } = useSpendingCategories();
+
+  const spendingCategoryById = new Map(
+    (spendingCategories ?? []).map((cat) => [cat.id, cat])
+  );
 
   const handleCategoryFilter = (category: Category | undefined) => {
     setFilters((prev) => ({ ...prev, category, page: 1 }));
@@ -204,6 +215,50 @@ export function Expenses() {
                       >
                         {getCategoryLabel(expense.category)}
                       </span>
+                      {/* Spending category badge: auto-assigned, editable inline.
+                          SAVINGS rows are transfers, so they stay unclassified */}
+                      {expense.category !== 'SAVINGS' && (
+                        <>
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{
+                              backgroundColor:
+                                spendingCategoryById.get(expense.spendingCategoryId ?? '')
+                                  ?.color ?? '#94a3b8',
+                            }}
+                          />
+                          <select
+                            value={expense.spendingCategoryId ?? ''}
+                            onChange={(e) =>
+                              updateExpense.mutate({
+                                id: expense.id,
+                                data: { spendingCategoryId: e.target.value || null },
+                              })
+                            }
+                            disabled={updateExpense.isPending}
+                            title={
+                              expense.spendingCategoryManual
+                                ? 'Categoria corretta manualmente — scegli "Altro (auto)" per tornare alla classificazione automatica'
+                                : 'Categoria assegnata automaticamente dalla descrizione — puoi correggerla'
+                            }
+                            className={cn(
+                              'max-w-[10rem] truncate rounded border-0 bg-transparent py-0 pl-0 pr-5 text-xs font-medium cursor-pointer focus:ring-0',
+                              expense.spendingCategoryId ? 'text-slate-600' : 'text-slate-400 italic'
+                            )}
+                          >
+                            <option value="">Altro (auto)</option>
+                            {(spendingCategories ?? []).map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                                {expense.spendingCategoryId === cat.id &&
+                                expense.spendingCategoryManual
+                                  ? ' ✎'
+                                  : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
                     </div>
                     {expense.notes && (
                       <p className="text-sm text-slate-500 mt-1 truncate">

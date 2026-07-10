@@ -3,6 +3,7 @@ import type { ExpenseDTO, ExpenseWithPeriodDTO, CreateExpenseDTO, UpdateExpenseD
 import { AppError } from '../lib/error-handler.js';
 import type { Category } from '@budget/shared';
 import { monthPeriodService } from './month-period.service.js';
+import { spendingCategoryService } from './spending-category.service.js';
 
 export class ExpenseService {
   /**
@@ -172,6 +173,12 @@ export class ExpenseService {
       : '';
     const finalLabel = tricountPrefix + data.label;
 
+    // Auto-classify from the label (SAVINGS rows are transfers, not spending)
+    const spendingCategoryId =
+      data.category === 'SAVINGS'
+        ? null
+        : await spendingCategoryService.classifyForUser(userId, finalLabel);
+
     const expense = await prisma.expense.create({
       data: {
         monthPeriodId: monthPeriod.id,
@@ -182,6 +189,7 @@ export class ExpenseService {
         notes: data.notes || null,
         isFixed: data.isFixed ?? false,
         tricountType: data.tricountType ?? null,
+        spendingCategoryId,
       },
     });
 
@@ -215,6 +223,41 @@ export class ExpenseService {
       }
     }
 
+    // Spending category: explicit override wins; otherwise re-classify when the
+    // label or budget category changes (manual overrides are never touched)
+    let spendingCategoryId: string | null | undefined;
+    let spendingCategoryManual: boolean | undefined;
+    const finalCategory = data.category ?? existing.category;
+    const finalLabel = data.label ?? existing.label;
+
+    if (data.spendingCategoryId !== undefined) {
+      if (data.spendingCategoryId === null) {
+        // Back to auto classification
+        spendingCategoryId =
+          finalCategory === 'SAVINGS'
+            ? null
+            : await spendingCategoryService.classifyForUser(userId, finalLabel);
+        spendingCategoryManual = false;
+      } else {
+        const category = await prisma.spendingCategory.findFirst({
+          where: { id: data.spendingCategoryId, userId },
+        });
+        if (!category) {
+          throw new AppError('Spending category not found', 404, 'NOT_FOUND');
+        }
+        spendingCategoryId = data.spendingCategoryId;
+        spendingCategoryManual = true;
+      }
+    } else if (
+      !existing.spendingCategoryManual &&
+      (data.label !== undefined || data.category !== undefined)
+    ) {
+      spendingCategoryId =
+        finalCategory === 'SAVINGS'
+          ? null
+          : await spendingCategoryService.classifyForUser(userId, finalLabel);
+    }
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
@@ -225,6 +268,8 @@ export class ExpenseService {
         notes: data.notes !== undefined ? data.notes : undefined,
         isFixed: data.isFixed ?? undefined,
         tricountType: data.tricountType !== undefined ? data.tricountType : undefined,
+        spendingCategoryId,
+        spendingCategoryManual,
       },
     });
 
@@ -287,6 +332,8 @@ export class ExpenseService {
     notes: string | null;
     isFixed: boolean;
     tricountType: string | null;
+    spendingCategoryId: string | null;
+    spendingCategoryManual: boolean;
     createdAt: Date;
   }): ExpenseDTO {
     return {
@@ -299,6 +346,8 @@ export class ExpenseService {
       notes: expense.notes,
       isFixed: expense.isFixed,
       tricountType: expense.tricountType as 'IO' | 'FRA' | null,
+      spendingCategoryId: expense.spendingCategoryId,
+      spendingCategoryManual: expense.spendingCategoryManual,
       createdAt: expense.createdAt.toISOString(),
     };
   }

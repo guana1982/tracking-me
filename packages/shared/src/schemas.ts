@@ -72,6 +72,29 @@ export const updateExpenseSchema = z.object({
   notes: z.string().max(500).trim().optional().nullable(),
   isFixed: z.boolean().optional(),
   tricountType: tricountTypeSchema.nullable().optional(),
+  spendingCategoryId: z.string().min(1).nullable().optional(),
+});
+
+// Spending category schemas (fine-grained expense classification)
+const categoryKeywordSchema = z.string().min(2).max(80).trim();
+
+export const createSpendingCategorySchema = z.object({
+  name: z.string().min(1).max(60).trim(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  keywords: z.array(categoryKeywordSchema).max(50).optional(),
+});
+
+export const updateSpendingCategorySchema = z
+  .object({
+    name: z.string().min(1).max(60).trim().optional(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  })
+  .refine((data) => data.name !== undefined || data.color !== undefined, {
+    message: 'At least one field must be provided',
+  });
+
+export const createCategoryRuleSchema = z.object({
+  keyword: categoryKeywordSchema,
 });
 
 // Fixed expense template schemas
@@ -337,6 +360,9 @@ export type CreateFixedExpenseTemplateInput = z.infer<typeof createFixedExpenseT
 export type UpdateFixedExpenseTemplateInput = z.infer<typeof updateFixedExpenseTemplateSchema>;
 export type ApplyFixedExpenseTemplatesInput = z.infer<typeof applyFixedExpenseTemplatesSchema>;
 export type CreateReallocationInput = z.infer<typeof createReallocationSchema>;
+export type CreateSpendingCategoryInput = z.infer<typeof createSpendingCategorySchema>;
+export type UpdateSpendingCategoryInput = z.infer<typeof updateSpendingCategorySchema>;
+export type CreateCategoryRuleInput = z.infer<typeof createCategoryRuleSchema>;
 export type ExpenseFiltersInput = z.infer<typeof expenseFiltersSchema>;
 export type CreateCashFlowCheckInput = z.infer<typeof createCashFlowCheckSchema>;
 export type UpdateCashFlowCheckInput = z.infer<typeof updateCashFlowCheckSchema>;

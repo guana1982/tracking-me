@@ -12,6 +12,7 @@ import { reallocationRoutes } from './routes/reallocation.routes.js';
 import { cashFlowRoutes } from './routes/cashflow.routes.js';
 import { fixedExpenseTemplateRoutes } from './routes/fixed-expense-template.routes.js';
 import { portfolioRoutes } from './routes/portfolio.routes.js';
+import { spendingCategoryRoutes } from './routes/spending-category.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
 import { authRoutes } from './auth/auth.routes.js';
@@ -88,6 +89,7 @@ await fastify.register(swagger, {
       { name: 'CashFlow', description: 'Net worth tracking checks and settings' },
       { name: 'Fixed Expenses', description: 'Recurring fixed expense templates' },
       { name: 'Portfolio', description: 'Portfolio historical market data' },
+      { name: 'Spending Categories', description: 'Fine-grained expense classification' },
     ],
   },
 });
@@ -138,6 +140,7 @@ await fastify.register(reallocationRoutes, { prefix: '/api/reallocations' });
 await fastify.register(cashFlowRoutes, { prefix: '/api/cashflow' });
 await fastify.register(fixedExpenseTemplateRoutes, { prefix: '/api/fixed-expenses' });
 await fastify.register(portfolioRoutes, { prefix: '/api/portfolio' });
+await fastify.register(spendingCategoryRoutes, { prefix: '/api/spending-categories' });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {

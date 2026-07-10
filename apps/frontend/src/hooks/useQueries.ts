@@ -9,6 +9,7 @@ import {
   cashFlowApi,
   fixedExpensesApi,
   portfolioApi,
+  spendingCategoriesApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -30,6 +31,8 @@ import type {
   ApplyFixedExpenseTemplatesDTO,
   FixedExpenseCategory,
   PortfolioHistoryHorizonDTO,
+  CreateSpendingCategoryDTO,
+  UpdateSpendingCategoryDTO,
 } from '@budget/shared';
 
 // Query keys
@@ -50,6 +53,9 @@ export const queryKeys = {
     ['carryoverPreview', periodKey] as const,
   fixedExpenses: (category?: FixedExpenseCategory) =>
     ['fixedExpenses', category ?? 'all'] as const,
+  spendingCategories: ['spendingCategories'] as const,
+  spendingBreakdown: (periodKey: string) =>
+    ['spendingBreakdown', periodKey] as const,
   cashFlowChecks: ['cashFlowChecks'] as const,
   cashFlowSettings: ['cashFlowSettings'] as const,
   cashFlowColumns: ['cashFlowColumns'] as const,
@@ -198,6 +204,7 @@ export function useCreateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
     },
   });
 }
@@ -212,6 +219,7 @@ export function useUpdateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
     },
   });
 }
@@ -225,6 +233,96 @@ export function useDeleteExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
+    },
+  });
+}
+
+// Spending categories (fine-grained expense classification)
+export function useSpendingCategories() {
+  return useQuery({
+    queryKey: queryKeys.spendingCategories,
+    queryFn: spendingCategoriesApi.getAll,
+  });
+}
+
+export function useSpendingBreakdown(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.spendingBreakdown(periodKey),
+    queryFn: () => spendingCategoriesApi.getBreakdown(periodKey),
+  });
+}
+
+export function useCreateSpendingCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateSpendingCategoryDTO) => spendingCategoriesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingCategories });
+    },
+  });
+}
+
+export function useUpdateSpendingCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateSpendingCategoryDTO }) =>
+      spendingCategoriesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingCategories });
+      queryClient.invalidateQueries({ queryKey: ['spendingBreakdown'] });
+    },
+  });
+}
+
+export function useDeleteSpendingCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => spendingCategoriesApi.delete(id),
+    onSuccess: () => {
+      // Deleting a category unclassifies its expenses (FK SET NULL)
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingCategories });
+      queryClient.invalidateQueries({ queryKey: ['spendingBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
+  });
+}
+
+export function useAddCategoryRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ categoryId, keyword }: { categoryId: string; keyword: string }) =>
+      spendingCategoriesApi.addRule(categoryId, { keyword }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingCategories });
+    },
+  });
+}
+
+export function useDeleteCategoryRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ruleId: string) => spendingCategoriesApi.deleteRule(ruleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.spendingCategories });
+    },
+  });
+}
+
+export function useReclassifyExpenses() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => spendingCategoriesApi.reclassify(),
+    onSuccess: () => {
+      // Reclassification touches every period, invalidate whole families
+      queryClient.invalidateQueries({ queryKey: ['spendingBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
     },
   });
 }

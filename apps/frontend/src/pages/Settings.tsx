@@ -9,6 +9,7 @@ import {
 } from '../hooks/useQueries';
 import { formatCurrency, cn } from '../lib/utils';
 import { Loader2, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
+import { SpendingCategoriesManager } from '../components/SpendingCategoriesManager';
 
 export function Settings() {
   const { periodKey } = usePeriodStore();
@@ -322,6 +323,9 @@ export function Settings() {
           </div>
         </form>
       </section>
+
+      {/* Spending categories & keyword rules */}
+      <SpendingCategoriesManager />
     </div>
   );
 }
