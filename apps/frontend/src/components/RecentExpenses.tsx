@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
 import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat } from 'lucide-react';
-import { useUpdateExpense, useDeleteExpense } from '../hooks/useQueries';
+import { useUpdateExpense, useDeleteExpense, useSpendingCategories } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 import { FixedExpensesModal } from './FixedExpensesModal';
 
@@ -38,6 +38,13 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const updateExpense = useUpdateExpense(periodKey);
   const deleteExpense = useDeleteExpense(periodKey);
   const editingIdRef = useRef<string | null>(null);
+
+  // Spending classification (Spesa, Bollette, Auto, ...) shown as a small
+  // badge on each row; SAVINGS rows are transfers and are never classified
+  const { data: spendingCategories } = useSpendingCategories();
+  const spendingCategoryById = new Map(
+    (spendingCategories ?? []).map((cat) => [cat.id, cat])
+  );
 
   useEffect(() => {
     if (editing && editing.id !== editingIdRef.current && inputRef.current) {
@@ -476,6 +483,23 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                             {expense.tricountType === 'IO' ? 'Io' : 'Fra'}
                           </span>
                         )}
+                        {expense.category !== 'SAVINGS' && (() => {
+                          const spendingCategory = expense.spendingCategoryId
+                            ? spendingCategoryById.get(expense.spendingCategoryId)
+                            : undefined;
+                          const name = spendingCategory?.name ?? 'Altro';
+                          const color = spendingCategory?.color ?? '#94a3b8';
+                          return (
+                            <span
+                              className="flex-shrink-0 max-w-[7rem] truncate px-1.5 py-0.5 text-[10px] font-medium rounded"
+                              // 12% alpha background derived from the category color
+                              style={{ backgroundColor: `${color}1f`, color }}
+                              title={`Classificazione: ${name}`}
+                            >
+                              {name}
+                            </span>
+                          );
+                        })()}
                       </div>
                     )}
 
