@@ -305,6 +305,26 @@ export class SpendingCategoryService {
       throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
     }
 
+    return this.buildBreakdown(periodKey, userId, period.expenses);
+  }
+
+  /**
+   * Global spending breakdown across the whole expense history (periodKey 'all')
+   */
+  async getGlobalBreakdown(userId: string): Promise<SpendingBreakdownDTO> {
+    const expenses = await prisma.expense.findMany({
+      where: { monthPeriod: { userId }, category: { not: 'SAVINGS' } },
+      select: { amount: true, spendingCategoryId: true },
+    });
+
+    return this.buildBreakdown('all', userId, expenses);
+  }
+
+  private async buildBreakdown(
+    periodKey: string,
+    userId: string,
+    expenses: { amount: number; spendingCategoryId: string | null }[]
+  ): Promise<SpendingBreakdownDTO> {
     const categories = await prisma.spendingCategory.findMany({
       where: { userId },
       select: { id: true, name: true, color: true },
@@ -318,7 +338,7 @@ export class SpendingCategoryService {
 
     const buckets = new Map<string | null, { total: number; count: number }>();
     let total = 0;
-    for (const expense of period.expenses) {
+    for (const expense of expenses) {
       const key = expense.spendingCategoryId ?? null;
       if (!buckets.has(key)) buckets.set(key, { total: 0, count: 0 });
       const bucket = buckets.get(key)!;

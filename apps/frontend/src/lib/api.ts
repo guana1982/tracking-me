@@ -252,6 +252,9 @@ export const spendingCategoriesApi = {
   getBreakdown: (periodKey: string) =>
     fetchApi<SpendingBreakdownDTO>(`/spending-categories/breakdown/${periodKey}`),
 
+  getGlobalBreakdown: () =>
+    fetchApi<SpendingBreakdownDTO>('/spending-categories/breakdown'),
+
   create: (data: CreateSpendingCategoryDTO) =>
     fetchApi<SpendingCategoryDTO>('/spending-categories', {
       method: 'POST',

@@ -253,6 +253,33 @@ export function useSpendingBreakdown(periodKey: string) {
   });
 }
 
+// Global breakdown (whole history) — fetched lazily when its modal opens
+export function useGlobalSpendingBreakdown(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.spendingBreakdown('all'),
+    queryFn: spendingCategoriesApi.getGlobalBreakdown,
+    enabled,
+  });
+}
+
+// All expenses of a period / of the whole history, for the per-category
+// expense modals (filtered client-side by spendingCategoryId)
+export function useAllExpensesForPeriod(periodKey: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['expenses', periodKey, 'all-list'] as const,
+    queryFn: () => expensesApi.getAllForPeriod(periodKey),
+    enabled,
+  });
+}
+
+export function useAllExpensesGlobal(enabled: boolean) {
+  return useQuery({
+    queryKey: ['expenses', 'global-list'] as const,
+    queryFn: expensesApi.getAllGlobal,
+    enabled,
+  });
+}
+
 export function useCreateSpendingCategory() {
   const queryClient = useQueryClient();
 

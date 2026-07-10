@@ -25,6 +25,18 @@ export const spendingCategoryRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Global spending breakdown across the whole history
+  fastify.get('/breakdown', {
+    schema: {
+      tags: ['Spending Categories'],
+      summary: 'Get global spending breakdown by category (whole history)',
+    },
+    handler: async (request) => {
+      const breakdown = await spendingCategoryService.getGlobalBreakdown(request.authUser!.id);
+      return { success: true, data: breakdown };
+    },
+  });
+
   // Spending breakdown by category for a period
   fastify.get<{ Params: { periodKey: string } }>('/breakdown/:periodKey', {
     schema: {

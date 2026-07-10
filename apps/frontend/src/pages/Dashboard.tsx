@@ -205,6 +205,12 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Spending breakdown accordion (collapsed by default): per-category
+          classification of the month, global-history modal, per-category expense lists */}
+      <div className="flex-shrink-0">
+        <SpendingBreakdownCard periodKey={periodKey} />
+      </div>
+
       {/* Reallocation Button - visible after cutoff day; frozen (non-clickable) while the month is closed */}
       {canShowReallocationButton && (
         <div className="flex-shrink-0">
@@ -325,11 +331,6 @@ export function Dashboard() {
             isClosed={isClosed}
           />
         </div>
-      </div>
-
-      {/* Spending breakdown by auto-classified category (Spesa, Bollette, Auto, ...) */}
-      <div className="flex-shrink-0">
-        <SpendingBreakdownCard periodKey={periodKey} />
       </div>
 
       {/* Close Month Button - visible after cutoff day; unlock happens from the banner above */}
