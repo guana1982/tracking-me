@@ -218,8 +218,9 @@ export function KpiPanel({ periodKey }: { periodKey: string }) {
           {kpis.liquiditySource === 'total' && (
             <p className="rounded-lg bg-amber-50 text-amber-700 p-2.5">
               Ora il calcolo usa il <strong>patrimonio totale</strong> perché non sai ancora quali
-              conti sono liquidi: vai nella pagina Cash Flow e crea una classificazione chiamata
-              "Liquidità" con dentro i conti correnti — il runway diventerà preciso.
+              conti sono liquidi. Per renderlo preciso: pagina <strong>Cash Flow</strong> → bottone{' '}
+              <strong>"Gestisci colonne"</strong> → scheda <strong>"Classificazioni"</strong> →
+              crea una classificazione chiamata "Liquidità" e spunta le colonne dei conti correnti.
             </p>
           )}
         </InfoModal>
@@ -258,8 +259,10 @@ export function KpiPanel({ periodKey }: { periodKey: string }) {
           </p>
           {kpis.investedSharePct === null && (
             <p className="rounded-lg bg-amber-50 text-amber-700 p-2.5">
-              Per attivare questo KPI vai nella pagina Cash Flow e crea una classificazione
-              chiamata "Investimenti" con dentro le colonne investite (ETF, obbligazioni...).
+              Per attivare questo KPI: pagina <strong>Cash Flow</strong> → bottone{' '}
+              <strong>"Gestisci colonne"</strong> → scheda <strong>"Classificazioni"</strong> →
+              crea una classificazione chiamata "Investimenti" e spunta le colonne investite (ETF,
+              obbligazioni...).
             </p>
           )}
         </InfoModal>

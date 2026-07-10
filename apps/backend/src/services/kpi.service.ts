@@ -24,11 +24,12 @@ export class KpiService {
    * use the cash-flow classifications named "Liquid…" / "Invest…" when present.
    */
   async getKpis(periodKey: string, userId: string): Promise<KpiPanelDTO> {
-    const [totals, checks, columns, classifications] = await Promise.all([
+    const [totals, checks, columns, classifications, settings] = await Promise.all([
       this.loadPeriodTotals(userId),
       cashFlowService.getAllByUser(userId), // ordered by date desc
       cashFlowService.getColumns(userId),
       cashFlowService.getClassifications(userId),
+      cashFlowService.getSettings(userId),
     ]);
 
     // ── Budget KPIs ──────────────────────────────────────────────
@@ -58,14 +59,30 @@ export class KpiService {
     const avgMonthlySpend = average(completed.map((t) => t.totalSpend));
 
     // ── Wealth KPIs (cash-flow checks) ───────────────────────────
-    const activeKeys = new Set(
-      columns.filter((c: CashFlowColumnDTO) => c.isActive).map((c: CashFlowColumnDTO) => c.key)
+    // Same valuation as the cash-flow page total: rendimentoLordo is the gain
+    // already contained in etfLordo (summing it would double-count the equity),
+    // and etfLordo is netted of the 26% tax on the gain and of PAC commissions
+    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+    const valueFor = (check: CashFlowCheckDTO, key: string): number => {
+      if (key === 'rendimentoLordo') return 0;
+      const raw = check.values[key] ?? 0;
+      if (key === 'etfLordo') {
+        const rendimento = check.values['rendimentoLordo'] ?? 0;
+        return raw - rendimento * 0.26 - commissionTotal;
+      }
+      return raw;
+    };
+
+    const countedKeys = new Set(
+      columns
+        .filter((c: CashFlowColumnDTO) => c.isActive && c.showInPie)
+        .map((c: CashFlowColumnDTO) => c.key)
     );
     const sumKeys = (check: CashFlowCheckDTO, keys: Set<string>): number =>
-      Object.entries(check.values)
-        .filter(([key]) => keys.has(key))
-        .reduce((sum, [, value]) => sum + value, 0);
-    const checkTotal = (check: CashFlowCheckDTO): number => sumKeys(check, activeKeys);
+      [...keys]
+        .filter((key) => countedKeys.has(key))
+        .reduce((sum, key) => sum + valueFor(check, key), 0);
+    const checkTotal = (check: CashFlowCheckDTO): number => sumKeys(check, countedKeys);
 
     const latest = checks[0] ?? null;
     const netWorth = latest ? roundCurrency(checkTotal(latest)) : null;
