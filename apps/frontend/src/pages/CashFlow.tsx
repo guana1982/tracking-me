@@ -945,13 +945,21 @@ export function CashFlow() {
     }
 
     const valuedColumnsByKey = new Map<string, ValuedColumn>(valuedColumns.map((entry) => [entry.column.key, entry]));
+    // Classifications may overlap (a column in both "Obbligazione ITA" and
+    // "Investimenti"): the pie needs a partition, so each column belongs to the
+    // FIRST classification (by position) that contains it
+    const assignedKeys = new Set<string>();
     const groupedColumns: AllocationGroupDraft[] = classifications
       .map((classification) => ({
         key: classification.key,
         label: classification.label,
         columns: classification.columnKeys
-          .map((columnKey: string) => valuedColumnsByKey.get(columnKey))
-          .filter((entry: ValuedColumn | undefined): entry is ValuedColumn => Boolean(entry))
+          .filter((columnKey: string) => {
+            if (assignedKeys.has(columnKey) || !valuedColumnsByKey.has(columnKey)) return false;
+            assignedKeys.add(columnKey);
+            return true;
+          })
+          .map((columnKey: string) => valuedColumnsByKey.get(columnKey)!)
           .sort((a: ValuedColumn, b: ValuedColumn) => a.column.position - b.column.position),
       }))
       .filter((group) => group.columns.length > 0);
@@ -1407,7 +1415,7 @@ export function CashFlow() {
               )}
         </div>
         <div className="flex flex-col pl-4 xl:min-h-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             {hasVisibleTrendSeries && trendRegression && (
               <div className="flex items-center gap-2 shrink-0">
                 {trendChangePct !== null && (
@@ -1417,6 +1425,14 @@ export function CashFlow() {
                   >
                     {trendChangePct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                     {trendChangePct >= 0 ? '+' : ''}{trendChangePct.toFixed(1)}%
+                  </span>
+                )}
+                {trendData.length > 0 && (
+                  <span
+                    className="text-xs font-semibold text-slate-700 tabular-nums"
+                    title={`Ultimo valore assoluto (netto) della serie "${trendLineLabel}"`}
+                  >
+                    {formatCurrency(Number(trendData[trendData.length - 1]?.selectedTotal ?? 0))}
                   </span>
                 )}
                 <span
@@ -1453,7 +1469,7 @@ export function CashFlow() {
                 </button>
               </div>
             )}
-            <div className="flex flex-1 items-center justify-end gap-1.5 overflow-x-auto pb-1 scrollbar-thin min-w-0">
+            <div className="flex flex-1 flex-wrap items-center justify-end gap-1.5 min-w-0">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
               <span className="text-[10px] text-slate-600">Totale</span>
@@ -1467,8 +1483,9 @@ export function CashFlow() {
               </button>
             </label>
             {/* Classification series: transfer-invariant views (moving money
-                between accounts of the same class doesn't move these lines) */}
-            {classifications.map((cls, idx) => {
+                between accounts of the same class doesn't move these lines).
+                Empty classifications are hidden until columns are assigned */}
+            {classifications.filter((cls) => cls.columnKeys.length > 0).map((cls, idx) => {
               const key = `cls:${cls.key}`;
               const color = CLASSIFICATION_COLORS[idx % CLASSIFICATION_COLORS.length];
               const isOn = visibleTrendKeys.has(key);
@@ -1534,6 +1551,11 @@ export function CashFlow() {
                         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
                           <p className="text-[10px] text-slate-500">{point.dateLabel}</p>
                           <p className="text-xs font-semibold text-slate-900">{point.checkLabel}</p>
+                          {!showTotalTrend && (
+                            <p className="text-[10px] text-slate-500">
+                              Totale netto: {formatCurrency(Number(point.total))}
+                            </p>
+                          )}
                           {showRawLine && (
                             <p className="text-xs font-bold" style={{ color: trendLineColor }}>
                               {trendLineLabel}: {formatCurrency(Number(point.selectedTotal))}
@@ -1544,7 +1566,7 @@ export function CashFlow() {
                               Media mobile 30g: {formatCurrency(Number(point.trendSmooth))}
                             </p>
                           )}
-                          {!showTotalTrend && classifications.map((cls, idx) => {
+                          {!showTotalTrend && classifications.filter((cls) => cls.columnKeys.length > 0).map((cls, idx) => {
                             const key = `cls:${cls.key}`;
                             if (!visibleTrendKeys.has(key)) return null;
                             return (
@@ -2438,19 +2460,18 @@ export function CashFlow() {
                     <div className="px-3 py-2 space-y-1">
                       {columns.map((col) => {
                         const isInThis = cls.columnKeys.includes(col.key);
-                        const isInOther = !isInThis && (classificationsData ?? []).some(
+                        const isAlsoElsewhere = (classificationsData ?? []).some(
                           (other) => other.key !== cls.key && other.columnKeys.includes(col.key)
                         );
                         return (
                           <label
                             key={col.key}
-                            className={`flex items-center gap-2 text-sm py-0.5 ${isInOther ? 'opacity-40' : ''}`}
+                            className="flex items-center gap-2 text-sm py-0.5"
                           >
                             <input
                               type="checkbox"
                               className="rounded border-slate-300"
                               checked={isInThis}
-                              disabled={isInOther}
                               onChange={(e) => {
                                 const next = e.target.checked
                                   ? [...cls.columnKeys, col.key]
@@ -2459,7 +2480,14 @@ export function CashFlow() {
                               }}
                             />
                             <span className={isInThis ? 'text-slate-900' : 'text-slate-500'}>{col.label}</span>
-                            {isInOther && <span className="text-xs text-slate-400">(in altra classif.)</span>}
+                            {isAlsoElsewhere && (
+                              <span
+                                className="text-xs text-slate-400"
+                                title="La colonna appartiene anche a un'altra classificazione: nel grafico a torta conta solo nella prima per posizione, nel trend in tutte"
+                              >
+                                (anche altrove)
+                              </span>
+                            )}
                           </label>
                         );
                       })}

@@ -340,14 +340,12 @@ export class CashFlowService {
 
     const current = classifications[index];
 
+    // A column may belong to MULTIPLE classifications (e.g. "Obbligazione ITA"
+    // and the broader "Investimenti"): the pie resolves overlaps by assigning
+    // each column to the first classification by position
     let nextColumnKeys = current.columnKeys;
     if (data.columnKeys !== undefined) {
-      const otherKeys = new Set(
-        classifications
-          .filter((c) => c.key !== key)
-          .flatMap((c) => c.columnKeys)
-      );
-      nextColumnKeys = data.columnKeys.filter((ck) => !otherKeys.has(ck));
+      nextColumnKeys = [...new Set(data.columnKeys)];
     }
 
     classifications[index] = {
