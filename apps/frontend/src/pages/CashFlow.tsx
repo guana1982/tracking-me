@@ -418,7 +418,18 @@ export function CashFlow() {
     () => [...(classificationsData ?? [])].sort((a, b) => a.position - b.position || a.label.localeCompare(b.label)),
     [classificationsData]
   );
-  const activeColumns = useMemo(() => columns.filter((column) => column.isActive), [columns]);
+  // When etfLordo has a fiscal config (new method: aliquota + capitale
+  // investito) the gain column becomes redundant: hide it everywhere (check
+  // form, table, trend toggles). Clearing the config brings it back and the
+  // legacy RENDIM. LORDO × 26% method takes over again.
+  const activeColumns = useMemo(() => {
+    const etf = columns.find((column) => column.key === 'etfLordo');
+    const etfUsesFiscalConfig = etf?.taxRatePct != null && etf?.investedCapital != null;
+    return columns.filter(
+      (column) =>
+        column.isActive && !(column.key === 'rendimentoLordo' && etfUsesFiscalConfig)
+    );
+  }, [columns]);
 
   // Fiscal netting: columns configured with taxRatePct + investedCapital hold
   // the GROSS value and contribute to every total net of the capital-gain tax:
