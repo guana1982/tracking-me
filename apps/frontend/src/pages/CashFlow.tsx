@@ -173,7 +173,7 @@ const LEGACY_DIFF_LABELS: Record<string, string> = {
   webankCc: 'Diff WEBANK',
   webankObbl: 'Diff OBBLIG',
   etfLordo: 'Diff ETF',
-  rendimentoLordo: 'Diff REND',
+  rendimentoLordo: 'Diff Guad. ETF',
   bper: 'Diff BPER',
   tricount: 'Diff TRIC',
   cartaWebank: 'Diff CARTA',
@@ -185,7 +185,7 @@ const LEGACY_PIE_SHORT_LABELS: Record<string, string> = {
   webankCc: 'WBK',
   webankObbl: 'OBBL',
   etfLordo: 'ETF',
-  rendimentoLordo: 'REND',
+  rendimentoLordo: 'Guad. ETF',
   bper: 'BPER',
   tricount: 'TRIC',
   cartaWebank: 'CARTA',
@@ -2671,6 +2671,17 @@ export function CashFlow() {
                           }))
                         }
                       />
+                      {column.key === 'rendimentoLordo' && (
+                        <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                          Plusvalenza lorda totale maturata sugli ETF (la leggi dal broker, es.
+                          "profitto"). Serve a calcolare il netto: aggiornala insieme al valore ETF.
+                        </p>
+                      )}
+                      {column.key === 'etfLordo' && (
+                        <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                          Valore totale attuale degli ETF, lordo.
+                        </p>
+                      )}
                     </div>
                   ))}
                   <div className="sm:col-span-2 lg:col-span-4">

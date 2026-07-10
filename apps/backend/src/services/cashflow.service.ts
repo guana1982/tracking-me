@@ -22,7 +22,7 @@ const LEGACY_COLUMNS: CashFlowColumnDTO[] = [
   { key: 'webankCc', label: 'WEBANK c/c', position: 2, isActive: true, showInPie: true },
   { key: 'webankObbl', label: 'WEBANK Obbl', position: 3, isActive: true, showInPie: true },
   { key: 'etfLordo', label: 'ETF tutti LORDO', position: 4, isActive: true, showInPie: true },
-  { key: 'rendimentoLordo', label: 'RENDIM. LORDO', position: 5, isActive: true, showInPie: true },
+  { key: 'rendimentoLordo', label: 'Guadagno ETF (lordo)', position: 5, isActive: true, showInPie: true },
   { key: 'bper', label: 'BPER c/c', position: 6, isActive: true, showInPie: true },
   { key: 'tricount', label: 'TRIC DEB/CRED', position: 7, isActive: true, showInPie: true },
   { key: 'cartaWebank', label: 'CartaWeBank', position: 8, isActive: true, showInPie: true },
@@ -490,7 +490,13 @@ export class CashFlowService {
 
         const key =
           typeof keyValue === 'string' && COLUMN_KEY_REGEX.test(keyValue) ? keyValue : '';
-        const label = typeof labelValue === 'string' ? labelValue.trim() : '';
+        let label = typeof labelValue === 'string' ? labelValue.trim() : '';
+        // One-off label migration: the old default "RENDIM. LORDO" didn't say
+        // what to type in. Only the untouched default is renamed — a label
+        // customized by the user never matches and is left alone
+        if (key === 'rendimentoLordo' && label === 'RENDIM. LORDO') {
+          label = 'Guadagno ETF (lordo)';
+        }
         const position =
           typeof positionValue === 'number' && Number.isInteger(positionValue) && positionValue >= 0
             ? positionValue
