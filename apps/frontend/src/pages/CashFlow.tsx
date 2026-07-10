@@ -48,7 +48,9 @@ type RowWithMetrics = CashFlowRow & {
 type AllocationGroupSlice = {
   key: string;
   label: string;
-  value: number;
+  value: number; // value shown in the pie (columns not claimed by an earlier classification)
+  fullValue: number; // sum of ALL the classification's columns, overlaps included
+  isPartial: boolean; // true when some columns are shown under another classification
   percentage: number;
   color: string;
 };
@@ -988,11 +990,22 @@ export function CashFlow() {
       const color = group.key === UNCLASSIFIED_GROUP_KEY
         ? '#CBD5E1'
         : CLASSIFICATION_COLORS[index % CLASSIFICATION_COLORS.length];
+      // Full total of the classification including columns claimed by an
+      // earlier (overlapping) classification in the pie partition
+      const sourceClassification = classifications.find((cls) => cls.key === group.key);
+      const fullValue = sourceClassification
+        ? sourceClassification.columnKeys.reduce(
+            (sum: number, columnKey: string) => sum + (valuedColumnsByKey.get(columnKey)?.value ?? 0),
+            0
+          )
+        : value;
 
       return {
         key: group.key,
         label: group.label,
         value,
+        fullValue,
+        isPartial: Math.abs(fullValue - value) > 0.01,
         percentage: total > 0 ? (value / total) * 100 : 0,
         color,
       };
@@ -1358,10 +1371,20 @@ export function CashFlow() {
                   <div
                     key={`group-${group.key}`}
                     className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/70 px-2.5 py-1"
+                    title={
+                      group.isPartial
+                        ? `Nella torta "${group.label}" mostra solo le colonne non già assegnate a una classificazione precedente (${formatCurrency(group.value)}). Totale completo della classificazione: ${formatCurrency(group.fullValue)} — lo vedi intero come linea nel grafico trend.`
+                        : undefined
+                    }
                   >
                     <span className="text-[10px] font-semibold text-slate-700">{group.label}</span>
                     <span className="text-[10px] text-slate-500">{group.percentage.toFixed(1)}%</span>
                     <span className="text-[10px] font-semibold text-slate-900 tabular-nums">{formatCurrency(group.value)}</span>
+                    {group.isPartial && (
+                      <span className="text-[10px] text-amber-600 tabular-nums">
+                        parz. di {formatCurrency(group.fullValue)}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
