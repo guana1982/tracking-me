@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
@@ -6,7 +7,7 @@ import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
 import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
-import { Loader2, RefreshCw, Undo2, Lock, Unlock, ArrowRightCircle } from 'lucide-react';
+import { Loader2, RefreshCw, Undo2, Lock, Unlock, ArrowRightCircle, ChevronDown, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 
 export function Dashboard() {
@@ -23,6 +24,10 @@ export function Dashboard() {
   const createCarryover = useCreateCarryover(periodKey);
   const closeMonth = useCloseMonth(periodKey);
   const reopenMonth = useReopenMonth(periodKey);
+
+  // Charts block accordion (donut + gauge + savings chart): open by default,
+  // collapsible to leave more room for the expense tables below
+  const [showCharts, setShowCharts] = useState(true);
 
   // Check if the month is closed (fall back to the dashboard summary so the two sources can't disagree)
   const isClosed = monthPeriod?.isClosed ?? data?.monthPeriod.isClosed ?? false;
@@ -184,19 +189,43 @@ export function Dashboard() {
           isClosed && 'pointer-events-none select-none opacity-60'
         )}
       >
-      {/* Chart with Stats - Full width responsive */}
+      {/* Charts accordion (open by default): donut + stats, savings gauge, savings chart */}
       <div className="flex-shrink-0">
-        <BudgetChart
-          categories={categories}
-          totalIncome={totalIncome}
-          extraSpent={data.extraSpent}
-          compact
-          showStats
-          savingsHistory={savingsHistory}
-          isClosed={isClosed}
-          middleSlot={<SavingsGauge pace={savingsPace} />}
-        />
+        <button
+          onClick={() => setShowCharts((prev) => !prev)}
+          className="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm text-left hover:bg-slate-50 transition-colors"
+          title={showCharts ? 'Nascondi i grafici per lavorare meglio con le tabelle' : 'Mostra i grafici del mese'}
+        >
+          {showCharts ? (
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          )}
+          <LayoutDashboard className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+          <span className="font-semibold text-sm text-slate-700">Panoramica mese</span>
+          {!showCharts && (
+            <span className="text-xs text-slate-400 truncate">
+              Speso {formatCurrency(data.totalSpent)} · Entrate {formatCurrency(totalIncome)} · Extra {formatCurrency(data.extraSpent)}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Chart with Stats - Full width responsive */}
+      {showCharts && (
+        <div className="flex-shrink-0">
+          <BudgetChart
+            categories={categories}
+            totalIncome={totalIncome}
+            extraSpent={data.extraSpent}
+            compact
+            showStats
+            savingsHistory={savingsHistory}
+            isClosed={isClosed}
+            middleSlot={<SavingsGauge pace={savingsPace} />}
+          />
+        </div>
+      )}
 
       {/* Spending breakdown accordion (collapsed by default): per-category
           classification of the month, global-history modal, per-category expense lists */}
