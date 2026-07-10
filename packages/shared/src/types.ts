@@ -436,12 +436,13 @@ export interface CashFlowColumnDTO {
   position: number;
   isActive: boolean;
   showInPie: boolean;
-  // Optional fiscal netting: when both are set, the column contributes to every
-  // total as `value − gain × taxRatePct/100`, where the gross gain lives in the
-  // column `gainColumnKey` (which is then excluded from totals to avoid double
-  // counting). E.g. XEON at 13.4% with its own "XEON rendimento" column.
+  // Optional fiscal netting: when both are set, the column holds the GROSS
+  // value and contributes to every total net of the capital-gain tax:
+  // `value − max(0, value − investedCapital) × taxRatePct/100`.
+  // E.g. XEON at 13.4%, BTP at 12.5%, ETF at 26%. investedCapital is the total
+  // paid in (PMC), updated only on buys/sells — not at every check.
   taxRatePct?: number | null;
-  gainColumnKey?: string | null;
+  investedCapital?: number | null;
 }
 
 // CashFlow Check - net worth snapshot
@@ -474,7 +475,7 @@ export interface UpdateCashFlowColumnDTO {
   isActive?: boolean;
   showInPie?: boolean;
   taxRatePct?: number | null; // null clears the fiscal netting
-  gainColumnKey?: string | null;
+  investedCapital?: number | null;
 }
 
 // CashFlow Settings - per-user commission/ETF config

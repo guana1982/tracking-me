@@ -405,26 +405,28 @@ export function CashFlow() {
   );
   const activeColumns = useMemo(() => columns.filter((column) => column.isActive), [columns]);
 
-  // Fiscal netting (generalizes the etfLordo/rendimentoLordo special case):
-  // columns configured with taxRatePct + gainColumnKey contribute to every
-  // total as value − gain × rate; their gain columns are excluded from sums
-  // to avoid double counting
-  const gainColumnKeys = useMemo(
-    () =>
-      new Set(
-        columns
-          .map((column) => column.gainColumnKey)
-          .filter((key): key is string => Boolean(key))
-      ),
-    [columns]
-  );
-
+  // Fiscal netting: columns configured with taxRatePct + investedCapital hold
+  // the GROSS value and contribute to every total net of the capital-gain tax:
+  // value − max(0, value − invested) × rate. ETF (etfLordo) additionally
+  // subtracts PAC commissions; without a config it falls back to the legacy
+  // rendimentoLordo × 26% formula.
   const netRowValue = (row: CashFlowRow, column: CashFlowColumn): number => {
     const raw = getRowValue(row, column.key);
-    if (column.gainColumnKey && column.taxRatePct != null) {
-      return raw - (getRowValue(row, column.gainColumnKey) * column.taxRatePct) / 100;
+    if (column.taxRatePct != null && column.investedCapital != null) {
+      const gain = Math.max(0, raw - column.investedCapital);
+      return raw - (gain * column.taxRatePct) / 100;
     }
     return raw;
+  };
+
+  const etfColumn = useMemo(() => columns.find((column) => column.key === 'etfLordo'), [columns]);
+
+  const etfNetValue = (row: CashFlowRow): number => {
+    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
+    if (etfColumn && etfColumn.taxRatePct != null && etfColumn.investedCapital != null) {
+      return netRowValue(row, etfColumn) - commissionTotal;
+    }
+    return getRowValue(row, 'etfLordo') - getRowValue(row, 'rendimentoLordo') * 0.26 - commissionTotal;
   };
 
   useEffect(() => {
@@ -455,17 +457,11 @@ export function CashFlow() {
   const sortedRows = useMemo(() => [...rows].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [rows]);
 
   const rowsWithMetrics = useMemo<RowWithMetrics[]>(() => {
-    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
-
     const computeTotal = (row: CashFlowRow) => {
       const baseSum = activeColumns
-        .filter((col) => !STOCK_KEYS.has(col.key) && !gainColumnKeys.has(col.key))
+        .filter((col) => !STOCK_KEYS.has(col.key))
         .reduce((sum, col) => sum + netRowValue(row, col), 0);
-      const etfLordo = getRowValue(row, 'etfLordo');
-      const rendimentoLordo = getRowValue(row, 'rendimentoLordo');
-      const tasseComm = (rendimentoLordo * 26 / 100) + commissionTotal;
-      const azionarioNetto = etfLordo - tasseComm;
-      return baseSum + azionarioNetto;
+      return baseSum + etfNetValue(row);
     };
 
     return sortedRows.map((row, index) => {
@@ -514,15 +510,12 @@ export function CashFlow() {
   const savingsBreakdown = useMemo(() => {
     const points = rowsWithMetrics.slice().reverse(); // chronological ascending
     if (points.length < 2) return null;
-    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
-    const obblActive = activeColumns.some((c) => c.key === 'webankObbl');
-    const baseCols = activeColumns.filter(
-      (c) => !STOCK_KEYS.has(c.key) && !gainColumnKeys.has(c.key)
-    );
+    const obblColumn = activeColumns.find((c) => c.key === 'webankObbl');
+    const baseCols = activeColumns.filter((c) => !STOCK_KEYS.has(c.key));
 
     const buckets = (row: CashFlowRow) => {
-      const azionario = getRowValue(row, 'etfLordo') - getRowValue(row, 'rendimentoLordo') * 0.26 - commissionTotal;
-      const obbligazionario = obblActive ? getRowValue(row, 'webankObbl') : 0;
+      const azionario = etfNetValue(row);
+      const obbligazionario = obblColumn ? netRowValue(row, obblColumn) : 0;
       const base = baseCols.reduce((s, c) => s + netRowValue(row, c), 0);
       const liquidita = base - obbligazionario;
       return { azionario, obbligazionario, liquidita, total: base + azionario };
@@ -875,20 +868,15 @@ export function CashFlow() {
     // contained in etfLordo, so showing it as its own slice would double-count
     // the equity. The etfLordo slice uses its NET value (matching the Totale
     // formula) so the slices reconcile with the net portfolio.
-    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
     const pieValueFor = (column: CashFlowColumn): number => {
       if (column.key === 'etfLordo') {
-        const rendimentoLordo = getRowValue(latestRow, 'rendimentoLordo');
-        return getRowValue(latestRow, 'etfLordo') - (rendimentoLordo * 26 / 100) - commissionTotal;
+        return etfNetValue(latestRow);
       }
       return netRowValue(latestRow, column);
     };
 
     const pieColumns = activeColumns.filter(
-      (column) =>
-        column.showInPie &&
-        column.key !== 'rendimentoLordo' &&
-        !gainColumnKeys.has(column.key)
+      (column) => column.showInPie && column.key !== 'rendimentoLordo'
     );
 
     const valuedColumns: ValuedColumn[] = pieColumns
@@ -2371,85 +2359,73 @@ export function CashFlow() {
 
               {columnsModalTab === 'fiscal' && <>
                 <p className="text-sm text-slate-500">
-                  Qui configuri il <strong>netto fiscale</strong> di uno strumento: se una colonna
-                  contiene il valore lordo (es. XEON) e un'altra il suo rendimento lordo maturato,
-                  imposta aliquota e colonna rendimento. Ovunque (totale, torta, KPI) lo strumento
-                  contribuirà come <em>valore − rendimento × aliquota</em>, e la colonna
-                  rendimento sarà esclusa dai totali per non contare due volte. ETF e RENDIM.
-                  LORDO sono già gestiti in automatico (26% + commissioni PAC). Per i fondi
-                  monetari su titoli di stato (XEON) l'aliquota effettiva è ~13,4%.
+                  Metodo unico per tutti gli strumenti tassati (ETF 26%, BTP 12,5%, monetari come
+                  XEON ~13,4%): nei check inserisci sempre il <strong>valore lordo</strong>; qui
+                  imposti <strong>aliquota</strong> e <strong>capitale investito</strong> (il
+                  totale che hai versato — lo aggiorni solo quando compri o vendi, non a ogni
+                  check). Ovunque (totale, torta, KPI) lo strumento contribuirà al netto:{' '}
+                  <em>lordo − (lordo − capitale investito) × aliquota</em>. La tassa si paga solo
+                  sulla plusvalenza, per questo serve il capitale investito. Senza configurazione
+                  la colonna entra così com'è; l'ETF senza configurazione usa il metodo storico
+                  (RENDIM. LORDO × 26% + commissioni PAC — le commissioni vengono sottratte in
+                  entrambi i casi).
                 </p>
                 <div className="space-y-2">
                   {columns
-                    .filter(
-                      (column) =>
-                        column.isActive &&
-                        column.key !== 'etfLordo' &&
-                        column.key !== 'rendimentoLordo'
-                    )
-                    .map((column) => {
-                      const isGainForOther = gainColumnKeys.has(column.key);
-                      return (
-                        <div
-                          key={`${column.key}-${column.taxRatePct ?? ''}`}
-                          className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium text-slate-900">{column.label}</span>
-                            {isGainForOther && (
-                              <span className="ml-2 text-xs text-teal-600">
-                                colonna rendimento (esclusa dai totali)
+                    .filter((column) => column.isActive && column.key !== 'rendimentoLordo')
+                    .map((column) => (
+                      <div
+                        key={`${column.key}-${column.taxRatePct ?? ''}-${column.investedCapital ?? ''}`}
+                        className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-slate-900">{column.label}</span>
+                          {column.taxRatePct != null && column.investedCapital != null && (
+                            <span className="ml-2 text-xs text-emerald-600">
+                              netto attivo ({String(column.taxRatePct).replace('.', ',')}%)
+                            </span>
+                          )}
+                          {column.key === 'etfLordo' &&
+                            (column.taxRatePct == null || column.investedCapital == null) && (
+                              <span className="ml-2 text-xs text-sky-600">
+                                metodo storico: RENDIM. LORDO × 26%
                               </span>
                             )}
-                          </div>
-                          {!isGainForOther && (
-                            <div className="flex items-center gap-2">
-                              <label className="text-xs text-slate-500">Aliquota %</label>
-                              <input
-                                className="input h-9 w-20"
-                                inputMode="decimal"
-                                defaultValue={column.taxRatePct ?? ''}
-                                placeholder="13,4"
-                                onBlur={(e) => {
-                                  const raw = e.target.value.trim().replace(',', '.');
-                                  const parsed = raw === '' ? null : Number.parseFloat(raw);
-                                  if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return;
-                                  if (parsed !== (column.taxRatePct ?? null)) {
-                                    updateColumn.mutate({ key: column.key, data: { taxRatePct: parsed } });
-                                  }
-                                }}
-                              />
-                              <label className="text-xs text-slate-500">Colonna rendimento</label>
-                              <select
-                                className="input h-9 w-44"
-                                value={column.gainColumnKey ?? ''}
-                                onChange={(e) =>
-                                  updateColumn.mutate({
-                                    key: column.key,
-                                    data: { gainColumnKey: e.target.value || null },
-                                  })
-                                }
-                              >
-                                <option value="">— nessuna (valore già netto)</option>
-                                {columns
-                                  .filter(
-                                    (other) =>
-                                      other.key !== column.key &&
-                                      other.key !== 'etfLordo' &&
-                                      other.key !== 'rendimentoLordo' &&
-                                      !other.gainColumnKey
-                                  )
-                                  .map((other) => (
-                                    <option key={other.key} value={other.key}>
-                                      {other.label}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-500">Aliquota %</label>
+                          <input
+                            className="input h-9 w-20"
+                            inputMode="decimal"
+                            defaultValue={column.taxRatePct ?? ''}
+                            placeholder="13,4"
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim().replace(',', '.');
+                              const parsed = raw === '' ? null : Number.parseFloat(raw);
+                              if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return;
+                              if (parsed !== (column.taxRatePct ?? null)) {
+                                updateColumn.mutate({ key: column.key, data: { taxRatePct: parsed } });
+                              }
+                            }}
+                          />
+                          <label className="text-xs text-slate-500">Capitale investito €</label>
+                          <input
+                            className="input h-9 w-28"
+                            inputMode="decimal"
+                            defaultValue={column.investedCapital ?? ''}
+                            placeholder="es. 5000"
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim().replace(',', '.');
+                              const parsed = raw === '' ? null : Number.parseFloat(raw);
+                              if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
+                              if (parsed !== (column.investedCapital ?? null)) {
+                                updateColumn.mutate({ key: column.key, data: { investedCapital: parsed } });
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </>}
             </div>

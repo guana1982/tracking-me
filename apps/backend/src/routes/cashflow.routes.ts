@@ -214,7 +214,7 @@ export const cashFlowRoutes: FastifyPluginAsync = async (fastify) => {
           isActive: { type: 'boolean' },
           showInPie: { type: 'boolean' },
           taxRatePct: { type: ['number', 'null'], minimum: 0, maximum: 100 },
-          gainColumnKey: { type: ['string', 'null'] },
+          investedCapital: { type: ['number', 'null'], minimum: 0 },
         },
       },
     },

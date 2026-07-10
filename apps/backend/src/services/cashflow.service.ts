@@ -220,13 +220,9 @@ export class CashFlowService {
       showInPie: data.showInPie ?? current.showInPie,
       // Explicit null clears the fiscal netting config
       taxRatePct: data.taxRatePct !== undefined ? data.taxRatePct : current.taxRatePct ?? null,
-      gainColumnKey:
-        data.gainColumnKey !== undefined ? data.gainColumnKey : current.gainColumnKey ?? null,
+      investedCapital:
+        data.investedCapital !== undefined ? data.investedCapital : current.investedCapital ?? null,
     };
-
-    if (next.gainColumnKey === key) {
-      throw new AppError('A column cannot use itself as gain column', 400, 'VALIDATION_ERROR');
-    }
 
     if (!next.label) {
       throw new AppError('Column label is required', 400, 'VALIDATION_ERROR');
@@ -492,7 +488,7 @@ export class CashFlowService {
         const isActiveValue = (entry as { isActive?: unknown }).isActive;
         const showInPieValue = (entry as { showInPie?: unknown }).showInPie;
         const taxRatePctValue = (entry as { taxRatePct?: unknown }).taxRatePct;
-        const gainColumnKeyValue = (entry as { gainColumnKey?: unknown }).gainColumnKey;
+        const investedCapitalValue = (entry as { investedCapital?: unknown }).investedCapital;
 
         const key =
           typeof keyValue === 'string' && COLUMN_KEY_REGEX.test(keyValue) ? keyValue : '';
@@ -510,14 +506,16 @@ export class CashFlowService {
           taxRatePctValue <= 100
             ? taxRatePctValue
             : null;
-        const gainColumnKey =
-          typeof gainColumnKeyValue === 'string' && COLUMN_KEY_REGEX.test(gainColumnKeyValue)
-            ? gainColumnKeyValue
+        const investedCapital =
+          typeof investedCapitalValue === 'number' &&
+          Number.isFinite(investedCapitalValue) &&
+          investedCapitalValue >= 0
+            ? investedCapitalValue
             : null;
 
         if (!key || !label || seen.has(key)) return;
         seen.add(key);
-        result.push({ key, label, position, isActive, showInPie, taxRatePct, gainColumnKey });
+        result.push({ key, label, position, isActive, showInPie, taxRatePct, investedCapital });
       });
     }
 
