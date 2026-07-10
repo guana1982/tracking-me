@@ -1,6 +1,7 @@
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3, Maximize2, Percent } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Loader2, Eye, EyeOff, ChevronUp, ChevronDown, GripVertical, TrendingUp, TrendingDown, Minus, Columns3, Tags, Download, BarChart3, Maximize2, Percent, Info } from 'lucide-react';
+import { InfoModal } from '../components/InfoModal';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import {
   useCashFlowChecks,
@@ -389,6 +390,7 @@ export function CashFlow() {
   const [showSmoothedLine, setShowSmoothedLine] = useState(false);
   const [showRawLine, setShowRawLine] = useState(true);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [isTrendInfoOpen, setIsTrendInfoOpen] = useState(false);
   const [isSavingsModalOpen, setIsSavingsModalOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1469,6 +1471,15 @@ export function CashFlow() {
                 </button>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setIsTrendInfoOpen(true)}
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-indigo-600 transition-colors shrink-0"
+              title="Quali linee risentono dei trasferimenti tra i tuoi conti?"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Come leggere le linee</span>
+            </button>
             <div className="flex flex-1 flex-wrap items-center justify-end gap-1.5 min-w-0">
             <label className="inline-flex items-center gap-1.5 select-none rounded-full border border-slate-200 bg-white px-2 py-0.5 shrink-0">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
@@ -1845,6 +1856,40 @@ export function CashFlow() {
           </>
         )}
       </div>
+
+      {isTrendInfoOpen && (
+        <InfoModal title="Trasferimenti interni e linee del grafico" onClose={() => setIsTrendInfoOpen(false)}>
+          <p>
+            Quando sposti soldi tra i tuoi conti (es. da BPER a Webank, o da Webank agli ETF) il
+            patrimonio <strong>non cambia</strong> — ma la linea del singolo conto crolla o schizza,
+            e a prima vista sembra un'uscita o un guadagno. Ogni linea reagisce in modo diverso:
+          </p>
+          <p>
+            <strong>Totale</strong> — immune a tutti i trasferimenti interni, sempre. Si muove solo
+            per soldi che entrano o escono davvero (stipendio, spese) e per il mercato. È la
+            risposta a "sto diventando più ricco?".
+          </p>
+          <p>
+            <strong>Classificazioni</strong> (Liquidità, Investimenti...) — immuni ai giri{' '}
+            <em>tra conti della stessa classe</em>: BPER→Webank non muove "Liquidità". Se invece
+            investi (Webank→ETF), "Liquidità" scende e "Investimenti" sale: non è rumore, è la
+            fotografia corretta di dove hai spostato la ricchezza — e il Totale intanto resta
+            fermo. Più la classe è ampia, più è immune.
+          </p>
+          <p>
+            <strong>Singoli conti</strong> (BPER, TR, XEON...) — mai immuni: ogni trasferimento che
+            tocca il conto muove la linea. Usali solo per riconciliare l'estratto conto. I{' '}
+            <span className="text-amber-600 font-medium">pallini ambra</span> sul grafico segnalano
+            i probabili trasferimenti interni (due conti che si muovono di importi uguali e
+            opposti nello stesso check): passa il mouse sul punto per vedere da dove a dove.
+          </p>
+          <p className="rounded-lg bg-slate-50 p-2.5">
+            Uso consigliato: <strong>Totale</strong> per la crescita complessiva,{' '}
+            <strong>Liquidità + Investimenti</strong> per l'allocazione, singolo conto solo per i
+            controlli puntuali.
+          </p>
+        </InfoModal>
+      )}
 
       {isStatsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
