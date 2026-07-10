@@ -307,6 +307,17 @@ function getPieShortLabel(column: CashFlowColumn): string {
   return LEGACY_PIE_SHORT_LABELS[column.key] ?? (column.label.length > 6 ? `${column.label.slice(0, 6)}.` : column.label);
 }
 
+// True when the column's displayed/summed value is net of capital-gain tax:
+// etfLordo is always netted (legacy RENDIM. LORDO formula or fiscal config),
+// any other column becomes netted once the user sets aliquota + capitale
+// investito in the Fiscalità tab
+function isFiscallyNetted(column: CashFlowColumn): boolean {
+  return (
+    column.key === 'etfLordo' ||
+    (column.taxRatePct != null && column.investedCapital != null)
+  );
+}
+
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const normalized = hex.replace('#', '');
   const expanded = normalized.length === 3 ? normalized.split('').map((char) => `${char}${char}`).join('') : normalized;
@@ -939,8 +950,12 @@ export function CashFlow() {
       const baseColor = groupColors.get(group.key) ?? '#94a3b8';
       return group.columns.map((entry: ValuedColumn, index: number) => ({
         key: entry.column.key,
-        label: entry.column.label,
-        shortLabel: getPieShortLabel(entry.column),
+        label: isFiscallyNetted(entry.column)
+          ? `${entry.column.label} (netto)`
+          : entry.column.label,
+        shortLabel: isFiscallyNetted(entry.column)
+          ? `${getPieShortLabel(entry.column)} (netto)`
+          : getPieShortLabel(entry.column),
         value: entry.value,
         percentage: total > 0 ? (entry.value / total) * 100 : 0,
         color: getColumnShade(baseColor, index, group.columns.length),
