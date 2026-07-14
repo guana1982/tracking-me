@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   useWealthGoals,
   useCreateWealthGoal,
+  useUpdateWealthGoal,
   useDeleteWealthGoal,
 } from '../hooks/useQueries';
 import { cn, formatCurrency } from '../lib/utils';
@@ -11,6 +12,9 @@ import {
   ChevronRight,
   Loader2,
   Plus,
+  Pencil,
+  Check,
+  X,
   Trash2,
   Info,
   TrendingUp,
@@ -95,6 +99,7 @@ const CHART_SERIES: { key: keyof ChartPoint; name: string }[] = [
 export function WealthGoalsCard() {
   const { data: goals, isLoading } = useWealthGoals();
   const createGoal = useCreateWealthGoal();
+  const updateGoal = useUpdateWealthGoal();
   const deleteGoal = useDeleteWealthGoal();
 
   const [expanded, setExpanded] = useState(false);
@@ -103,6 +108,10 @@ export function WealthGoalsCard() {
   const [newName, setNewName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newDate, setNewDate] = useState('');
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDate, setEditDate] = useState('');
 
   const headerGoal = (goals ?? [])[0];
 
@@ -121,6 +130,33 @@ export function WealthGoalsCard() {
       setNewDate('');
     } catch (error) {
       console.error('Failed to create wealth goal:', error);
+    }
+  };
+
+  const startEdit = (goal: WealthGoalDTO) => {
+    setEditingGoalId(goal.id);
+    setEditName(goal.name);
+    setEditAmount(goal.targetAmount.toFixed(2));
+    setEditDate(goal.targetDate ?? '');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGoalId) return;
+    const amount = parseFloat(editAmount.replace(',', '.'));
+    if (!editName.trim() || isNaN(amount) || amount <= 0) return;
+    try {
+      await updateGoal.mutateAsync({
+        id: editingGoalId,
+        data: {
+          name: editName.trim(),
+          targetAmount: Math.round(amount * 100) / 100,
+          targetDate: editDate || null, // empty date clears the deadline
+        },
+      });
+      setEditingGoalId(null);
+    } catch (error) {
+      console.error('Failed to update wealth goal:', error);
     }
   };
 
@@ -228,42 +264,101 @@ export function WealthGoalsCard() {
                   stats.progressPct !== null ? Math.max(0, Math.min(100, stats.progressPct)) : 0;
                 const chartOpen = chartGoalId === goal.id;
                 const chartData = chartOpen ? buildChartData(goal) : [];
+                const isEditing = editingGoalId === goal.id;
 
                 return (
                   <div key={goal.id} className="space-y-1.5">
-                    {/* Name + status + actions */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <p className="font-medium text-slate-700 truncate">{goal.name}</p>
-                      <span
-                        className={cn(
-                          'px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0',
-                          meta.className
-                        )}
-                      >
-                        {meta.label}
-                      </span>
-                      <span className="flex-1" />
-                      <button
-                        onClick={() => setChartGoalId(chartOpen ? null : goal.id)}
-                        className={cn(
-                          'p-1.5 rounded transition-colors flex-shrink-0',
-                          chartOpen
-                            ? 'text-indigo-500 bg-indigo-50'
-                            : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'
-                        )}
-                        title="Mostra/nascondi il grafico di proiezione"
-                      >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(goal.id, goal.name)}
-                        disabled={deleteGoal.isPending}
-                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0"
-                        title="Elimina obiettivo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {isEditing ? (
+                      /* Inline edit: name, target amount, optional deadline (clear = remove it) */
+                      <form onSubmit={handleSaveEdit} className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Nome"
+                          className="input text-sm flex-1"
+                        />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          placeholder="Importo €"
+                          className="input text-sm w-full sm:w-28"
+                        />
+                        <input
+                          type="date"
+                          value={editDate}
+                          onChange={(e) => setEditDate(e.target.value)}
+                          className="input text-sm w-full sm:w-40"
+                          title="Scadenza: svuota il campo per toglierla"
+                        />
+                        <div className="flex gap-1">
+                          <button
+                            type="submit"
+                            disabled={updateGoal.isPending || !editName.trim() || !editAmount.trim()}
+                            className="btn btn-primary text-sm"
+                            title="Salva le modifiche"
+                          >
+                            {updateGoal.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Check className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingGoalId(null)}
+                            className="btn text-sm text-slate-500 hover:text-slate-700"
+                            title="Annulla"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      /* Name + status + actions */
+                      <div className="flex items-center gap-2 text-sm">
+                        <p className="font-medium text-slate-700 truncate">{goal.name}</p>
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0',
+                            meta.className
+                          )}
+                        >
+                          {meta.label}
+                        </span>
+                        <span className="flex-1" />
+                        <button
+                          onClick={() => startEdit(goal)}
+                          className="p-1.5 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded transition-colors flex-shrink-0"
+                          title="Modifica nome, importo o scadenza"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setChartGoalId(chartOpen ? null : goal.id)}
+                          className={cn(
+                            'p-1.5 rounded transition-colors flex-shrink-0',
+                            chartOpen
+                              ? 'text-indigo-500 bg-indigo-50'
+                              : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'
+                          )}
+                          title="Mostra/nascondi il grafico di proiezione"
+                        >
+                          <TrendingUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(goal.id, goal.name)}
+                          disabled={deleteGoal.isPending}
+                          className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                          title="Elimina obiettivo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     {/* Progress bar */}
                     <div className="flex items-center gap-3">
