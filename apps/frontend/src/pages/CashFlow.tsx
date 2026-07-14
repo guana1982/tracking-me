@@ -457,14 +457,21 @@ export function CashFlow() {
 
   // Fiscal netting: columns configured with taxRatePct + investedCapital hold
   // the GROSS value and contribute to every total net of the capital-gain tax:
-  // value − max(0, value − invested) × rate. ETF (etfLordo) additionally
-  // subtracts PAC commissions; without a config it falls back to the legacy
-  // rendimentoLordo × 26% formula.
+  // value − max(0, value − invested) × rate. A config with fiscalSince applies
+  // only to checks dated on/after it: earlier checks keep the pre-config
+  // method, so a static capitale investito doesn't rewrite history. ETF
+  // (etfLordo) additionally subtracts PAC commissions; without an (active)
+  // config it falls back to the legacy rendimentoLordo × 26% formula.
+  const fiscalConfigActive = (column: CashFlowColumn, rowDate: string): boolean =>
+    column.taxRatePct != null &&
+    column.investedCapital != null &&
+    (!column.fiscalSince || rowDate >= column.fiscalSince);
+
   const netRowValue = (row: CashFlowRow, column: CashFlowColumn): number => {
     const raw = getRowValue(row, column.key);
-    if (column.taxRatePct != null && column.investedCapital != null) {
-      const gain = Math.max(0, raw - column.investedCapital);
-      return raw - (gain * column.taxRatePct) / 100;
+    if (fiscalConfigActive(column, row.date)) {
+      const gain = Math.max(0, raw - column.investedCapital!);
+      return raw - (gain * column.taxRatePct!) / 100;
     }
     return raw;
   };
@@ -473,11 +480,27 @@ export function CashFlow() {
 
   const etfNetValue = (row: CashFlowRow): number => {
     const commissionTotal = settings.commissionPerEtf * settings.etfCount;
-    if (etfColumn && etfColumn.taxRatePct != null && etfColumn.investedCapital != null) {
+    if (etfColumn && fiscalConfigActive(etfColumn, row.date)) {
       return netRowValue(row, etfColumn) - commissionTotal;
     }
     return getRowValue(row, 'etfLordo') - getRowValue(row, 'rendimentoLordo') * 0.26 - commissionTotal;
   };
+
+  // Check-form fields follow the form DATE: editing a check older than the
+  // ETF config's decorrenza brings the Guadagno ETF (lordo) field back, since
+  // that check is still valued with the legacy formula
+  const formColumns = useMemo(() => {
+    const etf = columns.find((column) => column.key === 'etfLordo');
+    const etfConfigActiveAtFormDate =
+      etf != null &&
+      etf.taxRatePct != null &&
+      etf.investedCapital != null &&
+      (!etf.fiscalSince || form.date >= etf.fiscalSince);
+    return columns.filter(
+      (column) =>
+        column.isActive && !(column.key === 'rendimentoLordo' && etfConfigActiveAtFormDate)
+    );
+  }, [columns, form.date]);
 
   useEffect(() => {
     if (settingsData) {
@@ -2628,14 +2651,16 @@ export function CashFlow() {
                   sulla plusvalenza, per questo serve il capitale investito. Senza configurazione
                   la colonna entra così com'è; l'ETF senza configurazione usa il metodo storico
                   (RENDIM. LORDO × 26% + commissioni PAC — le commissioni vengono sottratte in
-                  entrambi i casi).
+                  entrambi i casi). <strong>Valida dal</strong>: i check precedenti a quella data
+                  restano valutati col metodo di prima — così la configurazione non riscrive lo
+                  storico e i grafici/medie sul passato rimangono veri. Vuota = vale da sempre.
                 </p>
                 <div className="space-y-2">
                   {columns
                     .filter((column) => column.isActive && column.key !== 'rendimentoLordo')
                     .map((column) => (
                       <div
-                        key={`${column.key}-${column.taxRatePct ?? ''}-${column.investedCapital ?? ''}`}
+                        key={`${column.key}-${column.taxRatePct ?? ''}-${column.investedCapital ?? ''}-${column.fiscalSince ?? ''}`}
                         className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
                       >
                         <div className="flex-1 min-w-0">
@@ -2680,6 +2705,23 @@ export function CashFlow() {
                               if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
                               if (parsed !== (column.investedCapital ?? null)) {
                                 updateColumn.mutate({ key: column.key, data: { investedCapital: parsed } });
+                              }
+                            }}
+                          />
+                          <label
+                            className="text-xs text-slate-500"
+                            title="Decorrenza: i check con data precedente restano valutati col metodo di prima (valore così com'è; per l'ETF il metodo storico RENDIM. LORDO × 26%). Vuota = la configurazione vale per tutto lo storico"
+                          >
+                            Valida dal
+                          </label>
+                          <input
+                            type="date"
+                            className="input h-9 w-36"
+                            defaultValue={column.fiscalSince ?? ''}
+                            onChange={(e) => {
+                              const next = e.target.value || null;
+                              if (next !== (column.fiscalSince ?? null)) {
+                                updateColumn.mutate({ key: column.key, data: { fiscalSince: next } });
                               }
                             }}
                           />
@@ -2744,7 +2786,7 @@ export function CashFlow() {
                     <label className="label">Data</label>
                     <input type="date" className="input" value={form.date} onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} />
                   </div>
-                  {activeColumns.map((column) => (
+                  {formColumns.map((column) => (
                     <div key={column.key}>
                       <label className="label">{column.label}</label>
                       <input

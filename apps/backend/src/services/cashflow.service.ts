@@ -222,6 +222,7 @@ export class CashFlowService {
       taxRatePct: data.taxRatePct !== undefined ? data.taxRatePct : current.taxRatePct ?? null,
       investedCapital:
         data.investedCapital !== undefined ? data.investedCapital : current.investedCapital ?? null,
+      fiscalSince: data.fiscalSince !== undefined ? data.fiscalSince : current.fiscalSince ?? null,
       deductColumnKeys:
         data.deductColumnKeys !== undefined
           ? data.deductColumnKeys
@@ -495,6 +496,7 @@ export class CashFlowService {
         const showInPieValue = (entry as { showInPie?: unknown }).showInPie;
         const taxRatePctValue = (entry as { taxRatePct?: unknown }).taxRatePct;
         const investedCapitalValue = (entry as { investedCapital?: unknown }).investedCapital;
+        const fiscalSinceValue = (entry as { fiscalSince?: unknown }).fiscalSince;
         const deductColumnKeysValue = (entry as { deductColumnKeys?: unknown }).deductColumnKeys;
 
         const key =
@@ -525,6 +527,10 @@ export class CashFlowService {
           investedCapitalValue >= 0
             ? investedCapitalValue
             : null;
+        const fiscalSince =
+          typeof fiscalSinceValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fiscalSinceValue)
+            ? fiscalSinceValue
+            : null;
         const deductColumnKeys = Array.isArray(deductColumnKeysValue)
           ? deductColumnKeysValue.filter(
               (k): k is string => typeof k === 'string' && COLUMN_KEY_REGEX.test(k) && k !== key
@@ -541,6 +547,7 @@ export class CashFlowService {
           showInPie,
           taxRatePct,
           investedCapital,
+          fiscalSince,
           deductColumnKeys: deductColumnKeys.length > 0 ? deductColumnKeys : null,
         });
       });

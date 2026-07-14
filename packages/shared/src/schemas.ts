@@ -246,6 +246,7 @@ export const updateCashFlowColumnSchema = z
     showInPie: z.boolean().optional(),
     taxRatePct: z.number().min(0).max(100).nullable().optional(),
     investedCapital: z.number().min(0).nullable().optional(),
+    fiscalSince: z.string().date().nullable().optional(),
     deductColumnKeys: z.array(z.string().min(1).max(80)).max(10).nullable().optional(),
   })
   .refine(
@@ -256,6 +257,7 @@ export const updateCashFlowColumnSchema = z
       data.showInPie !== undefined ||
       data.taxRatePct !== undefined ||
       data.investedCapital !== undefined ||
+      data.fiscalSince !== undefined ||
       data.deductColumnKeys !== undefined,
     {
       message: 'At least one field must be provided',

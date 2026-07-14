@@ -502,6 +502,12 @@ export interface CashFlowColumnDTO {
   // paid in (PMC), updated only on buys/sells — not at every check.
   taxRatePct?: number | null;
   investedCapital?: number | null;
+  // Config validity date (YYYY-MM-DD): checks BEFORE this date are valued with
+  // the pre-config method (raw value; for etfLordo the legacy rendimentoLordo
+  // × 26% formula), so a config added today doesn't rewrite history — e.g. a
+  // static investedCapital would otherwise read past contributions as taxed
+  // gains and distort every historical delta. Null = applies to all checks
+  fiscalSince?: string | null;
   // Check-form automation: when set, the user types the broker's aggregate
   // value and these columns' values are subtracted on save (e.g. the broker's
   // "ETF total" includes XEON, tracked in its own column). Editing shows the
@@ -540,6 +546,7 @@ export interface UpdateCashFlowColumnDTO {
   showInPie?: boolean;
   taxRatePct?: number | null; // null clears the fiscal netting
   investedCapital?: number | null;
+  fiscalSince?: string | null; // null = config applies to all checks
   deductColumnKeys?: string[] | null; // null clears the check-form deduction
 }
 
