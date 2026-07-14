@@ -443,6 +443,11 @@ export interface CashFlowColumnDTO {
   // paid in (PMC), updated only on buys/sells — not at every check.
   taxRatePct?: number | null;
   investedCapital?: number | null;
+  // Check-form automation: when set, the user types the broker's aggregate
+  // value and these columns' values are subtracted on save (e.g. the broker's
+  // "ETF total" includes XEON, tracked in its own column). Editing shows the
+  // recomposed gross. Stored data stays net, so no computation changes.
+  deductColumnKeys?: string[] | null;
 }
 
 // CashFlow Check - net worth snapshot
@@ -476,6 +481,7 @@ export interface UpdateCashFlowColumnDTO {
   showInPie?: boolean;
   taxRatePct?: number | null; // null clears the fiscal netting
   investedCapital?: number | null;
+  deductColumnKeys?: string[] | null; // null clears the check-form deduction
 }
 
 // CashFlow Settings - per-user commission/ETF config

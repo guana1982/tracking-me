@@ -222,7 +222,15 @@ export class CashFlowService {
       taxRatePct: data.taxRatePct !== undefined ? data.taxRatePct : current.taxRatePct ?? null,
       investedCapital:
         data.investedCapital !== undefined ? data.investedCapital : current.investedCapital ?? null,
+      deductColumnKeys:
+        data.deductColumnKeys !== undefined
+          ? data.deductColumnKeys
+          : current.deductColumnKeys ?? null,
     };
+
+    if (next.deductColumnKeys?.includes(key)) {
+      throw new AppError('A column cannot deduct itself', 400, 'VALIDATION_ERROR');
+    }
 
     if (!next.label) {
       throw new AppError('Column label is required', 400, 'VALIDATION_ERROR');
@@ -487,6 +495,7 @@ export class CashFlowService {
         const showInPieValue = (entry as { showInPie?: unknown }).showInPie;
         const taxRatePctValue = (entry as { taxRatePct?: unknown }).taxRatePct;
         const investedCapitalValue = (entry as { investedCapital?: unknown }).investedCapital;
+        const deductColumnKeysValue = (entry as { deductColumnKeys?: unknown }).deductColumnKeys;
 
         const key =
           typeof keyValue === 'string' && COLUMN_KEY_REGEX.test(keyValue) ? keyValue : '';
@@ -516,10 +525,24 @@ export class CashFlowService {
           investedCapitalValue >= 0
             ? investedCapitalValue
             : null;
+        const deductColumnKeys = Array.isArray(deductColumnKeysValue)
+          ? deductColumnKeysValue.filter(
+              (k): k is string => typeof k === 'string' && COLUMN_KEY_REGEX.test(k) && k !== key
+            )
+          : [];
 
         if (!key || !label || seen.has(key)) return;
         seen.add(key);
-        result.push({ key, label, position, isActive, showInPie, taxRatePct, investedCapital });
+        result.push({
+          key,
+          label,
+          position,
+          isActive,
+          showInPie,
+          taxRatePct,
+          investedCapital,
+          deductColumnKeys: deductColumnKeys.length > 0 ? deductColumnKeys : null,
+        });
       });
     }
 

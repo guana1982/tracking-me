@@ -225,6 +225,16 @@ function toForm(row: CashFlowRow, columns: CashFlowColumn[]): FormState {
   Object.entries(row.values ?? {}).forEach(([key, value]) => {
     if (!(key in values)) values[key] = String(value);
   });
+  // Columns with a deduction config are stored NET but edited as the broker's
+  // GROSS total: recompose it so the user always types/see the same number
+  columns.forEach((column) => {
+    if (!column.deductColumnKeys || column.deductColumnKeys.length === 0) return;
+    const gross = column.deductColumnKeys.reduce(
+      (sum, deductKey) => sum + Number(row.values?.[deductKey] ?? 0),
+      Number(row.values?.[column.key] ?? 0)
+    );
+    values[column.key] = String(Math.round(gross * 100) / 100);
+  });
   return {
     checkLabel: row.checkLabel,
     date: row.date.slice(0, 10),
@@ -233,10 +243,24 @@ function toForm(row: CashFlowRow, columns: CashFlowColumn[]): FormState {
   };
 }
 
-function buildValuesPayload(values: Record<string, string>): Record<string, number> {
+function buildValuesPayload(
+  values: Record<string, string>,
+  columns: CashFlowColumn[]
+): Record<string, number> {
   const out: Record<string, number> = {};
   Object.entries(values).forEach(([key, value]) => {
     out[key] = parseAmount(value);
+  });
+  // Deduction config: the user typed the broker's gross total, store it net of
+  // the configured columns (e.g. ETF total from the broker includes XEON)
+  columns.forEach((column) => {
+    if (!column.deductColumnKeys || column.deductColumnKeys.length === 0) return;
+    if (!(values[column.key] ?? '').trim()) return; // empty stays 0, don't go negative
+    const deducted = column.deductColumnKeys.reduce(
+      (sum, deductKey) => sum - (out[deductKey] ?? 0),
+      out[column.key]
+    );
+    out[column.key] = Math.round(deducted * 100) / 100;
   });
   return out;
 }
@@ -1148,7 +1172,7 @@ export function CashFlow() {
       checkLabel: form.checkLabel.trim() || `CHECK ${rows.length + 1}`,
       date: form.date || today,
       notes: form.notes.trim(),
-      values: buildValuesPayload(form.values),
+      values: buildValuesPayload(form.values, columns),
     };
 
     if (editingRowId) {
@@ -2659,6 +2683,36 @@ export function CashFlow() {
                               }
                             }}
                           />
+                          <label
+                            className="text-xs text-slate-500"
+                            title="Nel check inserisci il totale aggregato del broker: la colonna selezionata verrà sottratta automaticamente al salvataggio (es. il totale ETF del broker include XEON)"
+                          >
+                            Nel check sottrai
+                          </label>
+                          <select
+                            className="input h-9 w-36"
+                            value={column.deductColumnKeys?.[0] ?? ''}
+                            onChange={(e) =>
+                              updateColumn.mutate({
+                                key: column.key,
+                                data: { deductColumnKeys: e.target.value ? [e.target.value] : null },
+                              })
+                            }
+                          >
+                            <option value="">— niente</option>
+                            {columns
+                              .filter(
+                                (other) =>
+                                  other.isActive &&
+                                  other.key !== column.key &&
+                                  other.key !== 'rendimentoLordo'
+                              )
+                              .map((other) => (
+                                <option key={other.key} value={other.key}>
+                                  {other.label}
+                                </option>
+                              ))}
+                          </select>
                         </div>
                       </div>
                     ))}
@@ -2711,10 +2765,20 @@ export function CashFlow() {
                           "profitto"). Serve a calcolare il netto: aggiornala insieme al valore ETF.
                         </p>
                       )}
-                      {column.key === 'etfLordo' && (
+                      {column.deductColumnKeys && column.deductColumnKeys.length > 0 ? (
                         <p className="mt-1 text-[10px] leading-snug text-slate-400">
-                          Valore totale attuale degli ETF, lordo.
+                          Inserisci il totale aggregato del broker:{' '}
+                          {column.deductColumnKeys
+                            .map((deductKey) => columns.find((c) => c.key === deductKey)?.label ?? deductKey)
+                            .join(', ')}{' '}
+                          verrà sottratto in automatico al salvataggio.
                         </p>
+                      ) : (
+                        column.key === 'etfLordo' && (
+                          <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                            Valore totale attuale degli ETF, lordo.
+                          </p>
+                        )
                       )}
                     </div>
                   ))}
