@@ -2293,7 +2293,7 @@ export function CashFlow() {
       {isColumnsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40" />
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+          <div className="relative w-full max-w-7xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
               <div className="flex items-center gap-1">
                 <button
@@ -2661,100 +2661,108 @@ export function CashFlow() {
                     .map((column) => (
                       <div
                         key={`${column.key}-${column.taxRatePct ?? ''}-${column.investedCapital ?? ''}-${column.fiscalSince ?? ''}`}
-                        className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
+                        className="flex flex-col lg:flex-row lg:items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"
                       >
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-slate-900">{column.label}</span>
+                        <div className="lg:w-48 lg:flex-shrink-0 min-w-0">
+                          <span className="block font-medium text-slate-900 truncate">{column.label}</span>
                           {column.taxRatePct != null && column.investedCapital != null && (
-                            <span className="ml-2 text-xs text-emerald-600">
+                            <span className="block text-xs text-emerald-600">
                               netto attivo ({String(column.taxRatePct).replace('.', ',')}%)
                             </span>
                           )}
                           {column.key === 'etfLordo' &&
                             (column.taxRatePct == null || column.investedCapital == null) && (
-                              <span className="ml-2 text-xs text-sky-600">
+                              <span className="block text-xs text-sky-600">
                                 metodo storico: RENDIM. LORDO × 26%
                               </span>
                             )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-slate-500">Aliquota %</label>
-                          <input
-                            className="input h-9 w-20"
-                            inputMode="decimal"
-                            defaultValue={column.taxRatePct ?? ''}
-                            placeholder="13,4"
-                            onBlur={(e) => {
-                              const raw = e.target.value.trim().replace(',', '.');
-                              const parsed = raw === '' ? null : Number.parseFloat(raw);
-                              if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return;
-                              if (parsed !== (column.taxRatePct ?? null)) {
-                                updateColumn.mutate({ key: column.key, data: { taxRatePct: parsed } });
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-1 lg:justify-end">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-slate-500 whitespace-nowrap">Aliquota %</label>
+                            <input
+                              className="input h-9 w-20"
+                              inputMode="decimal"
+                              defaultValue={column.taxRatePct ?? ''}
+                              placeholder="13,4"
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim().replace(',', '.');
+                                const parsed = raw === '' ? null : Number.parseFloat(raw);
+                                if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return;
+                                if (parsed !== (column.taxRatePct ?? null)) {
+                                  updateColumn.mutate({ key: column.key, data: { taxRatePct: parsed } });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-slate-500 whitespace-nowrap">Capitale investito €</label>
+                            <input
+                              className="input h-9 w-28"
+                              inputMode="decimal"
+                              defaultValue={column.investedCapital ?? ''}
+                              placeholder="es. 5000"
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim().replace(',', '.');
+                                const parsed = raw === '' ? null : Number.parseFloat(raw);
+                                if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
+                                if (parsed !== (column.investedCapital ?? null)) {
+                                  updateColumn.mutate({ key: column.key, data: { investedCapital: parsed } });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label
+                              className="text-xs text-slate-500 whitespace-nowrap"
+                              title="Decorrenza: i check con data precedente restano valutati col metodo di prima (valore così com'è; per l'ETF il metodo storico RENDIM. LORDO × 26%). Vuota = la configurazione vale per tutto lo storico"
+                            >
+                              Valida dal
+                            </label>
+                            <input
+                              type="date"
+                              className="input h-9 w-36"
+                              defaultValue={column.fiscalSince ?? ''}
+                              onChange={(e) => {
+                                const next = e.target.value || null;
+                                if (next !== (column.fiscalSince ?? null)) {
+                                  updateColumn.mutate({ key: column.key, data: { fiscalSince: next } });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label
+                              className="text-xs text-slate-500 whitespace-nowrap"
+                              title="Nel check inserisci il totale aggregato del broker: la colonna selezionata verrà sottratta automaticamente al salvataggio (es. il totale ETF del broker include XEON)"
+                            >
+                              Nel check sottrai
+                            </label>
+                            <select
+                              className="input h-9 w-36"
+                              value={column.deductColumnKeys?.[0] ?? ''}
+                              onChange={(e) =>
+                                updateColumn.mutate({
+                                  key: column.key,
+                                  data: { deductColumnKeys: e.target.value ? [e.target.value] : null },
+                                })
                               }
-                            }}
-                          />
-                          <label className="text-xs text-slate-500">Capitale investito €</label>
-                          <input
-                            className="input h-9 w-28"
-                            inputMode="decimal"
-                            defaultValue={column.investedCapital ?? ''}
-                            placeholder="es. 5000"
-                            onBlur={(e) => {
-                              const raw = e.target.value.trim().replace(',', '.');
-                              const parsed = raw === '' ? null : Number.parseFloat(raw);
-                              if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
-                              if (parsed !== (column.investedCapital ?? null)) {
-                                updateColumn.mutate({ key: column.key, data: { investedCapital: parsed } });
-                              }
-                            }}
-                          />
-                          <label
-                            className="text-xs text-slate-500"
-                            title="Decorrenza: i check con data precedente restano valutati col metodo di prima (valore così com'è; per l'ETF il metodo storico RENDIM. LORDO × 26%). Vuota = la configurazione vale per tutto lo storico"
-                          >
-                            Valida dal
-                          </label>
-                          <input
-                            type="date"
-                            className="input h-9 w-36"
-                            defaultValue={column.fiscalSince ?? ''}
-                            onChange={(e) => {
-                              const next = e.target.value || null;
-                              if (next !== (column.fiscalSince ?? null)) {
-                                updateColumn.mutate({ key: column.key, data: { fiscalSince: next } });
-                              }
-                            }}
-                          />
-                          <label
-                            className="text-xs text-slate-500"
-                            title="Nel check inserisci il totale aggregato del broker: la colonna selezionata verrà sottratta automaticamente al salvataggio (es. il totale ETF del broker include XEON)"
-                          >
-                            Nel check sottrai
-                          </label>
-                          <select
-                            className="input h-9 w-36"
-                            value={column.deductColumnKeys?.[0] ?? ''}
-                            onChange={(e) =>
-                              updateColumn.mutate({
-                                key: column.key,
-                                data: { deductColumnKeys: e.target.value ? [e.target.value] : null },
-                              })
-                            }
-                          >
-                            <option value="">— niente</option>
-                            {columns
-                              .filter(
-                                (other) =>
-                                  other.isActive &&
-                                  other.key !== column.key &&
-                                  other.key !== 'rendimentoLordo'
-                              )
-                              .map((other) => (
-                                <option key={other.key} value={other.key}>
-                                  {other.label}
-                                </option>
-                              ))}
-                          </select>
+                            >
+                              <option value="">— niente</option>
+                              {columns
+                                .filter(
+                                  (other) =>
+                                    other.isActive &&
+                                    other.key !== column.key &&
+                                    other.key !== 'rendimentoLordo'
+                                )
+                                .map((other) => (
+                                  <option key={other.key} value={other.key}>
+                                    {other.label}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
                     ))}
