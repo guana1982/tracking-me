@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma.js';
-import type { KpiPanelDTO, CashFlowCheckDTO, CashFlowColumnDTO } from '@budget/shared';
+import type { KpiPanelDTO } from '@budget/shared';
 import { getCurrentPeriodKey, roundCurrency } from '../lib/utils.js';
 import { cashFlowService } from './cashflow.service.js';
+import { buildCheckValuation } from '../lib/check-valuation.js';
 
 // How many completed periods feed the trailing averages (savings rate, fixed
 // cost ratio, average monthly spend)
@@ -59,43 +60,8 @@ export class KpiService {
     const avgMonthlySpend = average(completed.map((t) => t.totalSpend));
 
     // ── Wealth KPIs (cash-flow checks) ───────────────────────────
-    // Same valuation as the cash-flow page total. Columns with a fiscal config
-    // (taxRatePct + investedCapital) hold the GROSS value and are netted of the
-    // capital-gain tax: value − max(0, value − invested) × rate. etfLordo also
-    // subtracts PAC commissions; without a config it falls back to the legacy
-    // formula (rendimentoLordo × 26%). rendimentoLordo itself is never summed:
-    // it is the gain already contained in etfLordo.
-    const commissionTotal = settings.commissionPerEtf * settings.etfCount;
-    const columnByKey = new Map<string, CashFlowColumnDTO>(
-      columns.map((c: CashFlowColumnDTO) => [c.key, c])
-    );
-    const netFiscalValue = (raw: number, column: CashFlowColumnDTO | undefined): number | null => {
-      if (!column || column.taxRatePct == null || column.investedCapital == null) return null;
-      const gain = Math.max(0, raw - column.investedCapital);
-      return raw - (gain * column.taxRatePct) / 100;
-    };
-    const valueFor = (check: CashFlowCheckDTO, key: string): number => {
-      if (key === 'rendimentoLordo') return 0;
-      const raw = check.values[key] ?? 0;
-      const netted = netFiscalValue(raw, columnByKey.get(key));
-      if (key === 'etfLordo') {
-        if (netted !== null) return netted - commissionTotal;
-        const rendimento = check.values['rendimentoLordo'] ?? 0;
-        return raw - rendimento * 0.26 - commissionTotal;
-      }
-      return netted ?? raw;
-    };
-
-    const countedKeys = new Set(
-      columns
-        .filter((c: CashFlowColumnDTO) => c.isActive && c.showInPie)
-        .map((c: CashFlowColumnDTO) => c.key)
-    );
-    const sumKeys = (check: CashFlowCheckDTO, keys: Set<string>): number =>
-      [...keys]
-        .filter((key) => countedKeys.has(key))
-        .reduce((sum, key) => sum + valueFor(check, key), 0);
-    const checkTotal = (check: CashFlowCheckDTO): number => sumKeys(check, countedKeys);
+    // Same valuation as the cash-flow page total (see lib/check-valuation.ts)
+    const { sumKeys, checkTotal } = buildCheckValuation(columns, settings);
 
     const latest = checks[0] ?? null;
     const netWorth = latest ? roundCurrency(checkTotal(latest)) : null;

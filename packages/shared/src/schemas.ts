@@ -125,6 +125,29 @@ export const updateSinkingFundSchema = z
     }
   );
 
+// Wealth goal schemas (net-worth targets with run-rate projections)
+export const createWealthGoalSchema = z.object({
+  name: z.string().min(1).max(60).trim(),
+  targetAmount: z.number().positive().multipleOf(0.01),
+  targetDate: z.string().date().nullable().optional(),
+});
+
+export const updateWealthGoalSchema = z
+  .object({
+    name: z.string().min(1).max(60).trim().optional(),
+    targetAmount: z.number().positive().multipleOf(0.01).optional(),
+    targetDate: z.string().date().nullable().optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.targetAmount !== undefined ||
+      data.targetDate !== undefined,
+    {
+      message: 'At least one field must be provided',
+    }
+  );
+
 // Fixed expense template schemas
 export const createFixedExpenseTemplateSchema = z.object({
   category: fixedExpenseCategorySchema,

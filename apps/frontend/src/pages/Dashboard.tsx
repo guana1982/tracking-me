@@ -9,6 +9,7 @@ import { ExpensesList } from '../components/RecentExpenses';
 import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
 import { KpiPanel } from '../components/KpiPanel';
 import { SinkingFundsCard } from '../components/SinkingFundsCard';
+import { WealthGoalsCard } from '../components/WealthGoalsCard';
 import { Loader2, RefreshCw, Undo2, Lock, Unlock, ArrowRightCircle, ChevronDown, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 
@@ -243,6 +244,11 @@ export function Dashboard() {
       {/* Sinking funds: monthly accruals for irregular expenses */}
       <div className="flex-shrink-0">
         <SinkingFundsCard />
+      </div>
+
+      {/* Wealth goals: net-worth targets with run-rate projections */}
+      <div className="flex-shrink-0">
+        <WealthGoalsCard />
       </div>
 
       {/* Reallocation Button - visible after cutoff day; frozen (non-clickable) while the month is closed */}

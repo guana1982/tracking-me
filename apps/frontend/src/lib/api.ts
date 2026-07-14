@@ -31,6 +31,9 @@ import type {
   SinkingFundDTO,
   CreateSinkingFundDTO,
   UpdateSinkingFundDTO,
+  WealthGoalDTO,
+  CreateWealthGoalDTO,
+  UpdateWealthGoalDTO,
   CashFlowCheckDTO,
   CreateCashFlowCheckDTO,
   UpdateCashFlowCheckDTO,
@@ -166,6 +169,29 @@ export const sinkingFundsApi = {
 
   delete: (id: string) =>
     fetchApi<void>(`/sinking-funds/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Wealth goals (obiettivi di patrimonio con proiezioni run-rate)
+export const wealthGoalsApi = {
+  getAll: () =>
+    fetchApi<WealthGoalDTO[]>('/wealth-goals'),
+
+  create: (data: CreateWealthGoalDTO) =>
+    fetchApi<void>('/wealth-goals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: UpdateWealthGoalDTO) =>
+    fetchApi<void>(`/wealth-goals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/wealth-goals/${id}`, {
       method: 'DELETE',
     }),
 };

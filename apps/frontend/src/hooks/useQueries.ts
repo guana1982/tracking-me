@@ -11,6 +11,7 @@ import {
   portfolioApi,
   spendingCategoriesApi,
   sinkingFundsApi,
+  wealthGoalsApi,
 } from '../lib/api';
 import type {
   CreateExpenseDTO,
@@ -36,6 +37,8 @@ import type {
   UpdateSpendingCategoryDTO,
   CreateSinkingFundDTO,
   UpdateSinkingFundDTO,
+  CreateWealthGoalDTO,
+  UpdateWealthGoalDTO,
 } from '@budget/shared';
 
 // Query keys
@@ -58,6 +61,7 @@ export const queryKeys = {
     ['fixedExpenses', category ?? 'all'] as const,
   kpis: (periodKey: string) => ['kpis', periodKey] as const,
   sinkingFunds: ['sinkingFunds'] as const,
+  wealthGoals: ['wealthGoals'] as const,
   spendingCategories: ['spendingCategories'] as const,
   spendingBreakdown: (periodKey: string) =>
     ['spendingBreakdown', periodKey] as const,
@@ -139,6 +143,48 @@ export function useDeleteSinkingFund() {
     mutationFn: (id: string) => sinkingFundsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
+    },
+  });
+}
+
+// Wealth goals (obiettivi di patrimonio)
+export function useWealthGoals() {
+  return useQuery({
+    queryKey: queryKeys.wealthGoals,
+    queryFn: wealthGoalsApi.getAll,
+  });
+}
+
+export function useCreateWealthGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateWealthGoalDTO) => wealthGoalsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
+    },
+  });
+}
+
+export function useUpdateWealthGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateWealthGoalDTO }) =>
+      wealthGoalsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
+    },
+  });
+}
+
+export function useDeleteWealthGoal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => wealthGoalsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
     },
   });
 }
@@ -594,6 +640,7 @@ export function useCreateCashFlowCheck() {
     mutationFn: (data: CreateCashFlowCheckDTO) => cashFlowApi.createCheck(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
     },
   });
 }
@@ -606,6 +653,7 @@ export function useUpdateCashFlowCheck() {
       cashFlowApi.updateCheck(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
     },
   });
 }
@@ -617,6 +665,7 @@ export function useDeleteCashFlowCheck() {
     mutationFn: (id: string) => cashFlowApi.deleteCheck(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cashFlowChecks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wealthGoals });
     },
   });
 }

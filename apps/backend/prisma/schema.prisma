@@ -27,6 +27,7 @@ model User {
   portfolioInstruments   PortfolioInstrument[]
   spendingCategories     SpendingCategory[]
   sinkingFunds           SinkingFund[]
+  wealthGoals            WealthGoal[]
 
   @@index([googleId])
   @@index([email])
@@ -279,6 +280,24 @@ model Reallocation {
 
   @@index([monthPeriodId])
   @@map("reallocations")
+}
+
+// Wealth Goal - net worth target with run-rate projections computed from the
+// cash-flow check history (progress, ETA, required vs actual monthly pace)
+model WealthGoal {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  targetAmount Float
+  targetDate   DateTime? @db.Date
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("wealth_goals")
 }
 
 // CashFlow Check - net worth snapshot at a point in time

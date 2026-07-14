@@ -318,6 +318,65 @@ export interface KpiPanelDTO {
   hasChecks: boolean;
 }
 
+// ============= Wealth Goal DTOs =============
+// Net-worth targets ("arrivare a 60k"): progress and projections are computed
+// server-side from the cash-flow check history using the same net valuation as
+// the cash-flow page total. Corporate playbook: run-rate forecast on the median
+// monthly delta (robust to one-off jumps), percentile band instead of a fake
+// precise date, required-vs-actual pace when a deadline is set
+
+export type WealthGoalStatus = 'achieved' | 'on_track' | 'at_risk' | 'off_track' | 'no_data';
+
+export interface WealthGoalHistoryPointDTO {
+  periodKey: string; // calendar YYYY-MM of the check (last check of the month wins)
+  value: number; // net total at that check
+}
+
+export interface WealthGoalStatsDTO {
+  currentValue: number | null; // net total of the latest check
+  currentDate: string | null;
+  progressPct: number | null; // currentValue / targetAmount × 100
+  remaining: number | null; // targetAmount − currentValue (negative = achieved)
+  monthsOfHistory: number; // calendar months with at least one check
+  // Monthly pace percentiles over the historical month-over-month deltas
+  // (normalized per month when checks skip months). P25 = pessimistic,
+  // P50 = median run-rate, P75 = optimistic
+  paceP25: number | null;
+  paceP50: number | null;
+  paceP75: number | null;
+  // Months to target at each pace (null = unreachable at that pace)
+  monthsToTargetP25: number | null;
+  monthsToTargetP50: number | null;
+  monthsToTargetP75: number | null;
+  etaPeriodP50: string | null; // YYYY-MM at the median pace
+  // Only when targetDate is set
+  monthsRemaining: number | null; // whole months from now to targetDate
+  requiredMonthlyPace: number | null; // remaining / monthsRemaining
+  status: WealthGoalStatus;
+  history: WealthGoalHistoryPointDTO[]; // ascending, for the projection chart
+}
+
+export interface WealthGoalDTO {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetDate: string | null; // YYYY-MM-DD
+  createdAt: string;
+  stats: WealthGoalStatsDTO;
+}
+
+export interface CreateWealthGoalDTO {
+  name: string;
+  targetAmount: number;
+  targetDate?: string | null;
+}
+
+export interface UpdateWealthGoalDTO {
+  name?: string;
+  targetAmount?: number;
+  targetDate?: string | null; // null clears the deadline
+}
+
 // ============= Dashboard DTOs =============
 
 // Category summary for dashboard (budget categories only — EXTRA is tracked separately)

@@ -14,6 +14,7 @@ import { fixedExpenseTemplateRoutes } from './routes/fixed-expense-template.rout
 import { portfolioRoutes } from './routes/portfolio.routes.js';
 import { spendingCategoryRoutes } from './routes/spending-category.routes.js';
 import { sinkingFundRoutes } from './routes/sinking-fund.routes.js';
+import { wealthGoalRoutes } from './routes/wealth-goal.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
 import { authRoutes } from './auth/auth.routes.js';
@@ -92,6 +93,7 @@ await fastify.register(swagger, {
       { name: 'Portfolio', description: 'Portfolio historical market data' },
       { name: 'Spending Categories', description: 'Fine-grained expense classification' },
       { name: 'Sinking Funds', description: 'Monthly accruals for irregular expenses' },
+      { name: 'Wealth Goals', description: 'Net worth targets with run-rate projections' },
     ],
   },
 });
@@ -144,6 +146,7 @@ await fastify.register(fixedExpenseTemplateRoutes, { prefix: '/api/fixed-expense
 await fastify.register(portfolioRoutes, { prefix: '/api/portfolio' });
 await fastify.register(spendingCategoryRoutes, { prefix: '/api/spending-categories' });
 await fastify.register(sinkingFundRoutes, { prefix: '/api/sinking-funds' });
+await fastify.register(wealthGoalRoutes, { prefix: '/api/wealth-goals' });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
