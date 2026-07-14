@@ -59,30 +59,30 @@ type ChartPoint = {
   periodKey: string;
   storico?: number;
   p25?: number;
-  p50?: number;
+  avg?: number;
   p75?: number;
 };
 
 // History + three dashed projection lines anchored to the last real point
 function buildChartData(goal: WealthGoalDTO): ChartPoint[] {
-  const { history, paceP25, paceP50, paceP75, monthsToTargetP25, monthsToTargetP50 } = goal.stats;
+  const { history, paceP25, paceAvg, paceP75, monthsToTargetP25, monthsToTargetAvg } = goal.stats;
   if (history.length === 0) return [];
 
   const data: ChartPoint[] = history.map((p) => ({ periodKey: p.periodKey, storico: p.value }));
-  if (paceP50 === null) return data;
+  if (paceAvg === null) return data;
 
   const last = history[history.length - 1];
   const connector = data[data.length - 1];
   connector.p25 = last.value;
-  connector.p50 = last.value;
+  connector.avg = last.value;
   connector.p75 = last.value;
 
-  const horizon = Math.min(36, Math.max(6, monthsToTargetP25 ?? monthsToTargetP50 ?? 12));
+  const horizon = Math.min(36, Math.max(6, monthsToTargetP25 ?? monthsToTargetAvg ?? 12));
   for (let i = 1; i <= horizon; i++) {
     data.push({
       periodKey: addMonths(last.periodKey, i),
       p25: paceP25 !== null ? Math.round((last.value + paceP25 * i) * 100) / 100 : undefined,
-      p50: Math.round((last.value + paceP50 * i) * 100) / 100,
+      avg: Math.round((last.value + paceAvg * i) * 100) / 100,
       p75: paceP75 !== null ? Math.round((last.value + paceP75 * i) * 100) / 100 : undefined,
     });
   }
@@ -91,9 +91,9 @@ function buildChartData(goal: WealthGoalDTO): ChartPoint[] {
 
 const CHART_SERIES: { key: keyof ChartPoint; name: string }[] = [
   { key: 'storico', name: 'Storico' },
-  { key: 'p75', name: 'Ottimistico (P75)' },
-  { key: 'p50', name: 'Mediano (P50)' },
-  { key: 'p25', name: 'Prudente (P25)' },
+  { key: 'p75', name: 'Mesi migliori (P75)' },
+  { key: 'avg', name: 'Ritmo medio' },
+  { key: 'p25', name: 'Mesi peggiori (P25)' },
 ];
 
 export function WealthGoalsCard() {
@@ -222,28 +222,30 @@ export function WealthGoalsCard() {
             immune ai trasferimenti tra conti). Esempio: "arrivare a 60.000 €".
           </p>
           <p>
-            <strong>Il ritmo:</strong> guardiamo di quanto è cresciuto il patrimonio mese per
-            mese e prendiamo la <strong>mediana</strong>, non la media — così un mese anomalo
-            (uno scorporo, un rimborso una tantum) non falsa la previsione. È il "run-rate" che
-            usano le aziende nei forecast.
+            <strong>Il ritmo medio:</strong> è la crescita totale del patrimonio divisa per i
+            mesi trascorsi, contando solo i <strong>mesi completi</strong> (quello in corso è
+            escluso: lo stipendio magari non è ancora arrivato e falserebbe tutto). È lo stesso
+            numero del "Risparmio medio/mese" della pagina Cash Flow — il "run-rate" che usano
+            le aziende nei forecast.
           </p>
           <p>
-            <strong>La forbice:</strong> invece di una data secca (che sarebbe falsa precisione)
-            mostriamo tre traiettorie: prudente (P25 = il ritmo dei tuoi mesi peggiori), mediana
-            (P50) e ottimistica (P75 = i mesi migliori). La verità starà quasi sempre in mezzo.
+            <strong>La forbice:</strong> i singoli mesi ballano molto (un check fatto prima o
+            dopo lo stipendio sposta centinaia di euro), quindi oltre al ritmo medio mostriamo
+            come andrebbe se i prossimi mesi somigliassero ai tuoi <em>peggiori</em> (P25) o ai
+            tuoi <em>migliori</em> (P75). La verità starà quasi sempre in mezzo.
           </p>
           <p>
             <strong>Con una scadenza:</strong> se imposti anche una data, calcoliamo il ritmo
             richiesto — quanto dovresti accumulare al mese per farcela — e lo confrontiamo col
-            tuo ritmo reale: <span className="text-emerald-600 font-medium">In linea</span> se la
-            mediana basta, <span className="text-amber-600 font-medium">A rischio</span> se ce la
-            fai solo nello scenario ottimistico,{' '}
+            tuo ritmo medio: <span className="text-emerald-600 font-medium">In linea</span> se il
+            ritmo medio basta, <span className="text-amber-600 font-medium">A rischio</span> se
+            ce la fai solo se i prossimi mesi vanno come i tuoi migliori,{' '}
             <span className="text-red-600 font-medium">Fuori rotta</span> se nemmeno quello
             basta.
           </p>
           <p>
-            <strong>Attenzione:</strong> servono almeno due mesi con un check per stimare il
-            ritmo, e le prime stime ballano parecchio — più check accumuli, più la proiezione
+            <strong>Attenzione:</strong> servono check in almeno due mesi completi per stimare
+            il ritmo, e le prime stime ballano parecchio — più mesi accumuli, più la proiezione
             diventa affidabile.
           </p>
         </InfoModal>
@@ -390,15 +392,15 @@ export function WealthGoalsCard() {
                         'Nessun check di cash-flow: aggiungi il primo check per iniziare'
                       )}
                     </p>
-                    {stats.status !== 'achieved' && stats.paceP50 !== null && (
+                    {stats.status !== 'achieved' && stats.paceAvg !== null && (
                       <p className="text-[11px] text-slate-400">
-                        Ritmo mediano ~{formatCurrency(stats.paceP50)}/mese
-                        {stats.monthsToTargetP50 !== null && stats.etaPeriodP50 !== null && (
+                        Ritmo medio ~{formatCurrency(stats.paceAvg)}/mese
+                        {stats.monthsToTargetAvg !== null && stats.etaPeriodAvg !== null && (
                           <>
                             {' '}
-                            → arrivo stimato {shortPeriod(stats.etaPeriodP50)} (
-                            {stats.monthsToTargetP50}{' '}
-                            {stats.monthsToTargetP50 === 1 ? 'mese' : 'mesi'}
+                            → arrivo stimato {shortPeriod(stats.etaPeriodAvg)} (
+                            {stats.monthsToTargetAvg}{' '}
+                            {stats.monthsToTargetAvg === 1 ? 'mese' : 'mesi'}
                             {stats.monthsToTargetP75 !== null &&
                               stats.monthsToTargetP25 !== null &&
                               stats.monthsToTargetP25 !== stats.monthsToTargetP75 && (
@@ -409,7 +411,7 @@ export function WealthGoalsCard() {
                             )
                           </>
                         )}
-                        {stats.monthsToTargetP50 === null && ' → a questo ritmo non ci arrivi'}
+                        {stats.monthsToTargetAvg === null && ' → a questo ritmo non ci arrivi'}
                       </p>
                     )}
                     {stats.status !== 'achieved' && stats.requiredMonthlyPace !== null && goal.targetDate && (
@@ -418,26 +420,27 @@ export function WealthGoalsCard() {
                         <span className="font-semibold text-slate-500">
                           {formatCurrency(stats.requiredMonthlyPace)}/mese
                         </span>
-                        {stats.paceP50 !== null && (
+                        {stats.paceAvg !== null && (
                           <>
                             , viaggi a ~
                             <span
                               className={cn(
                                 'font-semibold',
-                                stats.paceP50 >= stats.requiredMonthlyPace
+                                stats.paceAvg >= stats.requiredMonthlyPace
                                   ? 'text-emerald-600'
                                   : 'text-red-500'
                               )}
                             >
-                              {formatCurrency(stats.paceP50)}/mese
+                              {formatCurrency(stats.paceAvg)}/mese
                             </span>
                           </>
                         )}
                       </p>
                     )}
-                    {stats.paceP50 === null && stats.currentValue !== null && (
+                    {stats.paceAvg === null && stats.currentValue !== null && (
                       <p className="text-[11px] text-slate-400">
-                        Servono check in almeno 2 mesi diversi per stimare il ritmo di crescita
+                        Servono check in almeno 2 mesi completi per stimare il ritmo di crescita
+                        (il mese in corso non conta finché non finisce)
                       </p>
                     )}
 
@@ -497,7 +500,7 @@ export function WealthGoalsCard() {
                             />
                             <Line
                               type="monotone"
-                              dataKey="p50"
+                              dataKey="avg"
                               stroke="#6366f1"
                               strokeWidth={1.5}
                               strokeDasharray="4 4"
@@ -518,9 +521,9 @@ export function WealthGoalsCard() {
                     {chartOpen && (
                       <p className="text-[10px] text-slate-400">
                         Linea nera = storico · tratteggiate ={' '}
-                        <span className="text-emerald-600">ottimistica</span> /{' '}
-                        <span className="text-indigo-500">mediana</span> /{' '}
-                        <span className="text-amber-600">prudente</span> · viola = obiettivo
+                        <span className="text-emerald-600">mesi migliori</span> /{' '}
+                        <span className="text-indigo-500">ritmo medio</span> /{' '}
+                        <span className="text-amber-600">mesi peggiori</span> · viola = obiettivo
                       </p>
                     )}
                   </div>

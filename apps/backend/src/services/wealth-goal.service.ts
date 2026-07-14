@@ -50,11 +50,32 @@ export class WealthGoalService {
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([periodKey, point]) => ({ periodKey, value: roundCurrency(point.total) }));
 
-    // Monthly paces, normalized when checks skip months (delta / month gap)
+    // Paces from COMPLETE calendar months only: the in-progress month's
+    // endpoint still moves (salary not landed, spending mid-cycle) and would
+    // poison the estimate — same rule as the cash-flow "Risparmio medio/mese"
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const completed = history.filter((p) => p.periodKey < thisMonth);
+
+    // Month-over-month deltas, normalized when checks skip months. Used for
+    // the P25/P75 band only: single-month deltas swing wildly with the check
+    // timing vs payday, so their median misleads as a central estimate
     const paces: number[] = [];
-    for (let i = 1; i < history.length; i++) {
-      const gap = this.monthsBetween(history[i - 1].periodKey, history[i].periodKey);
-      if (gap > 0) paces.push((history[i].value - history[i - 1].value) / gap);
+    for (let i = 1; i < completed.length; i++) {
+      const gap = this.monthsBetween(completed[i - 1].periodKey, completed[i].periodKey);
+      if (gap > 0) paces.push((completed[i].value - completed[i - 1].value) / gap);
+    }
+
+    // Central pace = telescoped run-rate (total growth / months elapsed):
+    // the timing noise cancels out, matching the "Risparmio medio/mese" stat
+    let paceAvg: number | null = null;
+    if (completed.length >= 2) {
+      const span = this.monthsBetween(
+        completed[0].periodKey,
+        completed[completed.length - 1].periodKey
+      );
+      if (span > 0) {
+        paceAvg = (completed[completed.length - 1].value - completed[0].value) / span;
+      }
     }
 
     const latest = checks[0] ?? null;
@@ -74,6 +95,7 @@ export class WealthGoalService {
         currentPeriodKey,
         history,
         paces,
+        paceAvg,
       }),
     }));
   }
@@ -135,9 +157,10 @@ export class WealthGoalService {
       currentPeriodKey: string | null;
       history: WealthGoalHistoryPointDTO[];
       paces: number[];
+      paceAvg: number | null;
     }
   ): WealthGoalStatsDTO {
-    const { currentValue, currentDate, currentPeriodKey, history, paces } = series;
+    const { currentValue, currentDate, currentPeriodKey, history, paces, paceAvg } = series;
 
     const progressPct =
       currentValue !== null && targetAmount > 0
@@ -146,7 +169,6 @@ export class WealthGoalService {
     const remaining = currentValue !== null ? roundCurrency(targetAmount - currentValue) : null;
 
     const paceP25 = this.percentile(paces, 25);
-    const paceP50 = this.percentile(paces, 50);
     const paceP75 = this.percentile(paces, 75);
 
     const monthsToTarget = (pace: number | null): number | null => {
@@ -158,12 +180,12 @@ export class WealthGoalService {
     };
     // P25 is the SLOWER pace, so it gives the LATER arrival (and vice versa)
     const monthsToTargetP25 = monthsToTarget(paceP25);
-    const monthsToTargetP50 = monthsToTarget(paceP50);
+    const monthsToTargetAvg = monthsToTarget(paceAvg);
     const monthsToTargetP75 = monthsToTarget(paceP75);
 
-    const etaPeriodP50 =
-      monthsToTargetP50 !== null && currentPeriodKey !== null
-        ? this.addMonths(currentPeriodKey, monthsToTargetP50)
+    const etaPeriodAvg =
+      monthsToTargetAvg !== null && currentPeriodKey !== null
+        ? this.addMonths(currentPeriodKey, monthsToTargetAvg)
         : null;
 
     // Deadline block: whole months from today to targetDate
@@ -186,18 +208,18 @@ export class WealthGoalService {
       status = 'no_data';
     } else if (remaining !== null && remaining <= 0) {
       status = 'achieved';
-    } else if (paceP50 === null) {
-      status = 'no_data'; // fewer than two monthly points: no pace yet
+    } else if (paceAvg === null) {
+      status = 'no_data'; // fewer than two complete monthly points: no pace yet
     } else if (requiredMonthlyPace !== null) {
-      // Deadline set: compare required vs actual pace percentiles
-      if (paceP50 >= requiredMonthlyPace) status = 'on_track';
+      // Deadline set: compare required vs actual pace
+      if (paceAvg >= requiredMonthlyPace) status = 'on_track';
       else if (paceP75 !== null && paceP75 >= requiredMonthlyPace) status = 'at_risk';
       else status = 'off_track';
     } else if (targetDate && monthsRemaining === 0) {
       status = 'off_track'; // deadline passed without reaching the target
     } else {
-      // No deadline: on track as long as the median pace moves toward the goal
-      status = paceP50 > 0 ? 'on_track' : 'off_track';
+      // No deadline: on track as long as the average pace moves toward the goal
+      status = paceAvg > 0 ? 'on_track' : 'off_track';
     }
 
     return {
@@ -207,12 +229,12 @@ export class WealthGoalService {
       remaining,
       monthsOfHistory: history.length,
       paceP25: paceP25 !== null ? roundCurrency(paceP25) : null,
-      paceP50: paceP50 !== null ? roundCurrency(paceP50) : null,
+      paceAvg: paceAvg !== null ? roundCurrency(paceAvg) : null,
       paceP75: paceP75 !== null ? roundCurrency(paceP75) : null,
       monthsToTargetP25,
-      monthsToTargetP50,
+      monthsToTargetAvg,
       monthsToTargetP75,
-      etaPeriodP50,
+      etaPeriodAvg,
       monthsRemaining,
       requiredMonthlyPace,
       status,

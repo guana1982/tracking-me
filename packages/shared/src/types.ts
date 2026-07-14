@@ -338,17 +338,20 @@ export interface WealthGoalStatsDTO {
   progressPct: number | null; // currentValue / targetAmount × 100
   remaining: number | null; // targetAmount − currentValue (negative = achieved)
   monthsOfHistory: number; // calendar months with at least one check
-  // Monthly pace percentiles over the historical month-over-month deltas
-  // (normalized per month when checks skip months). P25 = pessimistic,
-  // P50 = median run-rate, P75 = optimistic
+  // Paces are computed on COMPLETE calendar months only (the in-progress
+  // month's endpoint still moves). paceAvg = telescoped run-rate (total
+  // growth / months elapsed): timing noise between checks and paydays cancels
+  // out, matching the "Risparmio medio/mese" stat. P25/P75 = percentiles of
+  // the single-month deltas (normalized per month when checks skip months):
+  // they show how much individual months vary around that run-rate
   paceP25: number | null;
-  paceP50: number | null;
+  paceAvg: number | null;
   paceP75: number | null;
   // Months to target at each pace (null = unreachable at that pace)
   monthsToTargetP25: number | null;
-  monthsToTargetP50: number | null;
+  monthsToTargetAvg: number | null;
   monthsToTargetP75: number | null;
-  etaPeriodP50: string | null; // YYYY-MM at the median pace
+  etaPeriodAvg: string | null; // YYYY-MM at the average pace
   // Only when targetDate is set
   monthsRemaining: number | null; // whole months from now to targetDate
   requiredMonthlyPace: number | null; // remaining / monthsRemaining
