@@ -18,6 +18,7 @@ import {
   Trash2,
   Info,
   TrendingUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -96,6 +97,21 @@ const CHART_SERIES: { key: keyof ChartPoint; name: string }[] = [
   { key: 'p25', name: 'Mesi peggiori (P25)' },
 ];
 
+// Months + arrival period to reach `target` from `current` at `pace` €/month;
+// nulls when the pace doesn't get there (zero/negative or >50 years away)
+function projectEta(
+  target: number,
+  current: number,
+  pace: number | null,
+  fromPeriod: string
+): { months: number; period: string } | null {
+  if (target <= current) return { months: 0, period: fromPeriod };
+  if (pace === null || pace <= 0) return null;
+  const months = Math.ceil((target - current) / pace);
+  if (months > 600) return null;
+  return { months, period: addMonths(fromPeriod, months) };
+}
+
 export function WealthGoalsCard() {
   const { data: goals, isLoading } = useWealthGoals();
   const createGoal = useCreateWealthGoal();
@@ -112,6 +128,7 @@ export function WealthGoalsCard() {
   const [editName, setEditName] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [simTarget, setSimTarget] = useState<number | null>(null);
 
   const headerGoal = (goals ?? [])[0];
 
@@ -169,6 +186,30 @@ export function WealthGoalsCard() {
       }
     }
   };
+
+  // Target→date simulator: slide the amount, read the arrival date. Pace and
+  // current value are goal-independent, so the first goal's stats serve
+  const simStats = headerGoal?.stats;
+  const simReady =
+    simStats != null && simStats.currentValue !== null && simStats.paceAvg !== null;
+  const simMin = simReady ? Math.ceil(simStats.currentValue! / 500) * 500 : 0;
+  const simMax = simMin + 100_000;
+  const simValue = Math.min(
+    simMax,
+    Math.max(simMin, Math.round(simTarget ?? headerGoal?.targetAmount ?? simMin))
+  );
+  const simFrom = simStats?.currentDate
+    ? simStats.currentDate.slice(0, 7)
+    : new Date().toISOString().slice(0, 7);
+  const simEtaAvg = simReady
+    ? projectEta(simValue, simStats.currentValue!, simStats.paceAvg, simFrom)
+    : null;
+  const simEtaBest = simReady
+    ? projectEta(simValue, simStats.currentValue!, simStats.paceP75, simFrom)
+    : null;
+  const simEtaWorst = simReady
+    ? projectEta(simValue, simStats.currentValue!, simStats.paceP25, simFrom)
+    : null;
 
   return (
     <div className="card py-3 shadow-sm bg-white border border-slate-200">
@@ -529,6 +570,70 @@ export function WealthGoalsCard() {
                   </div>
                 );
               })}
+
+              {/* Target→date simulator: slide the amount, read the arrival date */}
+              {simReady && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-3 py-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500" />
+                      Se l'obiettivo fosse…
+                    </p>
+                    <p className="text-sm font-bold text-indigo-600 tabular-nums">
+                      {formatCurrency(simValue)}
+                    </p>
+                  </div>
+                  <input
+                    type="range"
+                    min={simMin}
+                    max={simMax}
+                    step={500}
+                    value={simValue}
+                    onChange={(e) => setSimTarget(Number(e.target.value))}
+                    className="w-full accent-indigo-500 cursor-pointer"
+                    title="Trascina per esplorare: quanto patrimonio → quando lo raggiungi"
+                  />
+                  <div className="text-sm text-slate-700">
+                    {simEtaAvg === null ? (
+                      <span className="text-red-500 font-semibold">
+                        al ritmo medio attuale non ci arrivi
+                      </span>
+                    ) : simEtaAvg.months === 0 ? (
+                      <span className="text-emerald-600 font-semibold">già raggiunto ✓</span>
+                    ) : (
+                      <>
+                        lo raggiungi a{' '}
+                        <span className="font-bold text-slate-900">
+                          {shortPeriod(simEtaAvg.period)}
+                        </span>{' '}
+                        <span className="text-slate-400">
+                          ({simEtaAvg.months} {simEtaAvg.months === 1 ? 'mese' : 'mesi'} al ritmo
+                          medio di {formatCurrency(simStats.paceAvg!)}/mese)
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {simEtaAvg !== null && simEtaAvg.months > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-slate-400">
+                        Se i prossimi mesi somigliano ai tuoi{' '}
+                        <span className="text-emerald-600">migliori</span>:{' '}
+                        {simEtaBest ? shortPeriod(simEtaBest.period) : 'mai'} · ai{' '}
+                        <span className="text-amber-600">peggiori</span>:{' '}
+                        {simEtaWorst ? shortPeriod(simEtaWorst.period) : 'mai'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setNewAmount(String(simValue))}
+                        className="text-[11px] text-indigo-500 hover:underline"
+                        title="Copia questo importo nel form del nuovo obiettivo qui sotto"
+                      >
+                        Usa nel nuovo obiettivo ↓
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* New goal form */}
               <form
