@@ -10,6 +10,7 @@ import {
   ChevronDown,
   LogOut,
   User,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
@@ -29,8 +30,15 @@ export function Layout() {
   const { user, logout } = useAuthStore();
   const isCashFlowPage = location.pathname.startsWith('/cash-flow');
   const isPortfolioPage = location.pathname.startsWith('/portfolio');
-  const showBudgetContext = !isCashFlowPage && !isPortfolioPage;
-  const appTitle = isCashFlowPage ? 'Net Worth' : isPortfolioPage ? 'Portafoglio' : 'Budget';
+  const isFoodPage = location.pathname.startsWith('/food');
+  const showBudgetContext = !isCashFlowPage && !isPortfolioPage && !isFoodPage;
+  const appTitle = isCashFlowPage
+    ? 'Net Worth'
+    : isPortfolioPage
+      ? 'Portafoglio'
+      : isFoodPage
+        ? 'Diario Alimentare'
+        : 'Budget';
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
   const isMonthClosed = dashboard?.monthPeriod?.isClosed ?? false;
@@ -40,6 +48,7 @@ export function Layout() {
     { to: '/expenses', icon: Receipt, label: 'Spese' },
     { to: '/cash-flow', icon: LineChart, label: 'Cash Flow' },
     { to: '/portfolio', icon: Briefcase, label: 'Portafoglio' },
+    { to: '/food', icon: UtensilsCrossed, label: 'Diario' },
     { to: '/settings', icon: Settings, label: 'Impostazioni' },
   ];
 

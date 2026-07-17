@@ -28,6 +28,8 @@ model User {
   spendingCategories     SpendingCategory[]
   sinkingFunds           SinkingFund[]
   wealthGoals            WealthGoal[]
+  meals                  Meal[]
+  quickLogs              QuickLog[]
 
   @@index([googleId])
   @@index([email])
@@ -326,6 +328,112 @@ model CashFlowCheck {
   @@index([userId])
   @@index([date])
   @@map("cashflow_checks")
+}
+
+// ============================================================
+// Food Diary module - isolated domain, shares only User/auth
+// ============================================================
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum MealItemUnit {
+  G
+  ML
+  PIECES
+  PORTION
+  TBSP
+  CUP
+}
+
+enum QuickLogCategory {
+  WORKOUT
+  SLEEP
+  SUPPLEMENT
+  FEELING
+}
+
+enum QuickLogValence {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+// Meal - one logged meal (colazione/pranzo/cena/spuntino) on a given day
+model Meal {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  mealType  MealType
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     MealItem[]
+  photo     MealPhoto?
+  quickLogs QuickLog[]
+
+  @@index([userId])
+  @@index([userId, date])
+  @@map("meals")
+}
+
+// Meal Item - free-text food entry; quantity/unit optional by design
+model MealItem {
+  id       String        @id @default(cuid())
+  mealId   String
+  foodName String
+  quantity Float?
+  unit     MealItemUnit?
+  position Int           @default(0)
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([mealId])
+  @@map("meal_items")
+}
+
+// Meal Photo - resized JPEG stored in-db (no external storage available);
+// kept in its own table so meal list queries never pull the bytes
+model MealPhoto {
+  id        String   @id @default(cuid())
+  mealId    String   @unique
+  mimeType  String   @default("image/jpeg")
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@map("meal_photos")
+}
+
+// Quick Log - raw free-text note; derived fields are recomputed from keyword
+// dictionaries and never structured by the user (text is the source of truth)
+model QuickLog {
+  id              String            @id @default(cuid())
+  userId          String
+  loggedAt        DateTime          @default(now())
+  text            String
+  mealId          String?
+  derivedCategory QuickLogCategory?
+  derivedValence  QuickLogValence?
+  categoryManual  Boolean           @default(false) // user override wins over recompute
+  valenceManual   Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meal Meal? @relation(fields: [mealId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, loggedAt])
+  @@index([mealId])
+  @@map("quick_logs")
 }
 
 // CashFlow Settings - per-user commission/ETF configuration

@@ -15,6 +15,9 @@ import { portfolioRoutes } from './routes/portfolio.routes.js';
 import { spendingCategoryRoutes } from './routes/spending-category.routes.js';
 import { sinkingFundRoutes } from './routes/sinking-fund.routes.js';
 import { wealthGoalRoutes } from './routes/wealth-goal.routes.js';
+import { mealRoutes } from './routes/meal.routes.js';
+import { quickLogRoutes } from './routes/quick-log.routes.js';
+import { foodDashboardRoutes } from './routes/food-dashboard.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
 import { authRoutes } from './auth/auth.routes.js';
@@ -94,6 +97,9 @@ await fastify.register(swagger, {
       { name: 'Spending Categories', description: 'Fine-grained expense classification' },
       { name: 'Sinking Funds', description: 'Monthly accruals for irregular expenses' },
       { name: 'Wealth Goals', description: 'Net worth targets with run-rate projections' },
+      { name: 'Meals', description: 'Food diary meals and items' },
+      { name: 'Quick Logs', description: 'Food diary raw quick logs' },
+      { name: 'Food Dashboard', description: 'Food diary trends, correlations and CSV export' },
     ],
   },
 });
@@ -147,6 +153,9 @@ await fastify.register(portfolioRoutes, { prefix: '/api/portfolio' });
 await fastify.register(spendingCategoryRoutes, { prefix: '/api/spending-categories' });
 await fastify.register(sinkingFundRoutes, { prefix: '/api/sinking-funds' });
 await fastify.register(wealthGoalRoutes, { prefix: '/api/wealth-goals' });
+await fastify.register(mealRoutes, { prefix: '/api/meals' });
+await fastify.register(quickLogRoutes, { prefix: '/api/quick-logs' });
+await fastify.register(foodDashboardRoutes, { prefix: '/api/food-dashboard' });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
