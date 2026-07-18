@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
@@ -8,6 +8,7 @@ import { Portfolio } from './pages/Portfolio';
 import { Settings } from './pages/Settings';
 import { FoodDiary } from './pages/FoodDiary';
 import { FoodTrends } from './pages/FoodTrends';
+import { HomeGate } from './pages/MobileHome';
 import { Login } from './pages/Login';
 import { AuthCallback } from './pages/AuthCallback';
 
@@ -27,7 +28,8 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        {/* Mobile: mode chooser; desktop: straight to the dashboard */}
+        <Route index element={<HomeGate />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="cash-flow" element={<CashFlow />} />

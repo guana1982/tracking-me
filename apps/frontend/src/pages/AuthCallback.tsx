@@ -49,7 +49,8 @@ export function AuthCallback() {
         }
 
         setAuth(data.data, token);
-        navigate('/dashboard', { replace: true });
+        // Root gate: desktop redirects to /dashboard, mobile shows the mode chooser
+        navigate('/', { replace: true });
       } catch (e) {
         console.error('Failed to complete auth callback:', e);
         setError('Autenticazione non riuscita. Riprova.');
