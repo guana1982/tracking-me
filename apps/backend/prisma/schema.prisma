@@ -30,6 +30,7 @@ model User {
   wealthGoals            WealthGoal[]
   meals                  Meal[]
   mealTypeDefinitions    MealTypeDefinition[]
+  mealUnitDefinitions    MealUnitDefinition[]
   quickLogs              QuickLog[]
 
   @@index([googleId])
@@ -335,15 +336,6 @@ model CashFlowCheck {
 // Food Diary module - isolated domain, shares only User/auth
 // ============================================================
 
-enum MealItemUnit {
-  G
-  ML
-  PIECES
-  PORTION
-  TBSP
-  CUP
-}
-
 enum QuickLogCategory {
   WORKOUT
   SLEEP
@@ -395,13 +387,31 @@ model MealTypeDefinition {
   @@map("meal_type_definitions")
 }
 
+model MealUnitDefinition {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  position  Int
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("meal_unit_definitions")
+}
+
 // Meal Item - free-text food entry; quantity/unit optional by design
 model MealItem {
   id       String        @id @default(cuid())
   mealId   String
   foodName String
   quantity Float?
-  unit     MealItemUnit?
+  unit     String?
   position Int           @default(0)
 
   meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)

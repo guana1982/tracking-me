@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
 import { mealTypeDefinitionService } from './meal-type-definition.service.js';
+import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 import { FOOD_CONFIG } from '@budget/shared';
 import type {
   MealDTO,
@@ -56,12 +57,16 @@ class MealService {
       include: mealInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'asc' }],
     });
-    const names = await mealTypeDefinitionService.nameMap(userId);
-    return meals.map((meal) => this.toDTO(meal, names));
+    const [names, unitNames] = await Promise.all([
+      mealTypeDefinitionService.nameMap(userId),
+      mealUnitDefinitionService.nameMap(userId),
+    ]);
+    return meals.map((meal) => this.toDTO(meal, names, unitNames));
   }
 
   async create(userId: string, data: CreateMealDTO): Promise<MealDTO> {
-    await mealTypeDefinitionService.assertActive(userId, data.mealType);
+    await mealTypeDefinitionService.assertExists(userId, data.mealType);
+    await this.assertUnitsExist(userId, data.items);
     const meal = await prisma.meal.create({
       data: {
         userId,
@@ -77,15 +82,19 @@ class MealService {
       },
       include: mealInclude,
     });
-    const names = await mealTypeDefinitionService.nameMap(userId);
-    return this.toDTO(meal, names);
+    const [names, unitNames] = await Promise.all([
+      mealTypeDefinitionService.nameMap(userId),
+      mealUnitDefinitionService.nameMap(userId),
+    ]);
+    return this.toDTO(meal, names, unitNames);
   }
 
   async update(id: string, userId: string, data: UpdateMealDTO): Promise<MealDTO> {
     await this.assertOwned(id, userId);
     if (data.mealType !== undefined) {
-      await mealTypeDefinitionService.assertActive(userId, data.mealType);
+      await mealTypeDefinitionService.assertExists(userId, data.mealType);
     }
+    if (data.items !== undefined) await this.assertUnitsExist(userId, data.items);
 
     const meal = await prisma.$transaction(async (tx) => {
       if (data.items !== undefined) {
@@ -114,8 +123,11 @@ class MealService {
         include: mealInclude,
       });
     });
-    const names = await mealTypeDefinitionService.nameMap(userId);
-    return this.toDTO(meal, names);
+    const [names, unitNames] = await Promise.all([
+      mealTypeDefinitionService.nameMap(userId),
+      mealUnitDefinitionService.nameMap(userId),
+    ]);
+    return this.toDTO(meal, names, unitNames);
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -259,7 +271,16 @@ class MealService {
     return { foodName: item.foodName, quantity: item.quantity, unit: item.unit };
   }
 
-  private toDTO(meal: MealWithRelations, names: Map<string, string>): MealDTO {
+  private async assertUnitsExist(userId: string, items: CreateMealItemDTO[]): Promise<void> {
+    const units = [...new Set(items.flatMap((item) => (item.unit ? [item.unit] : [])))];
+    await Promise.all(units.map((unit) => mealUnitDefinitionService.assertExists(userId, unit)));
+  }
+
+  private toDTO(
+    meal: MealWithRelations,
+    names: Map<string, string>,
+    unitNames: Map<string, string>
+  ): MealDTO {
     return {
       id: meal.id,
       date: toDateOnly(meal.date),
@@ -274,6 +295,7 @@ class MealService {
           foodName: item.foodName,
           quantity: item.quantity,
           unit: item.unit,
+          unitName: item.unit ? unitNames.get(item.unit) ?? item.unit : null,
           position: item.position,
         })
       ),

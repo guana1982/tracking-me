@@ -4,7 +4,6 @@ import { cn } from '../../lib/utils';
 import { mealsApi } from '../../lib/foodApi';
 import {
   mealTypeLabel,
-  unitLabel,
   smartDefaultMealType,
   todayLocal,
   resizePhotoToDataUrl,
@@ -16,9 +15,10 @@ import {
   useFrequentMeals,
   useMealPhoto,
   useMealTypes,
+  useMealUnits,
 } from '../../hooks/useFoodQueries';
-import { MEAL_ITEM_UNITS } from '@budget/shared';
 import { MealTypeManager } from './MealTypeManager';
+import { MealUnitManager } from './MealUnitManager';
 import type {
   MealDTO,
   MealTypeDTO,
@@ -76,6 +76,7 @@ export function MealFormModal({
   const [repeatMessage, setRepeatMessage] = useState<string | null>(null);
   const [isRepeatLoading, setIsRepeatLoading] = useState(false);
   const [isMealTypeManagerOpen, setIsMealTypeManagerOpen] = useState(false);
+  const [isMealUnitManagerOpen, setIsMealUnitManagerOpen] = useState(false);
   const firstFoodRef = useRef<HTMLTextAreaElement>(null);
 
   const createMeal = useCreateMeal();
@@ -83,6 +84,7 @@ export function MealFormModal({
   const suggestions = useFoodSuggestions(suggestQuery);
   const frequentMeals = useFrequentMeals(isOpen && showFrequent);
   const mealTypes = useMealTypes();
+  const mealUnits = useMealUnits();
   const existingPhoto = useMealPhoto(
     editingMeal?.id ?? '',
     isOpen && Boolean(editingMeal?.hasPhoto) && !photoDataUrl && !photoRemoved
@@ -120,6 +122,7 @@ export function MealFormModal({
     setSuggestQuery('');
     setShowFrequent(false);
     setIsMealTypeManagerOpen(false);
+    setIsMealUnitManagerOpen(false);
     setRepeatMessage(null);
     setTimeout(() => firstFoodRef.current?.focus(), 100);
   }, [isOpen, editingMeal, duplicateFrom]);
@@ -352,7 +355,17 @@ export function MealFormModal({
 
           {/* Items */}
           <div>
-            <label className="label">Alimenti</label>
+            <div className="flex items-center justify-between">
+              <label className="label">Alimenti</label>
+              <button
+                type="button"
+                onClick={() => setIsMealUnitManagerOpen(true)}
+                className="mb-1 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Gestisci unità
+              </button>
+            </div>
             <div className="space-y-2">
               {rows.map((row, index) => (
                 <div key={row.key} className="relative">
@@ -435,9 +448,11 @@ export function MealFormModal({
                       className="input w-24 sm:w-28"
                     >
                       <option value="">unità</option>
-                      {MEAL_ITEM_UNITS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unitLabel(unit)}
+                      {mealUnits.data
+                        ?.filter((unit) => unit.isActive || unit.key === row.unit)
+                        .map((unit) => (
+                        <option key={unit.key} value={unit.key}>
+                          {unit.name}{!unit.isActive ? ' (disattivata)' : ''}
                         </option>
                       ))}
                     </select>
@@ -541,6 +556,15 @@ export function MealFormModal({
         onCreated={(key) => {
           setMealType(key);
           setIsMealTypeManagerOpen(false);
+        }}
+      />
+      <MealUnitManager
+        isOpen={isMealUnitManagerOpen}
+        onClose={() => setIsMealUnitManagerOpen(false)}
+        onCreated={(key) => {
+          const target = rows.find((row) => !row.unit) ?? rows[0];
+          if (target) updateRow(target.key, { unit: key });
+          setIsMealUnitManagerOpen(false);
         }}
       />
     </div>

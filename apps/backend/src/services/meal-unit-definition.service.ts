@@ -1,35 +1,35 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
-import { MEAL_TYPES, MEAL_TYPE_LABELS } from '@budget/shared';
+import { MEAL_ITEM_UNITS, MEAL_ITEM_UNIT_LABELS } from '@budget/shared';
 import type {
-  CreateMealTypeDefinitionDTO,
-  MealTypeDefinitionDTO,
-  UpdateMealTypeDefinitionDTO,
+  CreateMealUnitDefinitionDTO,
+  MealUnitDefinitionDTO,
+  UpdateMealUnitDefinitionDTO,
 } from '@budget/shared';
 
-const DEFAULT_DEFINITIONS = MEAL_TYPES.map((key, position) => ({
+const DEFAULT_DEFINITIONS = MEAL_ITEM_UNITS.map((key, position) => ({
   key,
-  name: MEAL_TYPE_LABELS[key].charAt(0).toUpperCase() + MEAL_TYPE_LABELS[key].slice(1),
+  name: MEAL_ITEM_UNIT_LABELS[key],
   position,
   isDefault: true,
 }));
 
-class MealTypeDefinitionService {
-  async list(userId: string, includeInactive = true): Promise<MealTypeDefinitionDTO[]> {
+class MealUnitDefinitionService {
+  async list(userId: string, includeInactive = true): Promise<MealUnitDefinitionDTO[]> {
     await this.ensureDefaults(userId);
-    const [definitions, usedTypes] = await Promise.all([
-      prisma.mealTypeDefinition.findMany({
+    const [definitions, usedUnits] = await Promise.all([
+      prisma.mealUnitDefinition.findMany({
         where: { userId, ...(includeInactive ? {} : { isActive: true }) },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       }),
-      prisma.meal.groupBy({
-        by: ['mealType'],
-        where: { userId },
-        _count: { _all: true },
+      prisma.mealItem.findMany({
+        where: { meal: { userId }, unit: { not: null } },
+        distinct: ['unit'],
+        select: { unit: true },
       }),
     ]);
-    const used = new Set(usedTypes.map((entry) => entry.mealType));
+    const used = new Set(usedUnits.flatMap((entry) => (entry.unit ? [entry.unit] : [])));
     return definitions.map((definition) => ({
       key: definition.key,
       name: definition.name,
@@ -40,18 +40,15 @@ class MealTypeDefinitionService {
     }));
   }
 
-  async create(
-    userId: string,
-    data: CreateMealTypeDefinitionDTO
-  ): Promise<MealTypeDefinitionDTO> {
+  async create(userId: string, data: CreateMealUnitDefinitionDTO): Promise<MealUnitDefinitionDTO> {
     await this.ensureDefaults(userId);
     await this.assertUniqueName(userId, data.name);
-    const last = await prisma.mealTypeDefinition.findFirst({
+    const last = await prisma.mealUnitDefinition.findFirst({
       where: { userId },
       orderBy: { position: 'desc' },
       select: { position: true },
     });
-    const definition = await prisma.mealTypeDefinition.create({
+    const definition = await prisma.mealUnitDefinition.create({
       data: {
         userId,
         key: `custom-${randomUUID()}`,
@@ -65,23 +62,13 @@ class MealTypeDefinitionService {
   async update(
     key: string,
     userId: string,
-    data: UpdateMealTypeDefinitionDTO
-  ): Promise<MealTypeDefinitionDTO> {
+    data: UpdateMealUnitDefinitionDTO
+  ): Promise<MealUnitDefinitionDTO> {
     await this.ensureDefaults(userId);
-    const existing = await prisma.mealTypeDefinition.findFirst({ where: { userId, key } });
-    if (!existing) throw new AppError('Tipo pasto non trovato', 404, 'NOT_FOUND');
+    const existing = await prisma.mealUnitDefinition.findFirst({ where: { userId, key } });
+    if (!existing) throw new AppError('Unità non trovata', 404, 'NOT_FOUND');
     if (data.name !== undefined) await this.assertUniqueName(userId, data.name, key);
-    if (data.isActive === false && existing.isActive) {
-      const activeCount = await prisma.mealTypeDefinition.count({ where: { userId, isActive: true } });
-      if (activeCount <= 1) {
-        throw new AppError(
-          'Deve rimanere almeno un tipo pasto attivo',
-          400,
-          'LAST_ACTIVE_MEAL_TYPE'
-        );
-      }
-    }
-    const definition = await prisma.mealTypeDefinition.update({
+    const definition = await prisma.mealUnitDefinition.update({
       where: { id: existing.id },
       data: {
         name: data.name?.trim(),
@@ -89,18 +76,19 @@ class MealTypeDefinitionService {
         isActive: data.isActive,
       },
     });
-    const isUsed = (await prisma.meal.count({ where: { userId, mealType: key } })) > 0;
+    const isUsed =
+      (await prisma.mealItem.count({ where: { meal: { userId }, unit: key } })) > 0;
     return { ...definition, isUsed };
   }
 
   async assertExists(userId: string, key: string): Promise<void> {
     await this.ensureDefaults(userId);
-    const definition = await prisma.mealTypeDefinition.findFirst({
+    const definition = await prisma.mealUnitDefinition.findFirst({
       where: { userId, key },
       select: { id: true },
     });
     if (!definition) {
-      throw new AppError('Tipo pasto non valido', 400, 'INVALID_MEAL_TYPE');
+      throw new AppError('Unità non valida', 400, 'INVALID_MEAL_UNIT');
     }
   }
 
@@ -112,7 +100,7 @@ class MealTypeDefinitionService {
   private async ensureDefaults(userId: string): Promise<void> {
     await prisma.$transaction(
       DEFAULT_DEFINITIONS.map((definition) =>
-        prisma.mealTypeDefinition.upsert({
+        prisma.mealUnitDefinition.upsert({
           where: { userId_key: { userId, key: definition.key } },
           create: { userId, ...definition },
           update: {},
@@ -122,7 +110,7 @@ class MealTypeDefinitionService {
   }
 
   private async assertUniqueName(userId: string, name: string, excludeKey?: string): Promise<void> {
-    const duplicate = await prisma.mealTypeDefinition.findFirst({
+    const duplicate = await prisma.mealUnitDefinition.findFirst({
       where: {
         userId,
         name: { equals: name.trim(), mode: 'insensitive' },
@@ -131,9 +119,9 @@ class MealTypeDefinitionService {
       select: { id: true },
     });
     if (duplicate) {
-      throw new AppError('Esiste già un tipo pasto con questo nome', 409, 'DUPLICATE_MEAL_TYPE');
+      throw new AppError('Esiste già un’unità con questo nome', 409, 'DUPLICATE_MEAL_UNIT');
     }
   }
 }
 
-export const mealTypeDefinitionService = new MealTypeDefinitionService();
+export const mealUnitDefinitionService = new MealUnitDefinitionService();

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { mealsApi, mealTypesApi, quickLogsApi, foodDashboardApi } from '../lib/foodApi';
+import {
+  mealsApi,
+  mealTypesApi,
+  mealUnitsApi,
+  quickLogsApi,
+  foodDashboardApi,
+} from '../lib/foodApi';
 import type {
   CreateMealDTO,
   UpdateMealDTO,
@@ -8,6 +14,8 @@ import type {
   MealTypeDTO,
   CreateMealTypeDefinitionDTO,
   UpdateMealTypeDefinitionDTO,
+  CreateMealUnitDefinitionDTO,
+  UpdateMealUnitDefinitionDTO,
   FoodComparisonConditionDTO,
 } from '@budget/shared';
 
@@ -16,6 +24,7 @@ import type {
 export const foodQueryKeys = {
   meals: (from?: string, to?: string) => ['foodMeals', from ?? 'all', to ?? 'all'] as const,
   mealTypes: ['foodMealTypes'] as const,
+  mealUnits: ['foodMealUnits'] as const,
   quickLogs: (from?: string, to?: string) =>
     ['foodQuickLogs', from ?? 'all', to ?? 'all'] as const,
   suggestions: (q: string) => ['foodSuggestions', q] as const,
@@ -71,6 +80,35 @@ export function useUpdateMealType() {
       key: string;
       data: UpdateMealTypeDefinitionDTO;
     }) => mealTypesApi.update(key, data),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useMealUnits() {
+  return useQuery({
+    queryKey: foodQueryKeys.mealUnits,
+    queryFn: mealUnitsApi.getAll,
+  });
+}
+
+export function useCreateMealUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateMealUnitDefinitionDTO) => mealUnitsApi.create(data),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useUpdateMealUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: string;
+      data: UpdateMealUnitDefinitionDTO;
+    }) => mealUnitsApi.update(key, data),
     onSuccess: () => invalidateFoodData(queryClient),
   });
 }

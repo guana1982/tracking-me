@@ -16,6 +16,7 @@ export interface MealItemDTO {
   foodName: string;
   quantity: number | null;
   unit: MealItemUnitDTO | null;
+  unitName: string | null;
   position: number;
 }
 
@@ -114,6 +115,25 @@ export interface CreateMealTypeDefinitionDTO {
 }
 
 export interface UpdateMealTypeDefinitionDTO {
+  name?: string;
+  position?: number;
+  isActive?: boolean;
+}
+
+export interface MealUnitDefinitionDTO {
+  key: MealItemUnitDTO;
+  name: string;
+  position: number;
+  isActive: boolean;
+  isDefault: boolean;
+  isUsed: boolean;
+}
+
+export interface CreateMealUnitDefinitionDTO {
+  name: string;
+}
+
+export interface UpdateMealUnitDefinitionDTO {
   name?: string;
   position?: number;
   isActive?: boolean;

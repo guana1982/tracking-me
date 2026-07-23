@@ -11,9 +11,11 @@ import { formatCurrency, cn } from '../lib/utils';
 import { Loader2, Plus, Trash2, Save, AlertCircle, UtensilsCrossed } from 'lucide-react';
 import { SpendingCategoriesManager } from '../components/SpendingCategoriesManager';
 import { MealTypeManager } from '../components/food/MealTypeManager';
+import { MealUnitManager } from '../components/food/MealUnitManager';
 
 export function Settings() {
   const [isMealTypeManagerOpen, setIsMealTypeManagerOpen] = useState(false);
+  const [isMealUnitManagerOpen, setIsMealUnitManagerOpen] = useState(false);
   const { periodKey } = usePeriodStore();
   const { data: dashboard, isLoading: dashboardLoading } = useDashboard(periodKey);
   const { data: incomes, isLoading: incomesLoading } = useIncomes(periodKey);
@@ -348,12 +350,24 @@ export function Settings() {
             Gestisci tipi
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsMealUnitManagerOpen(true)}
+          className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          Gestisci unità degli alimenti
+        </button>
       </section>
 
       <MealTypeManager
         isOpen={isMealTypeManagerOpen}
         onClose={() => setIsMealTypeManagerOpen(false)}
         onCreated={() => setIsMealTypeManagerOpen(false)}
+      />
+      <MealUnitManager
+        isOpen={isMealUnitManagerOpen}
+        onClose={() => setIsMealUnitManagerOpen(false)}
+        onCreated={() => setIsMealUnitManagerOpen(false)}
       />
     </div>
   );

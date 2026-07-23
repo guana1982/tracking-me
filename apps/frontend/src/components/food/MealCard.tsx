@@ -67,7 +67,7 @@ export function MealCard({ meal, onEdit, onDuplicate, onDelete }: MealCardProps)
               <span>{item.foodName}</span>
               {item.quantity != null && (
                 <span className="text-slate-500 tabular-nums shrink-0">
-                  {item.quantity} {item.unit ? unitLabel(item.unit) : ''}
+                  {item.quantity} {item.unitName ?? (item.unit ? unitLabel(item.unit) : '')}
                 </span>
               )}
             </li>

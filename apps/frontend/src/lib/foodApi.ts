@@ -12,6 +12,9 @@ import type {
   MealTypeDefinitionDTO,
   CreateMealTypeDefinitionDTO,
   UpdateMealTypeDefinitionDTO,
+  MealUnitDefinitionDTO,
+  CreateMealUnitDefinitionDTO,
+  UpdateMealUnitDefinitionDTO,
   QuickLogDTO,
   CreateQuickLogDTO,
   UpdateQuickLogDTO,
@@ -74,6 +77,20 @@ export const mealTypesApi = {
     }),
   update: (key: string, data: UpdateMealTypeDefinitionDTO) =>
     fetchApi<MealTypeDefinitionDTO>(`/meal-types/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const mealUnitsApi = {
+  getAll: () => fetchApi<MealUnitDefinitionDTO[]>('/meal-units'),
+  create: (data: CreateMealUnitDefinitionDTO) =>
+    fetchApi<MealUnitDefinitionDTO>('/meal-units', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (key: string, data: UpdateMealUnitDefinitionDTO) =>
+    fetchApi<MealUnitDefinitionDTO>(`/meal-units/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

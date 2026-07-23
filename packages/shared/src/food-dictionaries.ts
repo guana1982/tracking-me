@@ -13,7 +13,8 @@ export type DefaultMealTypeDTO = (typeof MEAL_TYPES)[number];
 export type MealTypeDTO = string;
 
 export const MEAL_ITEM_UNITS = ['G', 'ML', 'PIECES', 'PORTION', 'TBSP', 'CUP'] as const;
-export type MealItemUnitDTO = (typeof MEAL_ITEM_UNITS)[number];
+export type DefaultMealItemUnitDTO = (typeof MEAL_ITEM_UNITS)[number];
+export type MealItemUnitDTO = string;
 
 export const QUICK_LOG_CATEGORIES = ['WORKOUT', 'SLEEP', 'SUPPLEMENT', 'FEELING'] as const;
 export type QuickLogCategoryDTO = (typeof QUICK_LOG_CATEGORIES)[number];
@@ -29,7 +30,7 @@ export const MEAL_TYPE_LABELS: Record<DefaultMealTypeDTO, string> = {
   SNACK: 'spuntino',
 };
 
-export const MEAL_ITEM_UNIT_LABELS: Record<MealItemUnitDTO, string> = {
+export const MEAL_ITEM_UNIT_LABELS: Record<DefaultMealItemUnitDTO, string> = {
   G: 'g',
   ML: 'ml',
   PIECES: 'pezzi',

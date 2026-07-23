@@ -3,6 +3,7 @@ import { MEAL_TYPE_LABELS, MEAL_ITEM_UNIT_LABELS } from '@budget/shared';
 import type { MealTypeDTO, MealItemUnitDTO } from '@budget/shared';
 import { toLocalParts, addDays } from './food-dashboard.service.js';
 import { mealTypeDefinitionService } from './meal-type-definition.service.js';
+import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 
 // CSV format (designed to be fed to an external LLM for analysis):
 // one row per meal_item, quick logs interleaved chronologically and
@@ -19,7 +20,12 @@ export interface CsvMealInput {
   mealTypeName?: string;
   notes: string | null;
   createdAt: Date; // time proxy for the meal
-  items: { foodName: string; quantity: number | null; unit: MealItemUnitDTO | null }[];
+  items: {
+    foodName: string;
+    quantity: number | null;
+    unit: MealItemUnitDTO | null;
+    unitName?: string;
+  }[];
 }
 
 export interface CsvQuickLogInput {
@@ -60,7 +66,11 @@ export function buildFoodCsv(
         meal.mealTypeName ?? MEAL_TYPE_LABELS[meal.mealType as keyof typeof MEAL_TYPE_LABELS] ?? meal.mealType,
         escapeCsvField(item.foodName),
         formatQuantity(item.quantity),
-        item.unit ? MEAL_ITEM_UNIT_LABELS[item.unit] : '',
+        item.unit
+          ? item.unitName ??
+            MEAL_ITEM_UNIT_LABELS[item.unit as keyof typeof MEAL_ITEM_UNIT_LABELS] ??
+            item.unit
+          : '',
         escapeCsvField(meal.notes ?? ''),
         '',
       ].join(',');
@@ -135,7 +145,10 @@ class FoodExportService {
       include: { meal: { select: { date: true, mealType: true } } },
       orderBy: { loggedAt: 'asc' },
     });
-    const names = await mealTypeDefinitionService.nameMap(userId);
+    const [names, unitNames] = await Promise.all([
+      mealTypeDefinitionService.nameMap(userId),
+      mealUnitDefinitionService.nameMap(userId),
+    ]);
 
     return buildFoodCsv(
       meals.map((meal) => ({
@@ -148,6 +161,7 @@ class FoodExportService {
           foodName: item.foodName,
           quantity: item.quantity,
           unit: item.unit,
+          unitName: item.unit ? unitNames.get(item.unit) : undefined,
         })),
       })),
       quickLogs.map((log) => ({

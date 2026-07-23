@@ -24,7 +24,7 @@ export function mealTypeLabel(mealType: MealTypeDTO): string {
 }
 
 export function unitLabel(unit: MealItemUnitDTO): string {
-  return MEAL_ITEM_UNIT_LABELS[unit];
+  return MEAL_ITEM_UNIT_LABELS[unit as keyof typeof MEAL_ITEM_UNIT_LABELS] ?? unit;
 }
 
 export function quickLogCategoryLabel(category: QuickLogCategoryDTO): string {
