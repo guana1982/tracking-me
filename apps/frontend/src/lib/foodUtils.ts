@@ -19,7 +19,8 @@ function capitalize(value: string): string {
 }
 
 export function mealTypeLabel(mealType: MealTypeDTO): string {
-  return capitalize(MEAL_TYPE_LABELS[mealType]);
+  const label = MEAL_TYPE_LABELS[mealType as keyof typeof MEAL_TYPE_LABELS];
+  return label ? capitalize(label) : mealType;
 }
 
 export function unitLabel(unit: MealItemUnitDTO): string {

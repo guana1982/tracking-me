@@ -9,6 +9,9 @@ import type {
   RepeatMealDTO,
   FrequentMealDTO,
   MealTypeDTO,
+  MealTypeDefinitionDTO,
+  CreateMealTypeDefinitionDTO,
+  UpdateMealTypeDefinitionDTO,
   QuickLogDTO,
   CreateQuickLogDTO,
   UpdateQuickLogDTO,
@@ -60,6 +63,20 @@ export const mealsApi = {
   getFrequent: () => fetchApi<FrequentMealDTO[]>('/meals/frequent'),
 
   getPhoto: (id: string) => fetchApi<MealPhotoDTO>(`/meals/${id}/photo`),
+};
+
+export const mealTypesApi = {
+  getAll: () => fetchApi<MealTypeDefinitionDTO[]>('/meal-types'),
+  create: (data: CreateMealTypeDefinitionDTO) =>
+    fetchApi<MealTypeDefinitionDTO>('/meal-types', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (key: string, data: UpdateMealTypeDefinitionDTO) =>
+    fetchApi<MealTypeDefinitionDTO>(`/meal-types/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Quick logs

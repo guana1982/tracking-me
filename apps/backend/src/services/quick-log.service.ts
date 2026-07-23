@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
+import { mealTypeDefinitionService } from './meal-type-definition.service.js';
 import { classifyQuickLog, FOOD_CONFIG } from '@budget/shared';
 import type {
   QuickLogDTO,
@@ -32,7 +33,8 @@ class QuickLogService {
       include: quickLogInclude,
       orderBy: { loggedAt: 'asc' },
     });
-    return logs.map((log) => this.toDTO(log));
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return logs.map((log) => this.toDTO(log, names));
   }
 
   /**
@@ -65,7 +67,8 @@ class QuickLogService {
       },
       include: quickLogInclude,
     });
-    return this.toDTO(log);
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return this.toDTO(log, names);
   }
 
   /**
@@ -108,7 +111,8 @@ class QuickLogService {
       },
       include: quickLogInclude,
     });
-    return this.toDTO(log);
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return this.toDTO(log, names);
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -144,7 +148,7 @@ class QuickLogService {
     return { updated, total: logs.length };
   }
 
-  private toDTO(log: QuickLogWithMeal): QuickLogDTO {
+  private toDTO(log: QuickLogWithMeal, names: Map<string, string>): QuickLogDTO {
     return {
       id: log.id,
       loggedAt: log.loggedAt.toISOString(),
@@ -154,6 +158,7 @@ class QuickLogService {
             id: log.meal.id,
             date: log.meal.date.toISOString().slice(0, 10),
             mealType: log.meal.mealType,
+            mealTypeName: names.get(log.meal.mealType) ?? log.meal.mealType,
           }
         : null,
       derivedCategory: log.derivedCategory,

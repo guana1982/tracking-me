@@ -9,7 +9,8 @@
 // ---------- Enums (codes in English, labels in Italian) ----------
 
 export const MEAL_TYPES = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const;
-export type MealTypeDTO = (typeof MEAL_TYPES)[number];
+export type DefaultMealTypeDTO = (typeof MEAL_TYPES)[number];
+export type MealTypeDTO = string;
 
 export const MEAL_ITEM_UNITS = ['G', 'ML', 'PIECES', 'PORTION', 'TBSP', 'CUP'] as const;
 export type MealItemUnitDTO = (typeof MEAL_ITEM_UNITS)[number];
@@ -21,7 +22,7 @@ export const QUICK_LOG_VALENCES = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] as const;
 export type QuickLogValenceDTO = (typeof QUICK_LOG_VALENCES)[number];
 
 // Italian labels (UI + CSV export use the lowercase form)
-export const MEAL_TYPE_LABELS: Record<MealTypeDTO, string> = {
+export const MEAL_TYPE_LABELS: Record<DefaultMealTypeDTO, string> = {
   BREAKFAST: 'colazione',
   LUNCH: 'pranzo',
   DINNER: 'cena',

@@ -29,6 +29,7 @@ model User {
   sinkingFunds           SinkingFund[]
   wealthGoals            WealthGoal[]
   meals                  Meal[]
+  mealTypeDefinitions    MealTypeDefinition[]
   quickLogs              QuickLog[]
 
   @@index([googleId])
@@ -334,13 +335,6 @@ model CashFlowCheck {
 // Food Diary module - isolated domain, shares only User/auth
 // ============================================================
 
-enum MealType {
-  BREAKFAST
-  LUNCH
-  DINNER
-  SNACK
-}
-
 enum MealItemUnit {
   G
   ML
@@ -368,7 +362,7 @@ model Meal {
   id        String   @id @default(cuid())
   userId    String
   date      DateTime @db.Date
-  mealType  MealType
+  mealType  String
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -381,6 +375,24 @@ model Meal {
   @@index([userId])
   @@index([userId, date])
   @@map("meals")
+}
+
+model MealTypeDefinition {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  position  Int
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("meal_type_definitions")
 }
 
 // Meal Item - free-text food entry; quantity/unit optional by design

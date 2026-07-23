@@ -23,6 +23,7 @@ export interface MealDTO {
   id: string;
   date: string; // YYYY-MM-DD
   mealType: MealTypeDTO;
+  mealTypeName: string;
   notes: string | null;
   hasPhoto: boolean;
   createdAt: string; // ISO datetime - proxy for the meal time (used for linking/late-dinner)
@@ -75,6 +76,7 @@ export interface FoodSuggestionDTO {
 export interface RepeatMealDTO {
   date: string;
   mealType: MealTypeDTO;
+  mealTypeName: string;
   notes: string | null;
   items: CreateMealItemDTO[];
 }
@@ -84,6 +86,7 @@ export interface FrequentMealDTO {
   signature: string; // normalized item-set key
   count: number;
   mealType: MealTypeDTO;
+  mealTypeName: string;
   lastDate: string;
   items: CreateMealItemDTO[];
 }
@@ -94,6 +97,26 @@ export interface QuickLogLinkedMealDTO {
   id: string;
   date: string;
   mealType: MealTypeDTO;
+  mealTypeName: string;
+}
+
+export interface MealTypeDefinitionDTO {
+  key: MealTypeDTO;
+  name: string;
+  position: number;
+  isActive: boolean;
+  isDefault: boolean;
+  isUsed: boolean;
+}
+
+export interface CreateMealTypeDefinitionDTO {
+  name: string;
+}
+
+export interface UpdateMealTypeDefinitionDTO {
+  name?: string;
+  position?: number;
+  isActive?: boolean;
 }
 
 export interface QuickLogDTO {

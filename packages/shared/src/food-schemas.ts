@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  MEAL_TYPES,
   MEAL_ITEM_UNITS,
   QUICK_LOG_CATEGORIES,
   QUICK_LOG_VALENCES,
@@ -10,7 +9,7 @@ import {
 // Food Diary module - Zod validation schemas
 // ============================================================
 
-export const mealTypeSchema = z.enum(MEAL_TYPES);
+export const mealTypeSchema = z.string().trim().min(1).max(64);
 export const mealItemUnitSchema = z.enum(MEAL_ITEM_UNITS);
 export const quickLogCategorySchema = z.enum(QUICK_LOG_CATEGORIES);
 export const quickLogValenceSchema = z.enum(QUICK_LOG_VALENCES);
@@ -86,6 +85,22 @@ export const repeatMealQuerySchema = z.object({
   mealType: mealTypeSchema,
 });
 
+export const createMealTypeDefinitionSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+});
+
+export const updateMealTypeDefinitionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40).optional(),
+    position: z.number().int().min(0).max(1000).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined || data.position !== undefined || data.isActive !== undefined,
+    { message: 'At least one field must be provided' }
+  );
+
 // ---------- Quick logs ----------
 
 export const createQuickLogSchema = z.object({
@@ -137,3 +152,5 @@ export type CreateQuickLogInput = z.infer<typeof createQuickLogSchema>;
 export type UpdateQuickLogInput = z.infer<typeof updateQuickLogSchema>;
 export type FoodRangeQueryInput = z.infer<typeof foodRangeQuerySchema>;
 export type FoodComparisonQueryInput = z.infer<typeof foodComparisonQuerySchema>;
+export type CreateMealTypeDefinitionInput = z.infer<typeof createMealTypeDefinitionSchema>;
+export type UpdateMealTypeDefinitionInput = z.infer<typeof updateMealTypeDefinitionSchema>;

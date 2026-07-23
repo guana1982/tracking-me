@@ -1,5 +1,5 @@
 import { Pencil, Trash2, Copy } from 'lucide-react';
-import { mealTypeLabel, unitLabel, localTimeOf } from '../../lib/foodUtils';
+import { unitLabel, localTimeOf } from '../../lib/foodUtils';
 import { useMealPhoto } from '../../hooks/useFoodQueries';
 import type { MealDTO } from '@budget/shared';
 
@@ -30,7 +30,7 @@ export function MealCard({ meal, onEdit, onDuplicate, onDelete }: MealCardProps)
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
-            {mealTypeLabel(meal.mealType)}
+            {meal.mealTypeName}
           </span>
           <span className="text-xs text-slate-400">{localTimeOf(meal.createdAt)}</span>
         </div>

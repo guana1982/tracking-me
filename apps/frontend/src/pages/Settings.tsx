@@ -8,10 +8,12 @@ import {
   useUpdateBudgetRule,
 } from '../hooks/useQueries';
 import { formatCurrency, cn } from '../lib/utils';
-import { Loader2, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, AlertCircle, UtensilsCrossed } from 'lucide-react';
 import { SpendingCategoriesManager } from '../components/SpendingCategoriesManager';
+import { MealTypeManager } from '../components/food/MealTypeManager';
 
 export function Settings() {
+  const [isMealTypeManagerOpen, setIsMealTypeManagerOpen] = useState(false);
   const { periodKey } = usePeriodStore();
   const { data: dashboard, isLoading: dashboardLoading } = useDashboard(periodKey);
   const { data: incomes, isLoading: incomesLoading } = useIncomes(periodKey);
@@ -326,6 +328,33 @@ export function Settings() {
 
       {/* Spending categories & keyword rules */}
       <SpendingCategoriesManager />
+
+      <section className="card">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <UtensilsCrossed className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Diario alimentare</h2>
+            </div>
+            <p className="text-sm text-slate-500 mt-2">
+              Aggiungi, rinomina o disattiva le voci disponibili nel menu “Tipo pasto”.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsMealTypeManagerOpen(true)}
+            className="btn btn-secondary text-sm shrink-0"
+          >
+            Gestisci tipi
+          </button>
+        </div>
+      </section>
+
+      <MealTypeManager
+        isOpen={isMealTypeManagerOpen}
+        onClose={() => setIsMealTypeManagerOpen(false)}
+        onCreated={() => setIsMealTypeManagerOpen(false)}
+      />
     </div>
   );
 }

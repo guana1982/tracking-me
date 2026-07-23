@@ -3,7 +3,6 @@ import { Pencil, Trash2, StickyNote, Link2, Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
   localTimeOf,
-  mealTypeLabel,
   quickLogCategoryLabel,
   quickLogValenceLabel,
   valenceColor,
@@ -165,7 +164,7 @@ export function QuickLogNote({ log }: QuickLogNoteProps) {
       {log.linkedMeal && (
         <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400">
           <Link2 className="w-3 h-3" />
-          {mealTypeLabel(log.linkedMeal.mealType)} del {log.linkedMeal.date.split('-').reverse().join('/')}
+          {log.linkedMeal.mealTypeName} del {log.linkedMeal.date.split('-').reverse().join('/')}
         </p>
       )}
     </div>

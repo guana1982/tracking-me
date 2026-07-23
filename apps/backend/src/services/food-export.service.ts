@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { MEAL_TYPE_LABELS, MEAL_ITEM_UNIT_LABELS } from '@budget/shared';
 import type { MealTypeDTO, MealItemUnitDTO } from '@budget/shared';
 import { toLocalParts, addDays } from './food-dashboard.service.js';
+import { mealTypeDefinitionService } from './meal-type-definition.service.js';
 
 // CSV format (designed to be fed to an external LLM for analysis):
 // one row per meal_item, quick logs interleaved chronologically and
@@ -15,6 +16,7 @@ export const FOOD_CSV_HEADER =
 export interface CsvMealInput {
   date: string; // YYYY-MM-DD
   mealType: MealTypeDTO;
+  mealTypeName?: string;
   notes: string | null;
   createdAt: Date; // time proxy for the meal
   items: { foodName: string; quantity: number | null; unit: MealItemUnitDTO | null }[];
@@ -23,7 +25,7 @@ export interface CsvMealInput {
 export interface CsvQuickLogInput {
   loggedAt: Date;
   text: string;
-  linkedMeal: { date: string; mealType: MealTypeDTO } | null;
+  linkedMeal: { date: string; mealType: MealTypeDTO; mealTypeName?: string } | null;
 }
 
 function escapeCsvField(value: string): string {
@@ -55,7 +57,7 @@ export function buildFoodCsv(
       const line = [
         'meal_item',
         datetime,
-        MEAL_TYPE_LABELS[meal.mealType],
+        meal.mealTypeName ?? MEAL_TYPE_LABELS[meal.mealType as keyof typeof MEAL_TYPE_LABELS] ?? meal.mealType,
         escapeCsvField(item.foodName),
         formatQuantity(item.quantity),
         item.unit ? MEAL_ITEM_UNIT_LABELS[item.unit] : '',
@@ -72,7 +74,11 @@ export function buildFoodCsv(
       local.minutes % 60
     ).padStart(2, '0')}`;
     const linkedMeal = log.linkedMeal
-      ? `${log.linkedMeal.date} ${MEAL_TYPE_LABELS[log.linkedMeal.mealType]}`
+      ? `${log.linkedMeal.date} ${
+          log.linkedMeal.mealTypeName ??
+          MEAL_TYPE_LABELS[log.linkedMeal.mealType as keyof typeof MEAL_TYPE_LABELS] ??
+          log.linkedMeal.mealType
+        }`
       : '';
     const line = [
       'quick_log',
@@ -129,11 +135,13 @@ class FoodExportService {
       include: { meal: { select: { date: true, mealType: true } } },
       orderBy: { loggedAt: 'asc' },
     });
+    const names = await mealTypeDefinitionService.nameMap(userId);
 
     return buildFoodCsv(
       meals.map((meal) => ({
         date: meal.date.toISOString().slice(0, 10),
         mealType: meal.mealType,
+        mealTypeName: names.get(meal.mealType),
         notes: meal.notes,
         createdAt: meal.createdAt,
         items: meal.items.map((item) => ({
@@ -146,7 +154,11 @@ class FoodExportService {
         loggedAt: log.loggedAt,
         text: log.text,
         linkedMeal: log.meal
-          ? { date: log.meal.date.toISOString().slice(0, 10), mealType: log.meal.mealType }
+          ? {
+              date: log.meal.date.toISOString().slice(0, 10),
+              mealType: log.meal.mealType,
+              mealTypeName: names.get(log.meal.mealType),
+            }
           : null,
       })),
       tzOffset

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Plus, Trash2, Camera, History, Star, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, Camera, History, Star, Loader2, Settings2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { mealsApi } from '../../lib/foodApi';
 import {
@@ -15,8 +15,10 @@ import {
   useFoodSuggestions,
   useFrequentMeals,
   useMealPhoto,
+  useMealTypes,
 } from '../../hooks/useFoodQueries';
-import { MEAL_TYPES, MEAL_ITEM_UNITS } from '@budget/shared';
+import { MEAL_ITEM_UNITS } from '@budget/shared';
+import { MealTypeManager } from './MealTypeManager';
 import type {
   MealDTO,
   MealTypeDTO,
@@ -73,12 +75,14 @@ export function MealFormModal({
   const [showFrequent, setShowFrequent] = useState(false);
   const [repeatMessage, setRepeatMessage] = useState<string | null>(null);
   const [isRepeatLoading, setIsRepeatLoading] = useState(false);
+  const [isMealTypeManagerOpen, setIsMealTypeManagerOpen] = useState(false);
   const firstFoodRef = useRef<HTMLTextAreaElement>(null);
 
   const createMeal = useCreateMeal();
   const updateMeal = useUpdateMeal();
   const suggestions = useFoodSuggestions(suggestQuery);
   const frequentMeals = useFrequentMeals(isOpen && showFrequent);
+  const mealTypes = useMealTypes();
   const existingPhoto = useMealPhoto(
     editingMeal?.id ?? '',
     isOpen && Boolean(editingMeal?.hasPhoto) && !photoDataUrl && !photoRemoved
@@ -115,9 +119,20 @@ export function MealFormModal({
     setActiveSuggestRow(null);
     setSuggestQuery('');
     setShowFrequent(false);
+    setIsMealTypeManagerOpen(false);
     setRepeatMessage(null);
     setTimeout(() => firstFoodRef.current?.focus(), 100);
   }, [isOpen, editingMeal, duplicateFrom]);
+
+  useEffect(() => {
+    if (!isOpen || !mealTypes.data?.length || editingMeal || duplicateFrom) return;
+    const selectedIsActive = mealTypes.data.some(
+      (type) => type.key === mealType && type.isActive
+    );
+    if (!selectedIsActive) {
+      setMealType(mealTypes.data.find((type) => type.isActive)?.key ?? mealType);
+    }
+  }, [isOpen, mealTypes.data, mealType, editingMeal, duplicateFrom]);
 
   const validItems = useMemo(
     () =>
@@ -151,7 +166,9 @@ export function MealFormModal({
         applyPrefill(meal.items);
         if (meal.notes) setNotes(meal.notes);
       } else {
-        setRepeatMessage(`Nessun ${mealTypeLabel(mealType).toLowerCase()} registrato ieri.`);
+        const selectedName =
+          mealTypes.data?.find((type) => type.key === mealType)?.name ?? mealTypeLabel(mealType);
+        setRepeatMessage(`Nessun ${selectedName.toLowerCase()} registrato ieri.`);
       }
     } catch {
       setRepeatMessage('Errore nel recupero del pasto di ieri.');
@@ -246,15 +263,27 @@ export function MealFormModal({
               />
             </div>
             <div>
-              <label className="label">Tipo pasto</label>
+              <div className="flex items-center justify-between">
+                <label className="label">Tipo pasto</label>
+                <button
+                  type="button"
+                  onClick={() => setIsMealTypeManagerOpen(true)}
+                  className="mb-1 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  Gestisci
+                </button>
+              </div>
               <select
                 value={mealType}
                 onChange={(e) => setMealType(e.target.value as MealTypeDTO)}
                 className="input"
               >
-                {MEAL_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {mealTypeLabel(type)}
+                {mealTypes.data
+                  ?.filter((type) => type.isActive || type.key === mealType)
+                  .map((type) => (
+                  <option key={type.key} value={type.key}>
+                    {type.name}{!type.isActive ? ' (disattivato)' : ''}
                   </option>
                 ))}
               </select>
@@ -314,7 +343,7 @@ export function MealFormModal({
                     {meal.items.map((item) => item.foodName).join(', ')}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {mealTypeLabel(meal.mealType)} · {meal.count} volte
+                    {meal.mealTypeName} · {meal.count} volte
                   </p>
                 </button>
               ))}
@@ -505,6 +534,15 @@ export function MealFormModal({
           </button>
         </form>
       </div>
+
+      <MealTypeManager
+        isOpen={isMealTypeManagerOpen}
+        onClose={() => setIsMealTypeManagerOpen(false)}
+        onCreated={(key) => {
+          setMealType(key);
+          setIsMealTypeManagerOpen(false);
+        }}
+      />
     </div>
   );
 }

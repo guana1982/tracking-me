@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
+import { mealTypeDefinitionService } from './meal-type-definition.service.js';
 import { FOOD_CONFIG } from '@budget/shared';
 import type {
   MealDTO,
@@ -55,10 +56,12 @@ class MealService {
       include: mealInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'asc' }],
     });
-    return meals.map((meal) => this.toDTO(meal));
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return meals.map((meal) => this.toDTO(meal, names));
   }
 
   async create(userId: string, data: CreateMealDTO): Promise<MealDTO> {
+    await mealTypeDefinitionService.assertActive(userId, data.mealType);
     const meal = await prisma.meal.create({
       data: {
         userId,
@@ -74,11 +77,15 @@ class MealService {
       },
       include: mealInclude,
     });
-    return this.toDTO(meal);
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return this.toDTO(meal, names);
   }
 
   async update(id: string, userId: string, data: UpdateMealDTO): Promise<MealDTO> {
     await this.assertOwned(id, userId);
+    if (data.mealType !== undefined) {
+      await mealTypeDefinitionService.assertActive(userId, data.mealType);
+    }
 
     const meal = await prisma.$transaction(async (tx) => {
       if (data.items !== undefined) {
@@ -107,7 +114,8 @@ class MealService {
         include: mealInclude,
       });
     });
-    return this.toDTO(meal);
+    const names = await mealTypeDefinitionService.nameMap(userId);
+    return this.toDTO(meal, names);
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -168,10 +176,12 @@ class MealService {
       orderBy: { createdAt: 'desc' },
     });
     if (!meal) return null;
+    const names = await mealTypeDefinitionService.nameMap(userId);
 
     return {
       date: toDateOnly(meal.date),
       mealType: meal.mealType,
+      mealTypeName: names.get(meal.mealType) ?? meal.mealType,
       notes: meal.notes,
       items: meal.items.map((item) => this.toItemInput(item)),
     };
@@ -202,6 +212,7 @@ class MealService {
       }
     }
 
+    const names = await mealTypeDefinitionService.nameMap(userId);
     return [...groups.entries()]
       .filter(([, group]) => group.count >= 2)
       .sort(([, a], [, b]) => b.count - a.count)
@@ -210,6 +221,7 @@ class MealService {
         signature,
         count: group.count,
         mealType: group.sample.mealType,
+        mealTypeName: names.get(group.sample.mealType) ?? group.sample.mealType,
         lastDate: toDateOnly(group.sample.date),
         items: group.sample.items.map((item) => this.toItemInput(item)),
       }));
@@ -247,11 +259,12 @@ class MealService {
     return { foodName: item.foodName, quantity: item.quantity, unit: item.unit };
   }
 
-  private toDTO(meal: MealWithRelations): MealDTO {
+  private toDTO(meal: MealWithRelations, names: Map<string, string>): MealDTO {
     return {
       id: meal.id,
       date: toDateOnly(meal.date),
       mealType: meal.mealType,
+      mealTypeName: names.get(meal.mealType) ?? meal.mealType,
       notes: meal.notes,
       hasPhoto: meal.photo !== null,
       createdAt: meal.createdAt.toISOString(),
