@@ -67,12 +67,13 @@ export function MealFormModal({
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [focusedFoodRow, setFocusedFoodRow] = useState<number | null>(null);
   const [activeSuggestRow, setActiveSuggestRow] = useState<number | null>(null);
   const [suggestQuery, setSuggestQuery] = useState('');
   const [showFrequent, setShowFrequent] = useState(false);
   const [repeatMessage, setRepeatMessage] = useState<string | null>(null);
   const [isRepeatLoading, setIsRepeatLoading] = useState(false);
-  const firstFoodRef = useRef<HTMLInputElement>(null);
+  const firstFoodRef = useRef<HTMLTextAreaElement>(null);
 
   const createMeal = useCreateMeal();
   const updateMeal = useUpdateMeal();
@@ -110,6 +111,7 @@ export function MealFormModal({
     setPhotoDataUrl(null);
     setPhotoRemoved(false);
     setPhotoError(null);
+    setFocusedFoodRow(null);
     setActiveSuggestRow(null);
     setSuggestQuery('');
     setShowFrequent(false);
@@ -325,11 +327,18 @@ export function MealFormModal({
             <div className="space-y-2">
               {rows.map((row, index) => (
                 <div key={row.key} className="relative">
-                  <div className="flex gap-2">
-                    <div className="flex-1 relative">
-                      <input
+                  <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                    <div
+                      className={cn(
+                        'relative min-w-0',
+                        focusedFoodRow === row.key
+                          ? 'basis-full sm:basis-auto sm:flex-1'
+                          : 'flex-1'
+                      )}
+                    >
+                      <textarea
                         ref={index === 0 ? firstFoodRef : undefined}
-                        type="text"
+                        rows={focusedFoodRow === row.key ? 4 : 1}
                         value={row.foodName}
                         onChange={(e) => {
                           updateRow(row.key, { foodName: e.target.value });
@@ -337,12 +346,21 @@ export function MealFormModal({
                           setSuggestQuery(e.target.value);
                         }}
                         onFocus={() => {
+                          setFocusedFoodRow(row.key);
                           setActiveSuggestRow(row.key);
                           setSuggestQuery(row.foodName);
                         }}
-                        onBlur={() => setTimeout(() => setActiveSuggestRow(null), 150)}
+                        onBlur={() => {
+                          setFocusedFoodRow(null);
+                          setTimeout(() => setActiveSuggestRow(null), 150);
+                        }}
                         placeholder="Es. pasta al pomodoro"
-                        className="input"
+                        className={cn(
+                          'input resize-none transition-[height] duration-200',
+                          focusedFoodRow === row.key
+                            ? 'h-28 py-3 leading-6 sm:h-10 sm:py-2 sm:leading-normal'
+                            : 'h-10 overflow-hidden whitespace-nowrap'
+                        )}
                       />
                       {activeSuggestRow === row.key &&
                         (suggestions.data?.length ?? 0) > 0 && (
