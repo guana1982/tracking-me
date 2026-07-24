@@ -49,6 +49,8 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
       ? pace.budgetTarget * 0.02 * (pace.daysElapsed / pace.effectiveCutoffDay)
       : 0;
   const eurosToTarget = Math.max(0, (pct - targetPct) * eurosPerPoint);
+  const redZoneThreshold = 33;
+  const eurosToRedZone = Math.max(0, (pct - redZoneThreshold) * eurosPerPoint);
 
   // Four integer ticks, with the current value normally between the third and
   // fourth tick (e.g. 52, 53, 54, 55 for a value around 54%).
@@ -73,6 +75,21 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
         ) : (
           <p className="text-xs font-semibold" style={{ color: activeZone.color }}>
             Indicatore al minimo
+          </p>
+        )}
+      </div>
+
+      <div className="flex justify-end mb-2">
+        {pct > redZoneThreshold ? (
+          <p className="text-right text-xs text-slate-600">
+            Per arrivare al <strong className="text-slate-900">{redZoneThreshold}%</strong>
+            <br />
+            puoi spendere ancora{' '}
+            <strong style={{ color: ZONES[0].color }}>{formatCurrency(eurosToRedZone)}</strong>
+          </p>
+        ) : (
+          <p className="text-right text-xs font-semibold" style={{ color: ZONES[0].color }}>
+            Sei già nella fascia critica
           </p>
         )}
       </div>
