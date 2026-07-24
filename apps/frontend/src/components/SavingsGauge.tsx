@@ -39,8 +39,11 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
   const pct = Math.max(0, Math.min(100, pace.performancePct));
   const activeZone = ZONES.find((zone) => pct >= zone.from && pct <= zone.to) ?? ZONES[1];
   const displayedPct = Math.round(pct);
-  const targetPct = Math.max(0, displayedPct - 1);
-  const targetDisplayedThreshold = Math.min(100, targetPct + 0.4);
+
+  // Target: il prossimo intero esatto sotto la posizione attuale
+  // Es: se sei a 53.4%, il target è 53.0%; se sei a 54.7%, il target è 54.0%
+  const nextFloorPct = Math.floor(pct);
+  const distanceToFloor = pct - nextFloorPct; // es: 0.4 per 53.4%
 
   // One performance point equals 2% of the monthly spending target in the
   // projection. A variable euro spent today is projected over the full cycle,
@@ -49,16 +52,15 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
     pace.effectiveCutoffDay > 0
       ? pace.budgetTarget * 0.02 * (pace.daysElapsed / pace.effectiveCutoffDay)
       : 0;
-  const eurosToTarget = Math.max(0, (pct - targetDisplayedThreshold) * eurosPerPoint);
+  const eurosToTarget = Math.max(0, distanceToFloor * eurosPerPoint);
   const redZoneThreshold = 33;
   const eurosToRedZone = Math.max(0, (pct - redZoneThreshold) * eurosPerPoint);
 
-  // Four integer ticks, with the current value normally between the third and
-  // fourth tick (e.g. 52, 53, 54, 55 for a value around 54%).
-  const rangeStart = Math.min(97, Math.max(0, Math.floor(pct) - 2));
+  // Four integer ticks centred sul floor: es. per 53.4% → ticks 52,53,54,55
+  const rangeStart = Math.min(97, Math.max(0, nextFloorPct - 1));
   const ticks = Array.from({ length: 4 }, (_, index) => rangeStart + index);
+  // Posizione proporzionale nel range dei 3 intervalli (rangeStart → rangeStart+3)
   const currentPosition = Math.max(0, Math.min(100, ((pct - rangeStart) / 3) * 100));
-
   return (
     <div className="mt-3 pt-3 border-t border-slate-100">
       <div className="flex items-end justify-between gap-3 mb-2">
@@ -66,16 +68,26 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
           <p className="text-xs font-medium text-slate-700">Prossimo punto percentuale</p>
           <p className="text-[11px] text-slate-500">Ipotesi: nuova spesa variabile oggi</p>
         </div>
-        {displayedPct > 0 ? (
+        {displayedPct > 0 && distanceToFloor > 0.001 ? (
           <p className="text-right text-xs text-slate-600">
-            Per visualizzare <strong className="text-slate-900">{targetPct}%</strong>
+            Per arrivare esattamente al{' '}
+            <strong className="text-slate-900">
+              {nextFloorPct.toLocaleString('it-IT', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })}%
+            </strong>
             <br />
-            (a {targetDisplayedThreshold.toLocaleString('it-IT', {
+            (ora sei a {pct.toLocaleString('it-IT', {
               minimumFractionDigits: 1,
               maximumFractionDigits: 1,
             })}%){' '}
             puoi spendere ancora{' '}
             <strong style={{ color: activeZone.color }}>{formatCurrency(eurosToTarget)}</strong>
+          </p>
+        ) : displayedPct > 0 ? (
+          <p className="text-xs font-semibold" style={{ color: activeZone.color }}>
+            Sei esattamente su un punto intero
           </p>
         ) : (
           <p className="text-xs font-semibold" style={{ color: activeZone.color }}>
@@ -395,9 +407,9 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                   La scala sotto il tachimetro traduce ogni punto percentuale in euro di nuova
                   spesa variabile effettuata oggi. L'importo cambia ogni giorno perché una spesa
                   registrata prima nel ciclo incide su più giorni della proiezione. Il valore
-                  principale mostra un decimale; il prossimo punto indica la prima soglia decimale
-                  che viene visualizzata come percentuale intera inferiore (per esempio 53,4%
-                  viene visualizzato come 53%).
+                  principale mostra un decimale; il prossimo punto indica la tacca intera
+                  immediatamente inferiore alla posizione reale. Per esempio, da 54,3% mostra
+                  l'importo esatto necessario per arrivare a 54,0%.
                 </p>
               </div>
             </div>
