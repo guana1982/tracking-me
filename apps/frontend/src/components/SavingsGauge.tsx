@@ -40,6 +40,7 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
   const activeZone = ZONES.find((zone) => pct >= zone.from && pct <= zone.to) ?? ZONES[1];
   const displayedPct = Math.round(pct);
   const targetPct = Math.max(0, displayedPct - 1);
+  const targetDisplayedThreshold = Math.min(100, targetPct + 0.4);
 
   // One performance point equals 2% of the monthly spending target in the
   // projection. A variable euro spent today is projected over the full cycle,
@@ -48,7 +49,7 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
     pace.effectiveCutoffDay > 0
       ? pace.budgetTarget * 0.02 * (pace.daysElapsed / pace.effectiveCutoffDay)
       : 0;
-  const eurosToTarget = Math.max(0, (pct - targetPct) * eurosPerPoint);
+  const eurosToTarget = Math.max(0, (pct - targetDisplayedThreshold) * eurosPerPoint);
   const redZoneThreshold = 33;
   const eurosToRedZone = Math.max(0, (pct - redZoneThreshold) * eurosPerPoint);
 
@@ -67,8 +68,12 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
         </div>
         {displayedPct > 0 ? (
           <p className="text-right text-xs text-slate-600">
-            Per arrivare al <strong className="text-slate-900">{targetPct}%</strong>
+            Per visualizzare <strong className="text-slate-900">{targetPct}%</strong>
             <br />
+            (a {targetDisplayedThreshold.toLocaleString('it-IT', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            })}%){' '}
             puoi spendere ancora{' '}
             <strong style={{ color: activeZone.color }}>{formatCurrency(eurosToTarget)}</strong>
           </p>
@@ -198,13 +203,19 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
         <>
           <div className="flex-1 flex flex-col items-center justify-center">
             <p className="text-2xl font-bold text-slate-900 leading-none mb-1">
-              {Math.round(pct)}%
+              {pct.toLocaleString('it-IT', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })}%
             </p>
             <svg
               viewBox={`0 0 ${W} ${H}`}
               className="w-full h-auto max-w-[240px]"
               role="img"
-              aria-label={`Performance risparmio ${Math.round(pct)}%`}
+              aria-label={`Performance risparmio ${pct.toLocaleString('it-IT', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              })}%`}
             >
               {ZONES.map((z) => (
                 <path
@@ -383,7 +394,10 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                 <p className="text-sm text-slate-600">
                   La scala sotto il tachimetro traduce ogni punto percentuale in euro di nuova
                   spesa variabile effettuata oggi. L'importo cambia ogni giorno perché una spesa
-                  registrata prima nel ciclo incide su più giorni della proiezione.
+                  registrata prima nel ciclo incide su più giorni della proiezione. Il valore
+                  principale mostra un decimale; il prossimo punto indica la prima soglia decimale
+                  che viene visualizzata come percentuale intera inferiore (per esempio 53,4%
+                  viene visualizzato come 53%).
                 </p>
               </div>
             </div>
