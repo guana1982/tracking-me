@@ -35,6 +35,90 @@ function arcWedgePath(cx: number, cy: number, rOuter: number, rInner: number, st
   ].join(' ');
 }
 
+function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
+  const pct = Math.max(0, Math.min(100, pace.performancePct));
+  const displayedPct = Math.round(pct);
+  const targetPct = Math.max(0, displayedPct - 1);
+
+  // One performance point equals 2% of the monthly spending target in the
+  // projection. A variable euro spent today is projected over the full cycle,
+  // so convert that projected delta back to the actual amount spendable today.
+  const eurosPerPoint =
+    pace.effectiveCutoffDay > 0
+      ? pace.budgetTarget * 0.02 * (pace.daysElapsed / pace.effectiveCutoffDay)
+      : 0;
+  const eurosToTarget = Math.max(0, (pct - targetPct) * eurosPerPoint);
+
+  // Four integer ticks, with the current value normally between the third and
+  // fourth tick (e.g. 52, 53, 54, 55 for a value around 54%).
+  const rangeStart = Math.min(97, Math.max(0, Math.floor(pct) - 2));
+  const ticks = Array.from({ length: 4 }, (_, index) => rangeStart + index);
+  const currentPosition = Math.max(0, Math.min(100, ((pct - rangeStart) / 3) * 100));
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="flex items-end justify-between gap-3 mb-2">
+        <div>
+          <p className="text-xs font-medium text-slate-700">Prossimo punto percentuale</p>
+          <p className="text-[11px] text-slate-500">Ipotesi: nuova spesa variabile oggi</p>
+        </div>
+        {displayedPct > 0 ? (
+          <p className="text-right text-xs text-slate-600">
+            Per arrivare al <strong className="text-slate-900">{targetPct}%</strong>
+            <br />
+            puoi spendere ancora{' '}
+            <strong className="text-red-600">{formatCurrency(eurosToTarget)}</strong>
+          </p>
+        ) : (
+          <p className="text-xs font-semibold text-red-600">Indicatore al minimo</p>
+        )}
+      </div>
+
+      <div className="relative h-24 px-1" aria-label={`Posizione attuale ${pct.toFixed(1)}%`}>
+        <div className="absolute left-1 right-1 top-9 h-1 rounded-full bg-slate-200 overflow-hidden">
+          <div
+            className="h-full bg-red-500 rounded-full"
+            style={{ width: `${currentPosition}%` }}
+          />
+        </div>
+
+        <div className="absolute left-1 right-1 top-0">
+          <div
+            className="absolute -translate-x-1/2 flex flex-col items-center"
+            style={{ left: `${currentPosition}%` }}
+          >
+            <span className="text-[10px] font-semibold text-red-600 whitespace-nowrap">Sei qui</span>
+            <span className="mt-0.5 w-0.5 h-7 bg-red-500" />
+          </div>
+        </div>
+
+        <div className="absolute left-1 right-1 top-7 flex justify-between">
+          {ticks.map((tick) => (
+            <div key={tick} className="relative flex justify-center">
+              <span className="absolute top-0 w-px h-5 bg-slate-700" />
+              <span className="absolute top-5 text-[11px] font-semibold text-slate-700">
+                {tick}%
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="absolute left-1 right-1 top-[4.15rem] grid grid-cols-3">
+          {ticks.slice(0, -1).map((tick) => (
+            <span key={tick} className="text-center text-[10px] text-slate-400">
+              {formatCurrency(eurosPerPoint)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-center text-[10px] text-slate-400">
+        Ogni intervallo vale quanto puoi spendere oggi per perdere 1 punto.
+      </p>
+    </div>
+  );
+}
+
 export function SavingsGauge({ pace }: SavingsGaugeProps) {
   const [showInfo, setShowInfo] = useState(false);
   const hasBudget = !!pace && pace.budgetTarget > 0;
@@ -142,6 +226,8 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
               </div>
             ))}
           </div>
+
+          <SavingsStepTracker pace={pace!} />
 
           {/* Primary: projected end-of-month vs budget target */}
           <div className="flex justify-between gap-3 mt-3 pt-2 border-t border-slate-100">
@@ -259,6 +345,17 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
                   <em> in proporzione alle entrate</em> (non il mese con più euro risparmiati in assoluto, ma quello con la
                   migliore percentuale di risparmio). Il confronto e fatto alla <strong>stessa percentuale di ciclo-stipendio trascorso</strong>,
                   proiettando in modo lineare lo stesso avanzamento sul mese migliore.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-800 mb-1">
+                  Indicatore per punto percentuale
+                </p>
+                <p className="text-sm text-slate-600">
+                  La scala sotto il tachimetro traduce ogni punto percentuale in euro di nuova
+                  spesa variabile effettuata oggi. L'importo cambia ogni giorno perché una spesa
+                  registrata prima nel ciclo incide su più giorni della proiezione.
                 </p>
               </div>
             </div>
