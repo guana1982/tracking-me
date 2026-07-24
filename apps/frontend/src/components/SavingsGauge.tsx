@@ -37,6 +37,7 @@ function arcWedgePath(cx: number, cy: number, rOuter: number, rInner: number, st
 
 function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
   const pct = Math.max(0, Math.min(100, pace.performancePct));
+  const activeZone = ZONES.find((zone) => pct >= zone.from && pct <= zone.to) ?? ZONES[1];
   const displayedPct = Math.round(pct);
   const targetPct = Math.max(0, displayedPct - 1);
 
@@ -67,18 +68,20 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
             Per arrivare al <strong className="text-slate-900">{targetPct}%</strong>
             <br />
             puoi spendere ancora{' '}
-            <strong className="text-red-600">{formatCurrency(eurosToTarget)}</strong>
+            <strong style={{ color: activeZone.color }}>{formatCurrency(eurosToTarget)}</strong>
           </p>
         ) : (
-          <p className="text-xs font-semibold text-red-600">Indicatore al minimo</p>
+          <p className="text-xs font-semibold" style={{ color: activeZone.color }}>
+            Indicatore al minimo
+          </p>
         )}
       </div>
 
       <div className="relative h-24 px-1" aria-label={`Posizione attuale ${pct.toFixed(1)}%`}>
         <div className="absolute left-1 right-1 top-9 h-1 rounded-full bg-slate-200 overflow-hidden">
           <div
-            className="h-full bg-red-500 rounded-full"
-            style={{ width: `${currentPosition}%` }}
+            className="h-full rounded-full"
+            style={{ width: `${currentPosition}%`, backgroundColor: activeZone.color }}
           />
         </div>
 
@@ -87,8 +90,16 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
             className="absolute -translate-x-1/2 flex flex-col items-center"
             style={{ left: `${currentPosition}%` }}
           >
-            <span className="text-[10px] font-semibold text-red-600 whitespace-nowrap">Sei qui</span>
-            <span className="mt-0.5 w-0.5 h-7 bg-red-500" />
+            <span
+              className="text-[10px] font-semibold whitespace-nowrap"
+              style={{ color: activeZone.color }}
+            >
+              Sei qui
+            </span>
+            <span
+              className="mt-0.5 w-0.5 h-7"
+              style={{ backgroundColor: activeZone.color }}
+            />
           </div>
         </div>
 
