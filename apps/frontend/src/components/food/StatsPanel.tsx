@@ -26,12 +26,14 @@ export function StatsPanel({ from, to, title, compact = false }: StatsPanelProps
   const data = stats.data;
   const cells: { label: string; value: string }[] = [
     { label: 'Giorni con pasti', value: `${data.daysWithMeals}/${data.totalDays}` },
-    { label: 'Stato medio', value: data.avgDayState !== null ? String(data.avgDayState) : 'n.d.' },
+    { label: 'Fisico medio', value: data.avgDayState !== null ? String(data.avgDayState) : 'n.d.' },
+    { label: 'Umore medio', value: data.avgMoodState !== null ? String(data.avgMoodState) : 'n.d.' },
     { label: 'Pranzo medio', value: data.avgLunchTime ?? 'n.d.' },
     { label: 'Cena media', value: data.avgDinnerTime ?? 'n.d.' },
     { label: 'Allenamenti', value: String(data.workoutCount) },
     { label: 'Sonno +/−', value: `${data.sleepPositive}/${data.sleepNegative}` },
     { label: 'Sensazioni +/−', value: `${data.feelingPositive}/${data.feelingNegative}` },
+    { label: 'Umore +/−', value: `${data.moodPositive}/${data.moodNegative}` },
   ];
 
   return (

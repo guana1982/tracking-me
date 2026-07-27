@@ -344,6 +344,7 @@ enum QuickLogCategory {
   SLEEP
   SUPPLEMENT
   FEELING
+  MOOD
 }
 
 enum QuickLogValence {

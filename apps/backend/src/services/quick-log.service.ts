@@ -44,7 +44,11 @@ class QuickLogService {
    */
   async create(userId: string, data: CreateQuickLogDTO): Promise<QuickLogDTO> {
     const loggedAt = data.loggedAt ? new Date(data.loggedAt) : new Date();
-    const { category, valence } = classifyQuickLog(data.text);
+    const derived = classifyQuickLog(data.text);
+    // Structured entries (mood picker) pin their own meaning: the explicit
+    // value wins and is flagged manual, so recalculate() never rewrites it
+    const category = data.derivedCategory ?? derived.category;
+    const valence = data.derivedValence ?? derived.valence;
 
     const linkWindowStart = new Date(
       loggedAt.getTime() - FOOD_CONFIG.MEAL_LINK_WINDOW_HOURS * 3600 * 1000
@@ -64,6 +68,8 @@ class QuickLogService {
         mealId: recentMeal?.id ?? null,
         derivedCategory: category,
         derivedValence: valence,
+        categoryManual: data.derivedCategory !== undefined,
+        valenceManual: data.derivedValence !== undefined,
       },
       include: quickLogInclude,
     });

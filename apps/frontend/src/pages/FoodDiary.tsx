@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Loader2, AlertCircle, Smile } from 'lucide-react';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { cn } from '../lib/utils';
@@ -10,6 +10,7 @@ import { MealFormModal } from '../components/food/MealFormModal';
 import { MealCard } from '../components/food/MealCard';
 import { QuickLogNote } from '../components/food/QuickLogNote';
 import { QuickLogBar } from '../components/food/QuickLogBar';
+import { MoodPickerModal } from '../components/food/MoodPickerModal';
 import type { MealDTO, QuickLogDTO } from '@budget/shared';
 
 type TimelineEntry =
@@ -26,6 +27,7 @@ function weekStart(date: string): string {
 export function FoodDiary() {
   const [selectedDate, setSelectedDate] = useState(todayLocal());
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+  const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealDTO | null>(null);
   const [duplicateFrom, setDuplicateFrom] = useState<MealDTO | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -126,6 +128,15 @@ export function FoodDiary() {
             <TrendingUp className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Andamento</span>
           </Link>
+          {/* Mood entry lives next to the meal one: same weight, different track */}
+          <button
+            onClick={() => setIsMoodModalOpen(true)}
+            className="hidden sm:flex btn text-xs items-center gap-1.5 bg-fuchsia-600 text-white hover:bg-fuchsia-700"
+            title="Registra l'umore di questo giorno"
+          >
+            <Smile className="w-3.5 h-3.5" />
+            Umore
+          </button>
           <button
             onClick={openCreate}
             className="hidden sm:flex btn btn-primary text-xs items-center gap-1.5"
@@ -184,10 +195,19 @@ export function FoodDiary() {
       ) : timeline.length === 0 ? (
         <div className="card text-center py-10">
           <p className="text-sm text-slate-500">Nessun pasto o nota per questo giorno.</p>
-          <button onClick={openCreate} className="mt-3 btn btn-primary text-sm">
-            <Plus className="w-4 h-4 mr-1.5" />
-            Aggiungi pasto
-          </button>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button onClick={openCreate} className="btn btn-primary text-sm">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Aggiungi pasto
+            </button>
+            <button
+              onClick={() => setIsMoodModalOpen(true)}
+              className="btn text-sm bg-fuchsia-600 text-white hover:bg-fuchsia-700"
+            >
+              <Smile className="w-4 h-4 mr-1.5" />
+              Umore
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -214,14 +234,23 @@ export function FoodDiary() {
         </div>
       </div>
 
-      {/* FAB "+ pasto" (mobile) */}
-      <button
-        onClick={openCreate}
-        className="sm:hidden fixed bottom-32 right-4 z-40 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
-        title="Nuovo pasto"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* FAB pair (mobile): umore and pasto, visually distinct */}
+      <div className="sm:hidden fixed bottom-32 right-4 z-40 flex flex-col items-center gap-3">
+        <button
+          onClick={() => setIsMoodModalOpen(true)}
+          className="w-12 h-12 bg-fuchsia-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-fuchsia-700 transition-colors"
+          title="Registra umore"
+        >
+          <Smile className="w-5 h-5" />
+        </button>
+        <button
+          onClick={openCreate}
+          className="w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+          title="Nuovo pasto"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
 
       {/* Toast */}
       {toast && (
@@ -236,6 +265,13 @@ export function FoodDiary() {
         onSaved={showToast}
         editingMeal={editingMeal}
         duplicateFrom={duplicateFrom}
+      />
+
+      <MoodPickerModal
+        isOpen={isMoodModalOpen}
+        onClose={() => setIsMoodModalOpen(false)}
+        onSaved={showToast}
+        date={selectedDate}
       />
     </div>
   );

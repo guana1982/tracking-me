@@ -34,6 +34,16 @@ describe('quick log classification (keyword dictionaries)', () => {
     expect(valence).toBe('NEUTRAL');
   });
 
+  it('classifies mood notes as MOOD, separate from physical sensations', () => {
+    expect(classifyQuickLogCategory('ansia e irritabilità tutto il giorno')).toBe('MOOD');
+    expect(classifyQuickLogValence('ansia e irritabilità tutto il giorno')).toBe('NEGATIVE');
+    expect(classifyQuickLogCategory('tranquillità e benessere')).toBe('MOOD');
+    expect(classifyQuickLogValence('tranquillità e benessere')).toBe('POSITIVE');
+    // A physical note stays physical even when the mood dictionary could match
+    expect(classifyQuickLogCategory('gambe pesanti dopo la corsa')).toBe('WORKOUT');
+    expect(classifyQuickLogCategory('dormito male, nottata agitata')).toBe('SLEEP');
+  });
+
   it('resolves mixed valences to NEUTRAL', () => {
     expect(classifyQuickLogValence('gambe pesanti ma testa lucida')).toBe('NEUTRAL');
   });
@@ -108,6 +118,8 @@ describe('CSV export', () => {
     {
       loggedAt: new Date('2026-07-16T12:40:00Z'), // 14:40 local
       text: 'sonnolento e fiacco',
+      category: 'FEELING' as const,
+      valence: 'NEGATIVE' as const,
       linkedMeal: { date: '2026-07-16', mealType: 'LUNCH' as const },
     },
   ];
@@ -117,11 +129,51 @@ describe('CSV export', () => {
     const lines = csv.replace(BOM, '').trim().split('\n');
     expect(lines[0]).toBe(FOOD_CSV_HEADER);
     expect(lines).toHaveLength(4); // header + 2 items + 1 quick log
-    expect(lines[1]).toBe('meal_item,2026-07-16 13:10,pranzo,pasta al pomodoro,90,g,con olio evo,');
+    expect(lines[1]).toBe(
+      'meal_item,2026-07-16,13:10,,,pranzo,pasta al pomodoro,90,g,con olio evo,,,'
+    );
     // Fields containing commas are quoted
     expect(lines[2]).toContain('"insalata, mista"');
-    // Quick log after the meal, with linked_meal valorized (criteri 7/8)
-    expect(lines[3]).toBe('quick_log,2026-07-16 14:40,,,,,sonnolento e fiacco,2026-07-16 pranzo');
+    // Quick log after the meal, with category/valence and linked_meal (criteri 7/8)
+    expect(lines[3]).toBe(
+      'quick_log,2026-07-16,14:40,sensazione,negativa,,,,,sonnolento e fiacco,2026-07-16 pranzo,,'
+    );
+  });
+
+  it('marks mood notes with their own record_type, keeping the tracks separable', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-07-16T08:00:00Z'), // 10:00 local
+          text: 'ansia dal mattino',
+          category: 'MOOD' as const,
+          valence: 'NEGATIVE' as const,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('mood_log,2026-07-16,10:00,umore,negativa,,,,,ansia dal mattino,,,');
+  });
+
+  it('opens each tracked day with a day_summary carrying both day scores', () => {
+    const csv = buildFoodCsv(meals, quickLogs, 120, [
+      { date: '2026-07-16', bodyState: -1, moodState: 0.5, mealCount: 1 },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The summary sorts first within its day, before the meal rows
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,1 pasti registrati,,-1,0.5');
+    expect(lines[2]).toContain('meal_item');
+  });
+
+  it('leaves a day score empty when that track was not logged', () => {
+    const csv = buildFoodCsv([], [], 0, [
+      { date: '2026-07-16', bodyState: null, moodState: 0.5, mealCount: 0 },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,0 pasti registrati,,,0.5');
   });
 
   it('starts with a UTF-8 BOM so Excel opens it correctly', () => {
@@ -143,6 +195,6 @@ describe('CSV export', () => {
       0
     );
     const lines = csv.replace(BOM, '').trim().split('\n');
-    expect(lines[1]).toBe('meal_item,2026-07-16 19:00,cena,minestrone,,,,');
+    expect(lines[1]).toBe('meal_item,2026-07-16,19:00,,,cena,minestrone,,,,,,');
   });
 });

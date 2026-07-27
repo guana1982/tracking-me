@@ -14,8 +14,11 @@ import type {
 } from '@budget/shared';
 
 // ---- "Stato del giorno" formula lives HERE, in one place ----
-// dayState = simple average of the day's quick-log valences
-// (positive = +1, neutral = 0, negative = -1). Days without logs = null.
+// Two INDEPENDENT tracks, never blended:
+//   dayState  = avg valence of the day's BODY logs (workout/sleep/feeling)
+//   moodState = avg valence of the day's MOOD logs
+// (positive = +1, neutral = 0, negative = -1). No logs of a track = null,
+// so each can be read on its own.
 // SLEEP logs are attributed to the day they influence: morning logs
 // (before SLEEP_ATTRIBUTION_HOUR) describe last night -> same day;
 // evening logs -> next day.
@@ -24,7 +27,8 @@ interface DayData {
   mealCount: number;
   dinnerAfter21: boolean;
   foods: Set<string>; // lowercased food names eaten that day
-  stateScores: number[];
+  stateScores: number[]; // body track
+  moodScores: number[]; // mood track
   workoutScores: number[];
   sleepScores: number[];
   feelingScores: number[];
@@ -36,6 +40,7 @@ function emptyDay(): DayData {
     dinnerAfter21: false,
     foods: new Set(),
     stateScores: [],
+    moodScores: [],
     workoutScores: [],
     sleepScores: [],
     feelingScores: [],
@@ -101,6 +106,8 @@ class FoodDashboardService {
         mealCount: day.mealCount,
         hasMeals: day.mealCount > 0,
         dayState: average(day.stateScores),
+        moodState: average(day.moodScores),
+        moodCount: day.moodScores.length,
         workoutPresent: day.workoutScores.length > 0,
         workoutValence: valenceFromScores(day.workoutScores),
         sleepValence: valenceFromScores(day.sleepScores),
@@ -115,7 +122,9 @@ class FoodDashboardService {
       supplementPeriods: supplementPeriods.filter(
         (p) => (p.endDate ?? '9999-12-31') >= range.from && p.startDate <= range.to
       ),
-      totalTrackedDays: days.filter((d) => d.hasMeals || d.dayState !== null).length,
+      totalTrackedDays: days.filter(
+        (d) => d.hasMeals || d.dayState !== null || d.moodState !== null
+      ).length,
     };
   }
 
@@ -160,7 +169,7 @@ class FoodDashboardService {
     const withDays: DayData[] = [];
     const withoutDays: DayData[] = [];
     for (const [date, day] of dayMap) {
-      if (day.mealCount === 0 && day.stateScores.length === 0) continue;
+      if (day.mealCount === 0 && day.stateScores.length === 0 && day.moodScores.length === 0) continue;
       (matches(date, day) ? withDays : withoutDays).push(day);
     }
 
@@ -260,7 +269,10 @@ class FoodDashboardService {
     let sleepNegative = 0;
     let feelingPositive = 0;
     let feelingNegative = 0;
+    let moodPositive = 0;
+    let moodNegative = 0;
     const dayStates: number[] = [];
+    const moodStates: number[] = [];
     for (let date = range.from; date <= range.to; date = addDays(date, 1)) {
       const day = dayMap.get(date) ?? emptyDay();
       mealsPerDay.push({ date, count: day.mealCount });
@@ -271,8 +283,12 @@ class FoodDashboardService {
       if (sleep === 'NEGATIVE') sleepNegative += 1;
       feelingPositive += day.feelingScores.filter((s) => s > 0).length;
       feelingNegative += day.feelingScores.filter((s) => s < 0).length;
+      moodPositive += day.moodScores.filter((s) => s > 0).length;
+      moodNegative += day.moodScores.filter((s) => s < 0).length;
       const state = average(day.stateScores);
       if (state !== null) dayStates.push(state);
+      const mood = average(day.moodScores);
+      if (mood !== null) moodStates.push(mood);
     }
 
     const avgLunch = average(lunchMinutes);
@@ -291,7 +307,10 @@ class FoodDashboardService {
       sleepNegative,
       feelingPositive,
       feelingNegative,
+      moodPositive,
+      moodNegative,
       avgDayState: average(dayStates),
+      avgMoodState: average(moodStates),
       topFoods: [...foodCounts.entries()]
         .sort(([, a], [, b]) => b - a)
         .slice(0, 15)
@@ -374,7 +393,12 @@ class FoodDashboardService {
 
       const day = getDay(attributedDate);
       const score = FOOD_CONFIG.VALENCE_SCORES[log.derivedValence];
-      day.stateScores.push(score);
+      // Mood lives on its own track and never enters the physical day state
+      if (log.derivedCategory === 'MOOD') {
+        day.moodScores.push(score);
+      } else {
+        day.stateScores.push(score);
+      }
       if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(score);
       if (log.derivedCategory === 'SLEEP') day.sleepScores.push(score);
       if (log.derivedCategory === 'FEELING') day.feelingScores.push(score);
@@ -424,11 +448,14 @@ class FoodDashboardService {
 
   private buildGroup(label: string, days: DayData[]): FoodComparisonGroupDTO {
     const states: number[] = [];
+    const moods: number[] = [];
     const sleepAvgs: number[] = [];
     const feelingAvgs: number[] = [];
     for (const day of days) {
       const state = average(day.stateScores);
       if (state !== null) states.push(state);
+      const mood = average(day.moodScores);
+      if (mood !== null) moods.push(mood);
       const sleep = average(day.sleepScores);
       if (sleep !== null) sleepAvgs.push(sleep);
       const feeling = average(day.feelingScores);
@@ -438,6 +465,7 @@ class FoodDashboardService {
       label,
       days: days.length,
       avgState: average(states),
+      avgMoodState: average(moods),
       avgSleepValence: average(sleepAvgs),
       avgFeelingValence: average(feelingAvgs),
     };

@@ -122,6 +122,9 @@ export const createQuickLogSchema = z.object({
   // Raw free text, no content validation by design (dictation-friendly)
   text: z.string().trim().min(1).max(2000),
   loggedAt: z.string().datetime({ offset: true }).optional(),
+  // Structured entries (mood picker) pin category/valence explicitly
+  derivedCategory: quickLogCategorySchema.optional(),
+  derivedValence: quickLogValenceSchema.optional(),
 });
 
 export const updateQuickLogSchema = z

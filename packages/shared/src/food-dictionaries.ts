@@ -16,8 +16,13 @@ export const MEAL_ITEM_UNITS = ['G', 'ML', 'PIECES', 'PORTION', 'TBSP', 'CUP'] a
 export type DefaultMealItemUnitDTO = (typeof MEAL_ITEM_UNITS)[number];
 export type MealItemUnitDTO = string;
 
-export const QUICK_LOG_CATEGORIES = ['WORKOUT', 'SLEEP', 'SUPPLEMENT', 'FEELING'] as const;
+// MOOD (umore) is tracked as its OWN dimension, kept separate from FEELING
+// (physical sensations tied to food/tiredness) so each can be read alone.
+export const QUICK_LOG_CATEGORIES = ['WORKOUT', 'SLEEP', 'SUPPLEMENT', 'FEELING', 'MOOD'] as const;
 export type QuickLogCategoryDTO = (typeof QUICK_LOG_CATEGORIES)[number];
+
+// The two independent day tracks: body = WORKOUT/SLEEP/FEELING, mood = MOOD
+export const BODY_CATEGORIES = ['WORKOUT', 'SLEEP', 'FEELING'] as const;
 
 export const QUICK_LOG_VALENCES = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] as const;
 export type QuickLogValenceDTO = (typeof QUICK_LOG_VALENCES)[number];
@@ -44,6 +49,7 @@ export const QUICK_LOG_CATEGORY_LABELS: Record<QuickLogCategoryDTO, string> = {
   SLEEP: 'sonno',
   SUPPLEMENT: 'integratore',
   FEELING: 'sensazione',
+  MOOD: 'umore',
 };
 
 export const QUICK_LOG_VALENCE_LABELS: Record<QuickLogValenceDTO, string> = {
@@ -94,13 +100,54 @@ export const QUICK_LOG_CATEGORY_KEYWORDS: Record<Exclude<QuickLogCategoryDTO, 'F
     'vitamina', 'proteine', 'mg', 'compressa', 'compresse', 'capsula', 'capsule',
     'melatonina', 'zinco', 'ferro', 'multivitaminico', 'probiotici', 'ashwagandha', 'collagene',
   ],
+  // Psychological state, deliberately distinct from physical sensations:
+  // these words describe how the head feels, not the body
+  MOOD: [
+    'umore', 'ansia', 'ansioso', 'ansiosa', 'angoscia', 'panico', 'agitato', 'agitata',
+    'irritabile', 'irritabilita', 'irritato', 'irritata', 'nervi', 'insofferente',
+    'instabile', 'instabilita', 'altalenante', 'disagio', 'a disagio', 'malessere psicologico',
+    'giu di morale', 'demoralizzato', 'demoralizzata', 'triste', 'tristezza', 'depresso',
+    'depressa', 'apatico', 'apatica', 'demotivato', 'demotivata', 'svuotato', 'svuotata',
+    'tranquillita', 'tranquillo', 'tranquilla', 'pace', 'sereno', 'serena', 'serenita',
+    'benessere', 'benessere psicologico', 'appagato', 'appagata', 'felice', 'felicita',
+    'contento', 'contenta', 'motivato', 'motivata', 'ottimista', 'fiducioso', 'fiduciosa',
+    'lucidita mentale', 'testa leggera', 'testa pesante', 'preoccupato', 'preoccupata',
+    'preoccupazione', 'stress', 'stressato', 'stressata', 'sopraffatto', 'sopraffatta',
+  ],
 };
 
-// Priority when match counts tie (a supplement name is the strongest signal)
+// Priority when match counts tie (a supplement name is the strongest signal).
+// MOOD sits last: a note that also mentions sleep or training stays on the
+// physical track, and pure mood words still win by match count.
 export const QUICK_LOG_CATEGORY_PRIORITY: Exclude<QuickLogCategoryDTO, 'FEELING'>[] = [
   'SUPPLEMENT',
   'WORKOUT',
   'SLEEP',
+  'MOOD',
+];
+
+// ---------- Mood picker (structured entry, separate from meals) ----------
+// Tapping a chip writes a MOOD quick log with an explicit valence, so the
+// meaning never depends on the keyword dictionaries.
+export interface MoodOption {
+  label: string;
+  valence: QuickLogValenceDTO;
+}
+
+export const MOOD_OPTIONS: MoodOption[] = [
+  { label: 'Benessere psicologico', valence: 'POSITIVE' },
+  { label: 'Tranquillità', valence: 'POSITIVE' },
+  { label: 'Pace', valence: 'POSITIVE' },
+  { label: 'Buon umore', valence: 'POSITIVE' },
+  { label: 'Motivazione', valence: 'POSITIVE' },
+  { label: 'Nella norma', valence: 'NEUTRAL' },
+  { label: 'Ansia', valence: 'NEGATIVE' },
+  { label: 'Cattivo umore', valence: 'NEGATIVE' },
+  { label: 'Irritabilità', valence: 'NEGATIVE' },
+  { label: 'Instabilità', valence: 'NEGATIVE' },
+  { label: 'Disagio', valence: 'NEGATIVE' },
+  { label: 'Tristezza', valence: 'NEGATIVE' },
+  { label: 'Stress', valence: 'NEGATIVE' },
 ];
 
 // Valence: match in both lists (or in none) resolves to NEUTRAL
@@ -110,6 +157,10 @@ export const QUICK_LOG_VALENCE_KEYWORDS: Record<Exclude<QuickLogValenceDTO, 'NEU
     'carico', 'carica', 'riposato', 'riposata', 'leggero', 'leggera', 'fresco', 'fresca',
     'ottimo', 'ottima', 'top', 'forte', 'sereno', 'serena', 'rilassato', 'rilassata',
     'pimpante', 'in forma',
+    // mood-specific
+    'tranquillo', 'tranquilla', 'tranquillità', 'serenità', 'pace', 'benessere', 'appagato',
+    'appagata', 'felice', 'felicità', 'contento', 'contenta', 'motivato', 'motivata',
+    'ottimista', 'fiducioso', 'fiduciosa', 'buon umore',
   ],
   NEGATIVE: [
     'fiacco', 'fiacca', 'stanco', 'stanca', 'stanchissimo', 'stanchissima', 'male', 'malissimo',
@@ -117,6 +168,13 @@ export const QUICK_LOG_VALENCE_KEYWORDS: Record<Exclude<QuickLogValenceDTO, 'NEU
     'spossato', 'spossata', 'nervoso', 'nervosa', 'stressato', 'stressata', 'affaticato',
     'affaticata', 'dolori', 'dolore', 'mal di', 'insonnia', 'svogliato', 'svogliata',
     'esausto', 'esausta', 'distrutto', 'distrutta', 'stanco morto', 'nausea', 'acidità',
+    // mood-specific
+    'ansia', 'ansioso', 'ansiosa', 'angoscia', 'panico', 'agitato', 'agitata', 'irritabile',
+    'irritabilità', 'irritato', 'irritata', 'insofferente', 'instabile', 'instabilità',
+    'altalenante', 'disagio', 'giù di morale', 'demoralizzato', 'demoralizzata', 'triste',
+    'tristezza', 'depresso', 'depressa', 'apatico', 'apatica', 'demotivato', 'demotivata',
+    'svuotato', 'svuotata', 'preoccupato', 'preoccupata', 'preoccupazione', 'stress',
+    'sopraffatto', 'sopraffatta', 'cattivo umore',
   ],
 };
 

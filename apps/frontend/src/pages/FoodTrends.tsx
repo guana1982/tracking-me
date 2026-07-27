@@ -6,6 +6,7 @@ import { todayLocal, addDaysLocal } from '../lib/foodUtils';
 import { useFoodOverview, useRecalculateQuickLogs } from '../hooks/useFoodQueries';
 import { MonthCalendar } from '../components/food/MonthCalendar';
 import { StateTimeline } from '../components/food/StateTimeline';
+import type { FoodTrack } from '../components/food/TrackToggle';
 import { ComparisonPanel } from '../components/food/ComparisonPanel';
 import { AssociationsPanel } from '../components/food/AssociationsPanel';
 import { StatsPanel } from '../components/food/StatsPanel';
@@ -19,6 +20,9 @@ export function FoodTrends() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // One source of truth for both the calendar and the timeline: switching in
+  // either place keeps the two visualizations telling the same story
+  const [track, setTrack] = useState<FoodTrack>('BOTH');
 
   const to = todayLocal();
   const from = addDaysLocal(to, -89);
@@ -90,11 +94,11 @@ export function FoodTrends() {
         </div>
       )}
 
-      {/* 1. Calendario mensile a semaforo */}
-      <MonthCalendar />
+      {/* 1. Calendario mensile a semaforo (fisico + umore) */}
+      <MonthCalendar track={track} onTrackChange={setTrack} />
 
-      {/* 2. Linea dello stato con eventi sovrapposti */}
-      <StateTimeline />
+      {/* 2. Linee dello stato con eventi sovrapposti */}
+      <StateTimeline track={track} onTrackChange={setTrack} />
 
       {/* 3. Confronto condizionato */}
       {hasEnoughData && <ComparisonPanel supplementNames={supplementNames} />}
@@ -112,8 +116,11 @@ export function FoodTrends() {
       <div className="card">
         <h3 className="text-sm font-semibold text-slate-900 mb-1">Export CSV</h3>
         <p className="text-xs text-slate-400 mb-3">
-          Una riga per alimento, note rapide intercalate (colonna record_type). Pensato per
-          l'analisi a valle con un LLM. Senza date esporta tutto lo storico.
+          Una riga per alimento, note fisiche e note di umore intercalate, più una riga di
+          riepilogo per ogni giorno con i due punteggi separati (<code>body_state</code> e{' '}
+          <code>mood_state</code>). La colonna <code>record_type</code> distingue i record
+          (meal_item / quick_log / mood_log / day_summary). Pensato per l'analisi a valle con un
+          LLM. Senza date esporta tutto lo storico.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input

@@ -63,18 +63,36 @@ export function categoryColor(category: QuickLogCategoryDTO | null): { bg: strin
       return { bg: 'bg-violet-100', text: 'text-violet-700' };
     case 'SUPPLEMENT':
       return { bg: 'bg-amber-100', text: 'text-amber-700' };
+    case 'MOOD':
+      return { bg: 'bg-fuchsia-100', text: 'text-fuchsia-700' };
     default:
       return { bg: 'bg-slate-100', text: 'text-slate-600' };
   }
 }
 
-/** Day-state score [-1, +1] -> semaphore color for the calendar/line */
+/** Day-state score [-1, +1] -> semaphore color for the calendar/line (physical track) */
 export function dayStateColor(state: number | null): string {
   if (state === null) return 'bg-slate-100';
   if (state > 0.33) return 'bg-emerald-400';
   if (state >= -0.33) return 'bg-amber-300';
   return 'bg-red-400';
 }
+
+/**
+ * Mood score [-1, +1] -> its own color ramp. Deliberately a different hue
+ * family from the physical one so the two tracks never read as the same thing.
+ */
+export function moodStateColor(state: number | null): string {
+  if (state === null) return 'bg-slate-100';
+  if (state > 0.33) return 'bg-teal-400';
+  if (state >= -0.33) return 'bg-purple-300';
+  return 'bg-rose-500';
+}
+
+// Line/marker colors for the charts (kept next to the calendar ramps so the
+// two surfaces stay consistent)
+export const BODY_LINE_COLOR = '#0f172a'; // slate-900
+export const MOOD_LINE_COLOR = '#c026d3'; // fuchsia-600
 
 // ---------- Local dates ----------
 

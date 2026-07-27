@@ -153,6 +153,10 @@ export interface QuickLogDTO {
 export interface CreateQuickLogDTO {
   text: string;
   loggedAt?: string; // only when the user explicitly overrides the timestamp
+  // Structured entries (mood picker) pin the classification instead of
+  // relying on the keyword dictionaries; both set the corresponding *Manual flag
+  derivedCategory?: QuickLogCategoryDTO;
+  derivedValence?: QuickLogValenceDTO;
 }
 
 // Manual category/valence corrections set the *Manual flags server-side
@@ -173,7 +177,11 @@ export interface FoodDayOverviewDTO {
   date: string; // YYYY-MM-DD
   mealCount: number;
   hasMeals: boolean;
-  dayState: number | null; // avg valence in [-1, +1]; null = no logs attributed to the day
+  // Two independent tracks, never blended: dayState is the PHYSICAL condition
+  // (workout/sleep/feeling logs), moodState the psychological one (mood logs).
+  dayState: number | null; // avg valence in [-1, +1]; null = no body logs that day
+  moodState: number | null; // avg valence in [-1, +1]; null = no mood logs that day
+  moodCount: number; // mood logs attributed to the day
   workoutPresent: boolean;
   workoutValence: QuickLogValenceDTO | null;
   sleepValence: QuickLogValenceDTO | null;
@@ -203,7 +211,8 @@ export type FoodComparisonConditionDTO =
 export interface FoodComparisonGroupDTO {
   label: string;
   days: number; // group size, always shown in UI
-  avgState: number | null;
+  avgState: number | null; // physical condition
+  avgMoodState: number | null; // mood, comparable side by side
   avgSleepValence: number | null;
   avgFeelingValence: number | null;
 }
@@ -246,6 +255,9 @@ export interface FoodStatsDTO {
   sleepNegative: number;
   feelingPositive: number;
   feelingNegative: number;
-  avgDayState: number | null;
+  moodPositive: number;
+  moodNegative: number;
+  avgDayState: number | null; // physical
+  avgMoodState: number | null; // mood
   topFoods: FoodTopFoodDTO[];
 }

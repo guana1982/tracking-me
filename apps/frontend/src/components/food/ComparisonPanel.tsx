@@ -37,7 +37,11 @@ function GroupBar({ group }: { group: FoodComparisonGroupDTO }) {
       </div>
       <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-slate-500 tabular-nums">
         <span>
-          Stato medio: <span className="font-semibold text-slate-700">{state ?? 'n.d.'}</span>
+          Fisico medio: <span className="font-semibold text-slate-700">{state ?? 'n.d.'}</span>
+        </span>
+        <span>
+          Umore medio:{' '}
+          <span className="font-semibold text-fuchsia-700">{group.avgMoodState ?? 'n.d.'}</span>
         </span>
         <span>Sonno: {group.avgSleepValence ?? 'n.d.'}</span>
         <span>Sensazioni: {group.avgFeelingValence ?? 'n.d.'}</span>
