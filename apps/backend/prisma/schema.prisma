@@ -31,6 +31,7 @@ model User {
   meals                  Meal[]
   mealTypeDefinitions    MealTypeDefinition[]
   mealUnitDefinitions    MealUnitDefinition[]
+  moodDefinitions        MoodDefinition[]
   quickLogs              QuickLog[]
 
   @@index([googleId])
@@ -407,6 +408,28 @@ model MealUnitDefinition {
   @@unique([userId, key])
   @@index([userId, position])
   @@map("meal_unit_definitions")
+}
+
+// Mood Definition - user-owned catalog of mood states offered by the picker.
+// Each carries its own valence, so a mood log's meaning is pinned at write
+// time and editing the catalog never rewrites history.
+model MoodDefinition {
+  id        String          @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  valence   QuickLogValence
+  position  Int
+  isActive  Boolean         @default(true)
+  isDefault Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("mood_definitions")
 }
 
 // Meal Item - free-text food entry; quantity/unit optional by design

@@ -3,6 +3,7 @@ import {
   mealsApi,
   mealTypesApi,
   mealUnitsApi,
+  moodsApi,
   quickLogsApi,
   foodDashboardApi,
 } from '../lib/foodApi';
@@ -16,6 +17,8 @@ import type {
   UpdateMealTypeDefinitionDTO,
   CreateMealUnitDefinitionDTO,
   UpdateMealUnitDefinitionDTO,
+  CreateMoodDefinitionDTO,
+  UpdateMoodDefinitionDTO,
   FoodComparisonConditionDTO,
 } from '@budget/shared';
 
@@ -25,6 +28,7 @@ export const foodQueryKeys = {
   meals: (from?: string, to?: string) => ['foodMeals', from ?? 'all', to ?? 'all'] as const,
   mealTypes: ['foodMealTypes'] as const,
   mealUnits: ['foodMealUnits'] as const,
+  moods: ['foodMoods'] as const,
   quickLogs: (from?: string, to?: string) =>
     ['foodQuickLogs', from ?? 'all', to ?? 'all'] as const,
   suggestions: (q: string) => ['foodSuggestions', q] as const,
@@ -160,6 +164,40 @@ export function useMealPhoto(id: string, enabled: boolean) {
     queryFn: () => mealsApi.getPhoto(id),
     enabled,
     staleTime: 1000 * 60 * 30, // photos never change silently
+  });
+}
+
+// ---------- Mood definitions ----------
+
+export function useMoods() {
+  return useQuery({
+    queryKey: foodQueryKeys.moods,
+    queryFn: moodsApi.getAll,
+  });
+}
+
+export function useCreateMood() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateMoodDefinitionDTO) => moodsApi.create(data),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useUpdateMood() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, data }: { key: string; data: UpdateMoodDefinitionDTO }) =>
+      moodsApi.update(key, data),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useDeleteMood() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => moodsApi.remove(key),
+    onSuccess: () => invalidateFoodData(queryClient),
   });
 }
 

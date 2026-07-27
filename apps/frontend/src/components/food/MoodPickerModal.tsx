@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { X, Loader2, Smile } from 'lucide-react';
+import { X, Loader2, Smile, Settings2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { todayLocal } from '../../lib/foodUtils';
-import { useCreateQuickLog } from '../../hooks/useFoodQueries';
-import { MOOD_OPTIONS } from '@budget/shared';
+import { useCreateQuickLog, useMoods } from '../../hooks/useFoodQueries';
+import { MoodManager } from './MoodManager';
 import type { QuickLogValenceDTO } from '@budget/shared';
 
 interface MoodPickerModalProps {
@@ -49,9 +49,14 @@ function resolveValence(valences: QuickLogValenceDTO[]): QuickLogValenceDTO {
  * valence explicitly, so the mood track never depends on keyword matching.
  */
 export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerModalProps) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]); // definition keys
   const [note, setNote] = useState('');
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const moods = useMoods();
   const createLog = useCreateQuickLog();
+
+  // Only active states are offered; archived ones stay in past entries
+  const options = (moods.data ?? []).filter((mood) => mood.isActive);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,23 +76,25 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
 
   if (!isOpen) return null;
 
-  const toggle = (label: string) => {
-    setSelected((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]
-    );
+  const toggle = (key: string) => {
+    setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
   const canSave = selected.length > 0 && !createLog.isPending;
 
   const handleSave = async () => {
     if (!canSave) return;
-    const valences = selected
-      .map((label) => MOOD_OPTIONS.find((o) => o.label === label)?.valence)
-      .filter((v): v is QuickLogValenceDTO => v !== undefined);
+    const chosen = selected
+      .map((key) => options.find((option) => option.key === key))
+      .filter((option): option is (typeof options)[number] => option !== undefined);
+    const valences = chosen.map((option) => option.valence);
 
-    // Readable sentence: it is what the CSV and the LLM will actually see
+    // Readable sentence: it is what the CSV and the LLM will actually see.
+    // Names are copied in, so renaming a state later never rewrites history.
     const trimmedNote = note.trim();
-    const text = `Umore: ${selected.join(', ')}${trimmedNote ? ` — ${trimmedNote}` : ''}`;
+    const text = `Umore: ${chosen.map((option) => option.name).join(', ')}${
+      trimmedNote ? ` — ${trimmedNote}` : ''
+    }`;
 
     await createLog.mutateAsync({
       text,
@@ -120,46 +127,67 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
               </p>
             </div>
           </div>
-          <button
-            onClick={() => !createLog.isPending && onClose()}
-            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setIsManagerOpen(true)}
+              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Gestisci stati d'umore"
+              aria-label="Gestisci stati d'umore"
+            >
+              <Settings2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => !createLog.isPending && onClose()}
+              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              aria-label="Chiudi"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Chips */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {GROUPS.map((group) => {
-            const options = MOOD_OPTIONS.filter((o) => o.valence === group.valence);
-            if (options.length === 0) return null;
-            return (
-              <div key={group.valence}>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
-                  {group.title}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {options.map((option) => {
-                    const isActive = selected.includes(option.label);
-                    const styles = CHIP_STYLES[option.valence];
-                    return (
-                      <button
-                        key={option.label}
-                        type="button"
-                        onClick={() => toggle(option.label)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-full border text-sm font-medium transition-colors',
-                          isActive ? styles.active : styles.idle
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
+          {moods.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          ) : options.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-6">
+              Nessuno stato d'umore attivo: aggiungine uno dall'ingranaggio in alto.
+            </p>
+          ) : (
+            GROUPS.map((group) => {
+              const groupOptions = options.filter((o) => o.valence === group.valence);
+              if (groupOptions.length === 0) return null;
+              return (
+                <div key={group.valence}>
+                  <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+                    {group.title}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupOptions.map((option) => {
+                      const isActive = selected.includes(option.key);
+                      const styles = CHIP_STYLES[option.valence];
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => toggle(option.key)}
+                          className={cn(
+                            'px-3 py-1.5 rounded-full border text-sm font-medium transition-colors',
+                            isActive ? styles.active : styles.idle
+                          )}
+                        >
+                          {option.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
 
           <div>
             <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
@@ -196,6 +224,8 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
           </button>
         </div>
       </div>
+
+      <MoodManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
     </div>
   );
 }

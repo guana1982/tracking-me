@@ -116,6 +116,29 @@ export const updateMealUnitDefinitionSchema = z
     { message: 'At least one field must be provided' }
   );
 
+// ---------- Mood definitions ----------
+
+export const createMoodDefinitionSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  valence: quickLogValenceSchema,
+});
+
+export const updateMoodDefinitionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40).optional(),
+    valence: quickLogValenceSchema.optional(),
+    position: z.number().int().min(0).max(1000).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined ||
+      data.valence !== undefined ||
+      data.position !== undefined ||
+      data.isActive !== undefined,
+    { message: 'At least one field must be provided' }
+  );
+
 // ---------- Quick logs ----------
 
 export const createQuickLogSchema = z.object({
@@ -174,3 +197,5 @@ export type CreateMealTypeDefinitionInput = z.infer<typeof createMealTypeDefinit
 export type UpdateMealTypeDefinitionInput = z.infer<typeof updateMealTypeDefinitionSchema>;
 export type CreateMealUnitDefinitionInput = z.infer<typeof createMealUnitDefinitionSchema>;
 export type UpdateMealUnitDefinitionInput = z.infer<typeof updateMealUnitDefinitionSchema>;
+export type CreateMoodDefinitionInput = z.infer<typeof createMoodDefinitionSchema>;
+export type UpdateMoodDefinitionInput = z.infer<typeof updateMoodDefinitionSchema>;

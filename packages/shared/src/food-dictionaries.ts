@@ -129,25 +129,29 @@ export const QUICK_LOG_CATEGORY_PRIORITY: Exclude<QuickLogCategoryDTO, 'FEELING'
 // ---------- Mood picker (structured entry, separate from meals) ----------
 // Tapping a chip writes a MOOD quick log with an explicit valence, so the
 // meaning never depends on the keyword dictionaries.
+// These are only the SEED values: each user owns an editable list of mood
+// definitions (add / rename / change valence / archive / delete), exactly
+// like meal types.
 export interface MoodOption {
+  key: string;
   label: string;
   valence: QuickLogValenceDTO;
 }
 
 export const MOOD_OPTIONS: MoodOption[] = [
-  { label: 'Benessere psicologico', valence: 'POSITIVE' },
-  { label: 'Tranquillità', valence: 'POSITIVE' },
-  { label: 'Pace', valence: 'POSITIVE' },
-  { label: 'Buon umore', valence: 'POSITIVE' },
-  { label: 'Motivazione', valence: 'POSITIVE' },
-  { label: 'Nella norma', valence: 'NEUTRAL' },
-  { label: 'Ansia', valence: 'NEGATIVE' },
-  { label: 'Cattivo umore', valence: 'NEGATIVE' },
-  { label: 'Irritabilità', valence: 'NEGATIVE' },
-  { label: 'Instabilità', valence: 'NEGATIVE' },
-  { label: 'Disagio', valence: 'NEGATIVE' },
-  { label: 'Tristezza', valence: 'NEGATIVE' },
-  { label: 'Stress', valence: 'NEGATIVE' },
+  { key: 'benessere', label: 'Benessere psicologico', valence: 'POSITIVE' },
+  { key: 'tranquillita', label: 'Tranquillità', valence: 'POSITIVE' },
+  { key: 'pace', label: 'Pace', valence: 'POSITIVE' },
+  { key: 'buon-umore', label: 'Buon umore', valence: 'POSITIVE' },
+  { key: 'motivazione', label: 'Motivazione', valence: 'POSITIVE' },
+  { key: 'nella-norma', label: 'Nella norma', valence: 'NEUTRAL' },
+  { key: 'ansia', label: 'Ansia', valence: 'NEGATIVE' },
+  { key: 'cattivo-umore', label: 'Cattivo umore', valence: 'NEGATIVE' },
+  { key: 'irritabilita', label: 'Irritabilità', valence: 'NEGATIVE' },
+  { key: 'instabilita', label: 'Instabilità', valence: 'NEGATIVE' },
+  { key: 'disagio', label: 'Disagio', valence: 'NEGATIVE' },
+  { key: 'tristezza', label: 'Tristezza', valence: 'NEGATIVE' },
+  { key: 'stress', label: 'Stress', valence: 'NEGATIVE' },
 ];
 
 // Valence: match in both lists (or in none) resolves to NEUTRAL

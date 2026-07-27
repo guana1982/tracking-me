@@ -15,6 +15,9 @@ import type {
   MealUnitDefinitionDTO,
   CreateMealUnitDefinitionDTO,
   UpdateMealUnitDefinitionDTO,
+  MoodDefinitionDTO,
+  CreateMoodDefinitionDTO,
+  UpdateMoodDefinitionDTO,
   QuickLogDTO,
   CreateQuickLogDTO,
   UpdateQuickLogDTO,
@@ -80,6 +83,22 @@ export const mealTypesApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+};
+
+export const moodsApi = {
+  getAll: () => fetchApi<MoodDefinitionDTO[]>('/moods'),
+  create: (data: CreateMoodDefinitionDTO) =>
+    fetchApi<MoodDefinitionDTO>('/moods', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (key: string, data: UpdateMoodDefinitionDTO) =>
+    fetchApi<MoodDefinitionDTO>(`/moods/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  remove: (key: string) =>
+    fetchApi<void>(`/moods/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 };
 
 export const mealUnitsApi = {

@@ -139,6 +139,30 @@ export interface UpdateMealUnitDefinitionDTO {
   isActive?: boolean;
 }
 
+// ---------- Mood definitions (user-owned, editable like meal types) ----------
+
+export interface MoodDefinitionDTO {
+  key: string;
+  name: string;
+  valence: QuickLogValenceDTO;
+  position: number;
+  isActive: boolean;
+  isDefault: boolean;
+  isUsed: boolean; // already referenced by a logged mood
+}
+
+export interface CreateMoodDefinitionDTO {
+  name: string;
+  valence: QuickLogValenceDTO;
+}
+
+export interface UpdateMoodDefinitionDTO {
+  name?: string;
+  valence?: QuickLogValenceDTO;
+  position?: number;
+  isActive?: boolean;
+}
+
 export interface QuickLogDTO {
   id: string;
   loggedAt: string; // ISO datetime
