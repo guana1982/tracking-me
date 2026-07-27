@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma.js';
-import type { ReallocationDTO, CreateReallocationDTO, ReallocationPreviewDTO, CarryoverPreviewDTO, ExpenseDTO } from '@budget/shared';
+import type { ReallocationDTO, CreateReallocationDTO, ReallocationPreviewDTO, CarryoverPreviewDTO, SurplusForwardPreviewDTO, ExpenseDTO, IncomeDTO } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { expenseService } from './expense.service.js';
+import { incomeService } from './income.service.js';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { isPastCutoffDay, roundCurrency, calculateTargets } from '../lib/utils.js';
 
@@ -121,6 +122,17 @@ export class ReallocationService {
       );
     }
 
+    // Mutual exclusion with the surplus-forward: the same leftover cannot be
+    // both saved and moved to the next month, or the euros would be counted
+    // twice. If it was already carried forward, the user must undo that first.
+    if (await this.surplusForwardIncome(periodKey, userId)) {
+      throw new AppError(
+        'Surplus already moved to the next month; undo it before reallocating to savings',
+        400,
+        'CONFLICT_SURPLUS_FORWARD'
+      );
+    }
+
     // Get preview to validate amount
     const preview = await this.getPreview(periodKey, userId);
 
@@ -228,6 +240,99 @@ export class ReallocationService {
     }
 
     return created;
+  }
+
+  /**
+   * Surplus-forward preview: the positive mirror of the carry-over. A month's
+   * leftover surplus (positive NEEDS + WANTS remainder, net of any SAVINGS
+   * reallocation already executed) can be moved to the next month as a single
+   * income line instead of being sent to SAVINGS. The two destinations are
+   * mutually exclusive so the same euros are never counted twice.
+   */
+  async getSurplusForwardPreview(periodKey: string, userId: string): Promise<SurplusForwardPreviewDTO> {
+    const { budgetRule, needsRemainder, wantsRemainder } = await this.computeRemainders(periodKey, userId);
+    const nextPeriodKey = this.getNextPeriodKey(periodKey);
+    const isAfterCutoff = isPastCutoffDay(budgetRule.cutoffDay, periodKey);
+    const availableAmount = roundCurrency(Math.max(0, needsRemainder) + Math.max(0, wantsRemainder));
+
+    const carriedIncome = await this.surplusForwardIncome(periodKey, userId);
+    const carried = !!carriedIncome;
+    const carriedAmount = carriedIncome ? roundCurrency(carriedIncome.amount) : 0;
+
+    // A SAVINGS reallocation already earmarks this surplus → forward is blocked
+    const savingsRealloc = await prisma.reallocation.findFirst({
+      where: { monthPeriod: { periodKey, userId }, toCategory: 'SAVINGS' },
+    });
+    const hasSavingsReallocation = !!savingsRealloc;
+
+    const available =
+      !carried && !hasSavingsReallocation && availableAmount > 0 && isAfterCutoff;
+
+    return {
+      nextPeriodKey,
+      availableAmount,
+      carried,
+      carriedAmount,
+      hasSavingsReallocation,
+      isAfterCutoff,
+      available,
+    };
+  }
+
+  /**
+   * Move the whole current surplus to the next month as an income line
+   * ("Riallocazione positiva da <mese>"). Idempotent: rejected when a
+   * carry-forward already exists or a savings reallocation is in the way.
+   */
+  async createSurplusForward(periodKey: string, userId: string): Promise<IncomeDTO> {
+    const preview = await this.getSurplusForwardPreview(periodKey, userId);
+
+    if (preview.carried) {
+      throw new AppError('Surplus already moved to the next month', 400, 'ALREADY_FORWARDED');
+    }
+    if (preview.hasSavingsReallocation) {
+      throw new AppError(
+        'A savings reallocation exists; undo it before moving the surplus forward',
+        400,
+        'CONFLICT_SAVINGS'
+      );
+    }
+    if (!preview.isAfterCutoff) {
+      throw new AppError('Surplus can be moved forward only after the cutoff day', 400, 'BEFORE_CUTOFF');
+    }
+    if (preview.availableAmount <= 0) {
+      throw new AppError('No surplus to move forward', 400, 'NO_SURPLUS');
+    }
+
+    const monthLabel = this.formatPeriodLabel(periodKey);
+    return incomeService.create(preview.nextPeriodKey, userId, {
+      label: `Riallocazione positiva da ${monthLabel}`,
+      amount: preview.availableAmount,
+      sourcePeriodKey: periodKey,
+    });
+  }
+
+  /**
+   * Undo the surplus-forward: delete the next-month income generated from this
+   * period's surplus.
+   */
+  async deleteSurplusForward(periodKey: string, userId: string): Promise<void> {
+    const income = await this.surplusForwardIncome(periodKey, userId);
+    if (!income) {
+      throw new AppError('No carried-forward surplus found', 404, 'NOT_FOUND');
+    }
+    await prisma.income.delete({ where: { id: income.id } });
+  }
+
+  // The income row in the next month generated from this period's surplus, if any
+  private async surplusForwardIncome(periodKey: string, userId: string) {
+    const nextPeriodKey = this.getNextPeriodKey(periodKey);
+    return prisma.income.findFirst({
+      where: {
+        monthPeriod: { periodKey: nextPeriodKey, userId },
+        sourcePeriodKey: periodKey,
+      },
+    });
   }
 
   private getNextPeriodKey(periodKey: string): string {

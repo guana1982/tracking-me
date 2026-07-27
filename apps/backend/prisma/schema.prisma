@@ -139,6 +139,9 @@ model Income {
   monthPeriodId String
   label         String
   amount        Float    // Store as float (EUR), we'll handle precision in app
+  // Set when this income is a surplus carried forward from that period's
+  // positive reallocation (YYYY-MM of the source month). Null for real income.
+  sourcePeriodKey String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

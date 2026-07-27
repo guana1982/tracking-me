@@ -60,6 +60,7 @@ export class IncomeService {
         monthPeriodId: monthPeriod.id,
         label: data.label,
         amount: data.amount,
+        sourcePeriodKey: data.sourcePeriodKey ?? null,
       },
     });
 
@@ -117,6 +118,7 @@ export class IncomeService {
     monthPeriodId: string;
     label: string;
     amount: number;
+    sourcePeriodKey: string | null;
     createdAt: Date;
   }): IncomeDTO {
     return {
@@ -124,6 +126,7 @@ export class IncomeService {
       monthPeriodId: income.monthPeriodId,
       label: income.label,
       amount: income.amount,
+      sourcePeriodKey: income.sourcePeriodKey,
       createdAt: income.createdAt.toISOString(),
     };
   }

@@ -20,6 +20,7 @@ import type {
   CreateReallocationDTO,
   ReallocationPreviewDTO,
   CarryoverPreviewDTO,
+  SurplusForwardPreviewDTO,
   CreateCarryoverDTO,
   SpendingCategoryDTO,
   CreateSpendingCategoryDTO,
@@ -360,6 +361,21 @@ export const reallocationsApi = {
     fetchApi<ExpenseDTO[]>(`/reallocations/period/${periodKey}/carryover`, {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  getSurplusForwardPreview: (periodKey: string) =>
+    fetchApi<SurplusForwardPreviewDTO>(
+      `/reallocations/period/${periodKey}/surplus-forward/preview`
+    ),
+
+  createSurplusForward: (periodKey: string) =>
+    fetchApi<IncomeDTO>(`/reallocations/period/${periodKey}/surplus-forward`, {
+      method: 'POST',
+    }),
+
+  deleteSurplusForward: (periodKey: string) =>
+    fetchApi<void>(`/reallocations/period/${periodKey}/surplus-forward`, {
+      method: 'DELETE',
     }),
 
   create: (periodKey: string, data: CreateReallocationDTO) =>

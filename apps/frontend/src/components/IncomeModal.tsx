@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Trash2, Loader2, Pencil, Landmark } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, Pencil, Landmark, ArrowRightCircle } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 import { useIncomes, useCreateIncome, useUpdateIncome, useDeleteIncome } from '../hooks/useQueries';
 import type { IncomeDTO } from '@budget/shared';
@@ -193,6 +193,15 @@ export function IncomeModal({ periodKey, isOpen, onClose }: IncomeModalProps) {
                         <span className="truncate">{income.label}</span>
                         <Pencil className="w-3 h-3 flex-shrink-0 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
+                    )}
+                    {income.sourcePeriodKey && !(editing?.id === income.id && editing.field === 'label') && (
+                      <span
+                        className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-sky-600"
+                        title="Surplus riportato dal mese precedente tramite riallocazione positiva"
+                      >
+                        <ArrowRightCircle className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">Surplus riportato</span>
+                      </span>
                     )}
                   </div>
 

@@ -165,6 +165,110 @@ export const reallocationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Surplus-forward preview (leftover surplus movable to the next month)
+  fastify.get<{ Params: { periodKey: string } }>('/period/:periodKey/surplus-forward/preview', {
+    schema: {
+      tags: ['Reallocations'],
+      summary: 'Get surplus-forward preview (surplus movable to next month as income)',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                nextPeriodKey: { type: 'string' },
+                availableAmount: { type: 'number' },
+                carried: { type: 'boolean' },
+                carriedAmount: { type: 'number' },
+                hasSavingsReallocation: { type: 'boolean' },
+                isAfterCutoff: { type: 'boolean' },
+                available: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+
+      const preview = await reallocationService.getSurplusForwardPreview(periodKey, request.authUser!.id);
+      return { success: true, data: preview };
+    },
+  });
+
+  // Move the current surplus to the next month as a positive income line
+  fastify.post<{ Params: { periodKey: string } }>('/period/:periodKey/surplus-forward', {
+    schema: {
+      tags: ['Reallocations'],
+      summary: 'Move current surplus to next month (as a positive income line)',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+
+      const income = await reallocationService.createSurplusForward(periodKey, request.authUser!.id);
+      reply.status(201);
+      return { success: true, data: income };
+    },
+  });
+
+  // Undo the surplus-forward (delete the generated next-month income)
+  fastify.delete<{ Params: { periodKey: string } }>('/period/:periodKey/surplus-forward', {
+    schema: {
+      tags: ['Reallocations'],
+      summary: 'Undo the surplus-forward for a period',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+
+      await reallocationService.deleteSurplusForward(periodKey, request.authUser!.id);
+      return { success: true };
+    },
+  });
+
   // Execute reallocation for a period
   fastify.post<{ Params: { periodKey: string }; Body: CreateReallocationDTO }>(
     '/period/:periodKey',

@@ -57,6 +57,8 @@ export const queryKeys = {
     ['reallocationPreview', periodKey] as const,
   carryoverPreview: (periodKey: string) =>
     ['carryoverPreview', periodKey] as const,
+  surplusForwardPreview: (periodKey: string) =>
+    ['surplusForwardPreview', periodKey] as const,
   fixedExpenses: (category?: FixedExpenseCategory) =>
     ['fixedExpenses', category ?? 'all'] as const,
   kpis: (periodKey: string) => ['kpis', periodKey] as const,
@@ -581,6 +583,51 @@ export function useCreateCarryover(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
       queryClient.invalidateQueries({ queryKey: ['savingsPace'] });
       queryClient.invalidateQueries({ queryKey: ['reallocationPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['periods'] });
+    },
+  });
+}
+
+export function useSurplusForwardPreview(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.surplusForwardPreview(periodKey),
+    queryFn: () => reallocationsApi.getSurplusForwardPreview(periodKey),
+  });
+}
+
+export function useCreateSurplusForward(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => reallocationsApi.createSurplusForward(periodKey),
+    onSuccess: () => {
+      // Writes an income into the NEXT period, so invalidate whole families
+      queryClient.invalidateQueries({ queryKey: ['surplusForwardPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['reallocationPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['incomes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsPace'] });
+      queryClient.invalidateQueries({ queryKey: ['kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['periods'] });
+    },
+  });
+}
+
+export function useDeleteSurplusForward(periodKey: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => reallocationsApi.deleteSurplusForward(periodKey),
+    onSuccess: () => {
+      // Removes the income from the NEXT period, so invalidate whole families
+      queryClient.invalidateQueries({ queryKey: ['surplusForwardPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['reallocationPreview'] });
+      queryClient.invalidateQueries({ queryKey: ['incomes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['savingsPace'] });
+      queryClient.invalidateQueries({ queryKey: ['kpis'] });
       queryClient.invalidateQueries({ queryKey: ['periods'] });
     },
   });

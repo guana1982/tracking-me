@@ -100,12 +100,17 @@ export interface IncomeDTO {
   monthPeriodId: string;
   label: string;
   amount: number;
+  // When set (YYYY-MM), this income is a surplus carried forward from that
+  // period's positive reallocation, not real earned income.
+  sourcePeriodKey?: string | null;
   createdAt: string;
 }
 
 export interface CreateIncomeDTO {
   label: string;
   amount: number;
+  // Internal use only (surplus forward): not accepted from the public API.
+  sourcePeriodKey?: string | null;
 }
 
 export interface UpdateIncomeDTO {
@@ -430,6 +435,20 @@ export interface CarryoverPreviewDTO {
 
 export interface CreateCarryoverDTO {
   category?: 'NEEDS' | 'WANTS'; // omit to carry all pending deficits
+}
+
+// Surplus-forward preview — positive mirror of the carry-over: a month's
+// leftover surplus (positive NEEDS+WANTS remainder) can be moved to the next
+// month as an income line ("Riallocazione positiva da <mese>") instead of
+// being sent to SAVINGS. The two destinations are mutually exclusive.
+export interface SurplusForwardPreviewDTO {
+  nextPeriodKey: string;
+  availableAmount: number; // surplus that can be moved forward (0 if none)
+  carried: boolean; // surplus already moved to the next month
+  carriedAmount: number; // amount already moved (0 if not carried)
+  hasSavingsReallocation: boolean; // a SAVINGS reallocation exists → forward blocked
+  isAfterCutoff: boolean;
+  available: boolean; // can move the surplus forward right now
 }
 
 // Savings history for bar chart and cumulative totals

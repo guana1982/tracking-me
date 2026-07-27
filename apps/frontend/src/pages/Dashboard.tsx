@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, useSurplusForwardPreview, useCreateSurplusForward, useDeleteSurplusForward, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
+import { ReallocationChoiceModal } from '../components/ReallocationChoiceModal';
 import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
@@ -10,7 +11,7 @@ import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
 import { KpiPanel } from '../components/KpiPanel';
 import { SinkingFundsCard } from '../components/SinkingFundsCard';
 import { WealthGoalsCard } from '../components/WealthGoalsCard';
-import { Loader2, RefreshCw, Undo2, Lock, Unlock, ArrowRightCircle, ChevronDown, ChevronRight, LayoutDashboard } from 'lucide-react';
+import { Loader2, RefreshCw, Lock, Unlock, ArrowRightCircle, ChevronDown, ChevronRight, LayoutDashboard, Check } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 
 export function Dashboard() {
@@ -25,12 +26,18 @@ export function Dashboard() {
   const createReallocation = useCreateReallocation(periodKey);
   const deleteReallocation = useDeleteReallocation(periodKey);
   const createCarryover = useCreateCarryover(periodKey);
+  const { data: surplusForwardPreview } = useSurplusForwardPreview(periodKey);
+  const createSurplusForward = useCreateSurplusForward(periodKey);
+  const deleteSurplusForward = useDeleteSurplusForward(periodKey);
   const closeMonth = useCloseMonth(periodKey);
   const reopenMonth = useReopenMonth(periodKey);
 
   // Charts block accordion (donut + gauge + savings chart): open by default,
   // collapsible to leave more room for the expense tables below
   const [showCharts, setShowCharts] = useState(true);
+
+  // Reallocation choice popup (savings vs. carry surplus to next month)
+  const [showReallocModal, setShowReallocModal] = useState(false);
 
   // Check if the month is closed (fall back to the dashboard summary so the two sources can't disagree)
   const isClosed = monthPeriod?.isClosed ?? data?.monthPeriod.isClosed ?? false;
@@ -39,16 +46,35 @@ export function Dashboard() {
   const needsReallocation = reallocations?.find(r => r.fromCategory === 'NEEDS' && r.toCategory === 'SAVINGS');
   const wantsReallocation = reallocations?.find(r => r.fromCategory === 'WANTS' && r.toCategory === 'SAVINGS');
   const hasReallocation = !!(needsReallocation || wantsReallocation);
+  const savingsReallocatedAmount = reallocations
+    ?.filter(r => r.toCategory === 'SAVINGS')
+    .reduce((sum, r) => sum + r.amount, 0) ?? 0;
 
-  // Check if we can show the reallocation button (after cutoff day and has available amount)
+  // Surplus carried forward to the next month (positive reallocation)
+  const forwardActive = surplusForwardPreview?.carried ?? false;
+  const forwardAmount = surplusForwardPreview?.carriedAmount ?? 0;
+  const surplusAmount = surplusForwardPreview?.availableAmount ?? reallocationPreview?.suggestedAmount ?? 0;
+  const nextMonthLabel = surplusForwardPreview
+    ? formatPeriodKey(surplusForwardPreview.nextPeriodKey)
+    : '';
+
+  // Show the reallocation button after the cutoff when there is a surplus to
+  // place, or when one destination is already active (so it can be managed/undone)
   const canShowReallocationButton = reallocationPreview?.isAfterCutoff &&
-    (reallocationPreview?.suggestedAmount > 0 || hasReallocation);
+    (reallocationPreview.suggestedAmount > 0 || hasReallocation || forwardActive);
+
+  const isReallocating =
+    createReallocation.isPending ||
+    deleteReallocation.isPending ||
+    createSurplusForward.isPending ||
+    deleteSurplusForward.isPending;
 
   // Per-card reallocation: moves a single category's leftover to SAVINGS.
   // Shown after the cutoff, like the global button; remainders are already
   // net of executed reallocations so the button disappears once used.
   const cardReallocation = (from: 'NEEDS' | 'WANTS') => {
-    if (isClosed || !reallocationPreview?.isAfterCutoff) return undefined;
+    // Hidden once the surplus is carried forward: the two destinations are exclusive
+    if (isClosed || !reallocationPreview?.isAfterCutoff || forwardActive) return undefined;
     const amount = from === 'NEEDS'
       ? reallocationPreview.needsRemainder
       : reallocationPreview.wantsRemainder;
@@ -89,38 +115,38 @@ export function Dashboard() {
     };
   };
 
-  const handleReallocation = async () => {
-    if (hasReallocation) {
-      // Undo all reallocations
-      if (needsReallocation) {
-        await deleteReallocation.mutateAsync(needsReallocation.id);
-      }
-      if (wantsReallocation) {
-        await deleteReallocation.mutateAsync(wantsReallocation.id);
-      }
-    } else if (reallocationPreview) {
-      // Create reallocations for both NEEDS and WANTS if they have remainders
-      const promises: Promise<unknown>[] = [];
+  const doSavingsReallocation = async () => {
+    if (!reallocationPreview) return;
+    // Create reallocations for both NEEDS and WANTS if they have remainders
+    const promises: Promise<unknown>[] = [];
 
-      if (reallocationPreview.needsRemainder > 0) {
-        promises.push(createReallocation.mutateAsync({
-          fromCategory: 'NEEDS',
-          toCategory: 'SAVINGS',
-          amount: reallocationPreview.needsRemainder,
-          reason: 'Riallocazione automatica - Necessità',
-        }));
-      }
+    if (reallocationPreview.needsRemainder > 0) {
+      promises.push(createReallocation.mutateAsync({
+        fromCategory: 'NEEDS',
+        toCategory: 'SAVINGS',
+        amount: reallocationPreview.needsRemainder,
+        reason: 'Riallocazione automatica - Necessità',
+      }));
+    }
 
-      if (reallocationPreview.wantsRemainder > 0) {
-        promises.push(createReallocation.mutateAsync({
-          fromCategory: 'WANTS',
-          toCategory: 'SAVINGS',
-          amount: reallocationPreview.wantsRemainder,
-          reason: 'Riallocazione automatica - Svago',
-        }));
-      }
+    if (reallocationPreview.wantsRemainder > 0) {
+      promises.push(createReallocation.mutateAsync({
+        fromCategory: 'WANTS',
+        toCategory: 'SAVINGS',
+        amount: reallocationPreview.wantsRemainder,
+        reason: 'Riallocazione automatica - Svago',
+      }));
+    }
 
-      await Promise.all(promises);
+    await Promise.all(promises);
+  };
+
+  const undoSavingsReallocation = async () => {
+    if (needsReallocation) {
+      await deleteReallocation.mutateAsync(needsReallocation.id);
+    }
+    if (wantsReallocation) {
+      await deleteReallocation.mutateAsync(wantsReallocation.id);
     }
   };
 
@@ -251,28 +277,27 @@ export function Dashboard() {
         <WealthGoalsCard />
       </div>
 
-      {/* Reallocation Button - visible after cutoff day; frozen (non-clickable) while the month is closed */}
+      {/* Reallocation button - opens the choice popup (savings vs. next month); frozen while the month is closed */}
       {canShowReallocationButton && (
         <div className="flex-shrink-0">
           <button
-            onClick={handleReallocation}
-            disabled={createReallocation.isPending || deleteReallocation.isPending}
+            onClick={() => setShowReallocModal(true)}
             className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all ${
-              hasReallocation
-                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+              (hasReallocation || forwardActive)
+                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300'
                 : 'bg-sky-600 text-white hover:bg-sky-700'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            }`}
           >
-            {(createReallocation.isPending || deleteReallocation.isPending) ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : hasReallocation ? (
-              <Undo2 className="w-4 h-4" />
+            {(hasReallocation || forwardActive) ? (
+              <Check className="w-4 h-4" />
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            {hasReallocation
-              ? 'Annulla riallocazione'
-              : `Rialloca ${formatCurrency(reallocationPreview?.suggestedAmount || 0)} nei risparmi`}
+            {forwardActive
+              ? `Surplus spostato a ${nextMonthLabel} · gestisci`
+              : hasReallocation
+              ? `${formatCurrency(savingsReallocatedAmount)} nei risparmi · gestisci`
+              : `Rialloca il surplus (${formatCurrency(surplusAmount)})`}
           </button>
         </div>
       )}
@@ -378,6 +403,23 @@ export function Dashboard() {
         </div>
       )}
       </div>
+
+      <ReallocationChoiceModal
+        isOpen={showReallocModal}
+        onClose={() => setShowReallocModal(false)}
+        monthLabel={formatPeriodKey(periodKey)}
+        nextMonthLabel={nextMonthLabel}
+        surplusAmount={surplusAmount}
+        savingsActive={hasReallocation}
+        savingsAmount={savingsReallocatedAmount}
+        forwardActive={forwardActive}
+        forwardAmount={forwardAmount}
+        isPending={isReallocating}
+        onSavings={doSavingsReallocation}
+        onForward={() => createSurplusForward.mutate()}
+        onUndoSavings={undoSavingsReallocation}
+        onUndoForward={() => deleteSurplusForward.mutate()}
+      />
     </div>
   );
 }
