@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Smile, Settings2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { todayLocal } from '../../lib/foodUtils';
 import { useCreateQuickLog, useMoods } from '../../hooks/useFoodQueries';
+import { useCheckInDay, useSaveCheckIn } from '../../hooks/useTherapyQueries';
 import { MoodManager } from './MoodManager';
+import { CheckInSection } from '../therapy/CheckInSection';
 import type { QuickLogValenceDTO } from '@budget/shared';
 
 interface MoodPickerModalProps {
@@ -52,8 +54,18 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
   const [selected, setSelected] = useState<string[]>([]); // definition keys
   const [note, setNote] = useState('');
   const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [checkInValues, setCheckInValues] = useState<Record<string, number>>({});
+  const [checkInNote, setCheckInNote] = useState('');
+  // Nothing is written unless a scale was actually moved: an untouched form
+  // must never invent an answer for a day
+  const [checkInTouched, setCheckInTouched] = useState(false);
+  const [isCheckInExpanded, setIsCheckInExpanded] = useState(false);
+  const checkInInitializedFor = useRef<string | null>(null);
+
   const moods = useMoods();
   const createLog = useCreateQuickLog();
+  const checkInDay = useCheckInDay(date, isOpen);
+  const saveCheckIn = useSaveCheckIn();
 
   // Only active states are offered; archived ones stay in past entries
   const options = (moods.data ?? []).filter((mood) => mood.isActive);
@@ -65,14 +77,40 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
     }
   }, [isOpen]);
 
+  // Prefill once per open day: the saved entry if the day is already
+  // compiled, otherwise the previous answers, so only changes have to move
+  useEffect(() => {
+    if (!isOpen) {
+      checkInInitializedFor.current = null;
+      return;
+    }
+    const data = checkInDay.data;
+    if (!data || checkInInitializedFor.current === date) return;
+
+    const next: Record<string, number> = {};
+    for (const scale of data.scales) {
+      const saved = data.entry?.values.find((value) => value.key === scale.key);
+      // Clamped: a scale whose range was shortened would otherwise carry a
+      // prefill the slider cannot show and the server would reject
+      next[scale.key] = Math.min(saved?.value ?? data.prefill[scale.key] ?? 0, scale.maxValue);
+    }
+    setCheckInValues(next);
+    setCheckInNote(data.entry?.note ?? '');
+    setCheckInTouched(false);
+    setIsCheckInExpanded(Boolean(data.entry));
+    checkInInitializedFor.current = date;
+  }, [isOpen, date, checkInDay.data]);
+
+  const isPending = createLog.isPending || saveCheckIn.isPending;
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !createLog.isPending) onClose();
+      if (e.key === 'Escape' && !isPending) onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, createLog.isPending, onClose]);
+  }, [isOpen, isPending, onClose]);
 
   if (!isOpen) return null;
 
@@ -80,38 +118,67 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
     setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
-  const canSave = selected.length > 0 && !createLog.isPending;
+  const handleCheckInChange = (key: string, value: number) => {
+    setCheckInValues((prev) => ({ ...prev, [key]: value }));
+    setCheckInTouched(true);
+  };
+
+  const handleCheckInNoteChange = (value: string) => {
+    setCheckInNote(value);
+    setCheckInTouched(true);
+  };
+
+  // Either half is enough on its own: some days only the mood is worth saying
+  const canSave = (selected.length > 0 || checkInTouched) && !isPending;
 
   const handleSave = async () => {
     if (!canSave) return;
-    const chosen = selected
-      .map((key) => options.find((option) => option.key === key))
-      .filter((option): option is (typeof options)[number] => option !== undefined);
-    const valences = chosen.map((option) => option.valence);
 
-    // Readable sentence: it is what the CSV and the LLM will actually see.
-    // Names are copied in, so renaming a state later never rewrites history.
-    const trimmedNote = note.trim();
-    const text = `Umore: ${chosen.map((option) => option.name).join(', ')}${
-      trimmedNote ? ` — ${trimmedNote}` : ''
-    }`;
+    if (selected.length > 0) {
+      const chosen = selected
+        .map((key) => options.find((option) => option.key === key))
+        .filter((option): option is (typeof options)[number] => option !== undefined);
+      const valences = chosen.map((option) => option.valence);
 
-    await createLog.mutateAsync({
-      text,
-      derivedCategory: 'MOOD',
-      derivedValence: resolveValence(valences),
-      // A past day gets logged at local noon of that day, not "now"
-      loggedAt:
-        date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
-    });
+      // Readable sentence: it is what the CSV and the LLM will actually see.
+      // Names are copied in, so renaming a state later never rewrites history.
+      const trimmedNote = note.trim();
+      const text = `Umore: ${chosen.map((option) => option.name).join(', ')}${
+        trimmedNote ? ` — ${trimmedNote}` : ''
+      }`;
 
-    onSaved('Umore registrato');
+      await createLog.mutateAsync({
+        text,
+        derivedCategory: 'MOOD',
+        derivedValence: resolveValence(valences),
+        // A past day gets logged at local noon of that day, not "now"
+        loggedAt:
+          date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
+      });
+    }
+
+    if (checkInTouched) {
+      // Upsert on the day: saving again edits, it never adds a second one
+      await saveCheckIn.mutateAsync({
+        date,
+        values: Object.entries(checkInValues).map(([key, value]) => ({ key, value })),
+        note: checkInNote.trim() || null,
+      });
+    }
+
+    onSaved(
+      selected.length > 0 && checkInTouched
+        ? 'Umore e check-in registrati'
+        : checkInTouched
+          ? 'Check-in registrato'
+          : 'Umore registrato'
+    );
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={() => !createLog.isPending && onClose()} />
+      <div className="absolute inset-0 bg-black/50" onClick={() => !isPending && onClose()} />
 
       <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
         {/* Header */}
@@ -137,7 +204,7 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
               <Settings2 className="w-5 h-5" />
             </button>
             <button
-              onClick={() => !createLog.isPending && onClose()}
+              onClick={() => !isPending && onClose()}
               className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               aria-label="Chiudi"
             >
@@ -203,6 +270,18 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
               autoComplete="off"
             />
           </div>
+
+          {/* Daily check-in: same moment, same save button */}
+          <CheckInSection
+            day={checkInDay.data}
+            isLoading={checkInDay.isLoading}
+            values={checkInValues}
+            onChange={handleCheckInChange}
+            note={checkInNote}
+            onNoteChange={handleCheckInNoteChange}
+            isExpanded={isCheckInExpanded}
+            onToggleExpanded={() => setIsCheckInExpanded((open) => !open)}
+          />
         </div>
 
         {/* Footer */}
@@ -217,10 +296,14 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             )}
           >
-            {createLog.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            {selected.length === 0
+            {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {selected.length === 0 && !checkInTouched
               ? 'Scegli almeno un umore'
-              : `Salva umore (${selected.length})`}
+              : selected.length === 0
+                ? 'Salva check-in'
+                : checkInTouched
+                  ? `Salva umore (${selected.length}) e check-in`
+                  : `Salva umore (${selected.length})`}
           </button>
         </div>
       </div>

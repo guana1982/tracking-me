@@ -4,3 +4,6 @@ export * from './constants';
 export * from './food-types';
 export * from './food-schemas';
 export * from './food-dictionaries';
+export * from './therapy-types';
+export * from './therapy-schemas';
+export * from './therapy-dictionaries';

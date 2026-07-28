@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Plus, Trash2, Camera, History, Star, Loader2, Settings2 } from 'lucide-react';
+import { X, Plus, Trash2, Camera, History, Star, Loader2, Settings2, Pill } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { mealsApi } from '../../lib/foodApi';
 import {
@@ -19,12 +19,15 @@ import {
 } from '../../hooks/useFoodQueries';
 import { MealTypeManager } from './MealTypeManager';
 import { MealUnitManager } from './MealUnitManager';
+import { useIntakeDay, useSetIntakes } from '../../hooks/useTherapyQueries';
+import { IntakeChecklist } from '../therapy/IntakeChecklist';
 import type {
   MealDTO,
   MealTypeDTO,
   MealItemUnitDTO,
   CreateMealItemDTO,
   FrequentMealDTO,
+  IntakeStatusDTO,
 } from '@budget/shared';
 
 interface ItemRow {
@@ -85,6 +88,10 @@ export function MealFormModal({
   const frequentMeals = useFrequentMeals(isOpen && showFrequent);
   const mealTypes = useMealTypes();
   const mealUnits = useMealUnits();
+  // What is due at this exact moment of this exact day: the intake ends up
+  // inside the meal form instead of in a module of its own
+  const intakeDay = useIntakeDay(date, isOpen);
+  const setIntakes = useSetIntakes();
   const existingPhoto = useMealPhoto(
     editingMeal?.id ?? '',
     isOpen && Boolean(editingMeal?.hasPhoto) && !photoDataUrl && !photoRemoved
@@ -150,6 +157,19 @@ export function MealFormModal({
         ),
     [rows]
   );
+
+  // Only the slot being logged right now; the rest of the day lives in the diary
+  const mealSlots = (intakeDay.data?.slots ?? []).filter((slot) => slot.slot === mealType);
+
+  const handleSetIntake = (
+    treatmentKey: string,
+    slot: string,
+    status: IntakeStatusDTO | null
+  ) => {
+    // Recorded immediately rather than on submit: the tick must survive a
+    // meal that is never saved, and it is already an explicit answer
+    setIntakes.mutate([{ date, treatmentKey, slot, status }]);
+  };
 
   const updateRow = (key: number, patch: Partial<ItemRow>) => {
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -292,6 +312,25 @@ export function MealFormModal({
               </select>
             </div>
           </div>
+
+          {/* Intakes due at this moment - only when the user tracks something */}
+          {mealSlots.length > 0 && (
+            <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Pill className="w-3.5 h-3.5 text-violet-600" />
+                <p className="text-xs font-medium text-violet-900">Da assumere in questo momento</p>
+              </div>
+              <IntakeChecklist
+                slots={mealSlots}
+                onSet={handleSetIntake}
+                disabled={setIntakes.isPending}
+                showSlotNames={false}
+              />
+              <p className="mt-2 text-[11px] text-violet-700/70">
+                Si registra subito, indipendentemente dal pasto.
+              </p>
+            </div>
+          )}
 
           {/* Shortcuts */}
           {!isEdit && (

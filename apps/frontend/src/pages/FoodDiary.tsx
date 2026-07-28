@@ -11,6 +11,7 @@ import { MealCard } from '../components/food/MealCard';
 import { QuickLogNote } from '../components/food/QuickLogNote';
 import { QuickLogBar } from '../components/food/QuickLogBar';
 import { MoodPickerModal } from '../components/food/MoodPickerModal';
+import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
 import type { MealDTO, QuickLogDTO } from '@budget/shared';
 
 type TimelineEntry =
@@ -181,6 +182,9 @@ export function FoodDiary() {
           );
         })}
       </div>
+
+      {/* Intakes of the day: part of the diary, above the timeline */}
+      <DailyIntakeCard date={selectedDate} />
 
       {/* Day timeline */}
       {isLoading ? (

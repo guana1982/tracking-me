@@ -20,6 +20,8 @@ import { mealTypeDefinitionRoutes } from './routes/meal-type-definition.routes.j
 import { mealUnitDefinitionRoutes } from './routes/meal-unit-definition.routes.js';
 import { moodDefinitionRoutes } from './routes/mood-definition.routes.js';
 import { quickLogRoutes } from './routes/quick-log.routes.js';
+import { treatmentRoutes } from './routes/treatment.routes.js';
+import { checkInRoutes } from './routes/check-in.routes.js';
 import { foodDashboardRoutes } from './routes/food-dashboard.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
@@ -105,6 +107,8 @@ await fastify.register(swagger, {
       { name: 'Meal Units', description: 'Custom food diary units' },
       { name: 'Quick Logs', description: 'Food diary raw quick logs' },
       { name: 'Moods', description: 'User-owned catalog of mood states' },
+      { name: 'Intakes', description: 'User-owned catalog of things taken daily, and adherence' },
+      { name: 'Check-in', description: 'Configurable daily self-report scales' },
       { name: 'Food Dashboard', description: 'Food diary trends, correlations and CSV export' },
     ],
   },
@@ -164,6 +168,8 @@ await fastify.register(mealTypeDefinitionRoutes, { prefix: '/api/meal-types' });
 await fastify.register(mealUnitDefinitionRoutes, { prefix: '/api/meal-units' });
 await fastify.register(moodDefinitionRoutes, { prefix: '/api/moods' });
 await fastify.register(quickLogRoutes, { prefix: '/api/quick-logs' });
+await fastify.register(treatmentRoutes, { prefix: '/api/treatments' });
+await fastify.register(checkInRoutes, { prefix: '/api/check-in' });
 await fastify.register(foodDashboardRoutes, { prefix: '/api/food-dashboard' });
 
 // Graceful shutdown

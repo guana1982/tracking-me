@@ -6,6 +6,7 @@ import {
   extractSupplementNames,
   hasSupplementStopWord,
   defaultMealTypeForHour,
+  describeScaleValue,
 } from '@budget/shared';
 import { buildFoodCsv, FOOD_CSV_HEADER } from './food-export.service.js';
 import { toLocalParts, addDays, average, valenceFromScores } from './food-dashboard.service.js';
@@ -130,13 +131,13 @@ describe('CSV export', () => {
     expect(lines[0]).toBe(FOOD_CSV_HEADER);
     expect(lines).toHaveLength(4); // header + 2 items + 1 quick log
     expect(lines[1]).toBe(
-      'meal_item,2026-07-16,13:10,,,pranzo,pasta al pomodoro,90,g,con olio evo,,,'
+      'meal_item,2026-07-16,13:10,,,pranzo,pasta al pomodoro,90,g,con olio evo,,,,,,'
     );
     // Fields containing commas are quoted
     expect(lines[2]).toContain('"insalata, mista"');
     // Quick log after the meal, with category/valence and linked_meal (criteri 7/8)
     expect(lines[3]).toBe(
-      'quick_log,2026-07-16,14:40,sensazione,negativa,,,,,sonnolento e fiacco,2026-07-16 pranzo,,'
+      'quick_log,2026-07-16,14:40,sensazione,negativa,,,,,sonnolento e fiacco,2026-07-16 pranzo,,,,,'
     );
   });
 
@@ -155,7 +156,9 @@ describe('CSV export', () => {
       120
     );
     const lines = csv.replace(BOM, '').trim().split('\n');
-    expect(lines[1]).toBe('mood_log,2026-07-16,10:00,umore,negativa,,,,,ansia dal mattino,,,');
+    expect(lines[1]).toBe(
+      'mood_log,2026-07-16,10:00,umore,negativa,,,,,ansia dal mattino,,,,,,'
+    );
   });
 
   it('opens each tracked day with a day_summary carrying both day scores', () => {
@@ -164,7 +167,7 @@ describe('CSV export', () => {
     ]);
     const lines = csv.replace(BOM, '').trim().split('\n');
     // The summary sorts first within its day, before the meal rows
-    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,1 pasti registrati,,-1,0.5');
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,1 pasti registrati,,-1,0.5,,,');
     expect(lines[2]).toContain('meal_item');
   });
 
@@ -173,7 +176,7 @@ describe('CSV export', () => {
       { date: '2026-07-16', bodyState: null, moodState: 0.5, mealCount: 0 },
     ]);
     const lines = csv.replace(BOM, '').trim().split('\n');
-    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,0 pasti registrati,,,0.5');
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,0 pasti registrati,,,0.5,,,');
   });
 
   it('starts with a UTF-8 BOM so Excel opens it correctly', () => {
@@ -195,6 +198,66 @@ describe('CSV export', () => {
       0
     );
     const lines = csv.replace(BOM, '').trim().split('\n');
-    expect(lines[1]).toBe('meal_item,2026-07-16,19:00,,,cena,minestrone,,,,,,');
+    expect(lines[1]).toBe('meal_item,2026-07-16,19:00,,,cena,minestrone,,,,,,,,,');
+  });
+
+  it('records an intake with its moment in meal_type, so it lines up with the meal', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T07:05:00Z'),
+          treatmentName: 'Sertralina 50 mg',
+          doseLabel: '½ cp',
+          slotName: 'Colazione',
+          status: 'TAKEN' as const,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'intake,2026-07-16,07:05,Sertralina 50 mg,,Colazione,,,,½ cp,,,,,,preso'
+    );
+  });
+
+  it('writes one checkin row per scale, with its wording and direction', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T21:30:00Z'),
+          values: [
+            { key: 'tensione', name: 'Tensione', value: 4, maxValue: 10, isPositive: false },
+            { key: 'energia', name: 'Energia', value: 8, maxValue: 10, isPositive: true },
+          ],
+          note: 'giornata pesante',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // A symptom scale is flagged "negativo": lower is better
+    expect(lines[1]).toBe(
+      'checkin,2026-07-16,21:30,Tensione,negativo,,,,,presente ma gestibile,,,,4,10,'
+    );
+    // The single positive scale reads the other way round
+    expect(lines[2]).toBe('checkin,2026-07-16,21:30,Energia,positivo,,,,,molto buona,,,,8,10,');
+    // The note closes the check-in block
+    expect(lines[3]).toBe('checkin,2026-07-16,21:30,nota,,,,,,giornata pesante,,,,,,');
+  });
+
+  it('uses the named steps of a scale instead of the generic wording', () => {
+    const label = describeScaleValue(2, 3, false, ['nessuna', 'poche', 'molte', 'continue']);
+    expect(label).toBe('molte');
+    // Out-of-range answers clamp instead of producing undefined
+    expect(describeScaleValue(9, 3, false, ['nessuna', 'poche'])).toBe('poche');
   });
 });
