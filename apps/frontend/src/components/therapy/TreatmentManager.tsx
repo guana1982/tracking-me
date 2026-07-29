@@ -8,6 +8,7 @@ import {
   useTreatments,
   useUpdateTreatment,
 } from '../../hooks/useTherapyQueries';
+import { TitrationPlanner } from './TitrationPlanner';
 import {
   BEDTIME_SLOT,
   BEDTIME_SLOT_LABEL,
@@ -370,6 +371,7 @@ export function TreatmentManager({ isOpen, onClose }: TreatmentManagerProps) {
                         {treatment.notes}
                       </p>
                     )}
+                    <TitrationPlanner treatment={treatment} />
                   </div>
 
                   <button

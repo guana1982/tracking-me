@@ -14,6 +14,8 @@ import { MoodPickerModal } from '../components/food/MoodPickerModal';
 import { DailyRatingsCard } from '../components/food/DailyRatingsCard';
 import { RatingNote } from '../components/food/RatingNote';
 import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
+import { ScheduleLine } from '../components/therapy/ScheduleLine';
+import { WeightLine } from '../components/therapy/WeightLine';
 import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
 import { useDeleteQuickLog } from '../hooks/useFoodQueries';
 import type { MealDTO, QuickLogDTO, RatingEntryDTO } from '@budget/shared';
@@ -220,11 +222,17 @@ export function FoodDiary() {
         })}
       </div>
 
-      {/* Votes of the day, between the dates and the intakes */}
+      {/* What is coming up: shown before anything is asked of the day */}
+      <ScheduleLine />
+
+      {/* Votes and episodes, between the dates and the intakes */}
       <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
 
       {/* Intakes of the day: part of the diary, above the timeline */}
       <DailyIntakeCard date={selectedDate} />
+
+      {/* Weekly, so most days this is a single quiet line */}
+      <WeightLine />
 
       {/* Day timeline */}
       {isLoading ? (

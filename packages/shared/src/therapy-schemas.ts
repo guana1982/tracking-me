@@ -74,6 +74,7 @@ export const createCheckInScaleSchema = z.object({
   maxValue: z.number().int().min(1).max(10).optional(),
   isPositive: z.boolean().optional(),
   isCore: z.boolean().optional(),
+  isSideEffect: z.boolean().optional(),
 });
 
 export const updateCheckInScaleSchema = z

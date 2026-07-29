@@ -9,6 +9,31 @@
 // ============================================================
 
 /**
+ * What a characteristic is for. SCALE is a periodic mark (a row of boxes);
+ * EVENT is an episode logged the moment it happens (a chip to tap). Same
+ * storage, same recap, same export - only the way in differs.
+ */
+export const RATING_KINDS = ['SCALE', 'EVENT'] as const;
+export type RatingKindDTO = (typeof RATING_KINDS)[number];
+
+export const RATING_KIND_LABELS: Record<RatingKindDTO, string> = {
+  SCALE: 'Voto',
+  EVENT: 'Episodio',
+};
+
+/**
+ * Suggested episode types. Installed on request, never automatically: the
+ * catalogue stays the user's own.
+ */
+export const DEFAULT_EVENT_DEFINITIONS: string[] = [
+  'Esplosione / sfogo verbale',
+  'Picco di irritazione',
+  'Picco compulsioni',
+  'Crollo dell’umore',
+  'Episodio di rimuginio',
+];
+
+/**
  * Structured picker a rating row can hand off to. NONE keeps the row a plain
  * vote; MOOD opens the mood chips modal and attaches what was chosen.
  */
@@ -46,6 +71,7 @@ export const DEFAULT_RATING_DEFINITIONS: RatingDefinitionSeed[] = [
 export interface RatingDefinitionDTO {
   key: string;
   name: string;
+  kind: RatingKindDTO;
   /** Highest vote of the row: the boxes run 1..maxValue */
   maxValue: number;
   linkedForm: RatingLinkedFormDTO;
@@ -58,12 +84,14 @@ export interface RatingDefinitionDTO {
 
 export interface CreateRatingDefinitionDTO {
   name: string;
+  kind?: RatingKindDTO;
   maxValue?: number;
   linkedForm?: RatingLinkedFormDTO;
 }
 
 export interface UpdateRatingDefinitionDTO {
   name?: string;
+  kind?: RatingKindDTO;
   maxValue?: number;
   linkedForm?: RatingLinkedFormDTO;
   position?: number;
@@ -82,10 +110,16 @@ export interface RatingEntryDTO {
   date: string; // YYYY-MM-DD
   ratingKey: string;
   ratingName: string;
-  /** Nullable on read only: what the row writes is always a vote */
+  kind: RatingKindDTO;
+  /** The mark, or the intensity of an episode. Null while unanswered */
   value: number | null;
   maxValue: number;
   note: string | null;
+  /**
+   * What set the episode off. The most valuable field of the module: over
+   * time it produces the ranking of the real triggers.
+   */
+  trigger: string | null;
   /** The mood log opened from this row, rendered inside the same recap */
   quickLogId: string | null;
   loggedAt: string;
@@ -99,18 +133,22 @@ export interface RatingEntryDTO {
 export interface CreateRatingEntryDTO {
   date: string;
   ratingKey: string;
-  value: number;
+  /** Required for a SCALE; optional for an EVENT, which is one tap away */
+  value?: number | null;
   note?: string | null;
+  trigger?: string | null;
   quickLogId?: string | null;
   /** Local instant of the vote; defaults to now on the server */
   loggedAt?: string;
 }
 
 /**
- * Correcting a vote already recorded. The moment is deliberately not part of
- * this: fixing a mark or a note must not move the recap in the timeline.
+ * Correcting an entry already recorded. The moment is deliberately not part
+ * of this: fixing a mark, a note or a trigger must not move the recap in the
+ * timeline.
  */
 export interface UpdateRatingEntryDTO {
-  value?: number;
+  value?: number | null;
   note?: string | null;
+  trigger?: string | null;
 }

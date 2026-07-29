@@ -3,6 +3,7 @@ import { Gauge, Loader2, Settings2 } from 'lucide-react';
 import { todayLocal } from '../../lib/foodUtils';
 import { useCreateRatingEntry, useRatings } from '../../hooks/useRatingQueries';
 import { RatingRow } from './RatingRow';
+import { EventChips } from './EventChips';
 import { RatingManager } from './RatingManager';
 import { MoodPickerModal } from './MoodPickerModal';
 import type { QuickLogDTO } from '@budget/shared';
@@ -33,7 +34,13 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
 
   if (ratings.isLoading) return null;
 
-  const definitions = (ratings.data ?? []).filter((definition) => definition.isActive);
+  const active = (ratings.data ?? []).filter((definition) => definition.isActive);
+  const definitions = active.filter((definition) => definition.kind === 'SCALE');
+  const events = active.filter((definition) => definition.kind === 'EVENT');
+
+  // A vote on a past day belongs to that day at local noon, not to "now"
+  const loggedAt =
+    date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString();
 
   const handleVote = (ratingKey: string, value: number, note: string | null) => {
     createEntry.mutate({
@@ -42,8 +49,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
       value,
       note,
       quickLogId: pendingLinks[ratingKey] ?? null,
-      // A vote on a past day belongs to that day at local noon, not to "now"
-      loggedAt: date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
+      loggedAt,
     });
     setPendingLinks((previous) => {
       const { [ratingKey]: _sent, ...rest } = previous;
@@ -51,7 +57,12 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
     });
   };
 
-  if (definitions.length === 0) {
+  // One tap, no fields: an episode has to be cheap to record while it happens
+  const handleLogEvent = (ratingKey: string) => {
+    createEntry.mutate({ date, ratingKey, loggedAt });
+  };
+
+  if (active.length === 0) {
     return (
       <>
         <button
@@ -104,6 +115,12 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
           />
         ))}
       </div>
+
+      {events.length > 0 && (
+        <div className={definitions.length > 0 ? 'mt-4 pt-3 border-t border-slate-100' : ''}>
+          <EventChips definitions={events} onLog={handleLogEvent} />
+        </div>
+      )}
 
       {createEntry.error && (
         <p className="mt-2 text-xs text-red-600">

@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Loader2, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
   useCreateRating,
   useDeleteRating,
+  useInstallDefaultEvents,
   useRatings,
   useUpdateRating,
 } from '../../hooks/useRatingQueries';
 import {
+  RATING_KINDS,
+  RATING_KIND_LABELS,
   RATING_LINKED_FORMS,
   RATING_LINKED_FORM_LABELS,
   RATING_MAX_MAX,
   RATING_MIN_MAX,
 } from '@budget/shared';
-import type { RatingLinkedFormDTO } from '@budget/shared';
+import type { RatingKindDTO, RatingLinkedFormDTO } from '@budget/shared';
 
 interface RatingManagerProps {
   isOpen: boolean;
@@ -67,8 +70,10 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
   const createRating = useCreateRating();
   const updateRating = useUpdateRating();
   const deleteRating = useDeleteRating();
+  const installEvents = useInstallDefaultEvents();
 
   const [newName, setNewName] = useState('');
+  const [newKind, setNewKind] = useState<RatingKindDTO>('SCALE');
   const [newMax, setNewMax] = useState(10);
   const [newLinkedForm, setNewLinkedForm] = useState<RatingLinkedFormDTO>('NONE');
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -77,6 +82,7 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
   useEffect(() => {
     if (!isOpen) {
       setNewName('');
+      setNewKind('SCALE');
       setNewMax(10);
       setNewLinkedForm('NONE');
       setEditingKey(null);
@@ -86,14 +92,26 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
 
   if (!isOpen) return null;
 
-  const error = createRating.error || updateRating.error || deleteRating.error || ratings.error;
-  const isPending = createRating.isPending || updateRating.isPending || deleteRating.isPending;
+  const error =
+    createRating.error ||
+    updateRating.error ||
+    deleteRating.error ||
+    installEvents.error ||
+    ratings.error;
+  const isPending =
+    createRating.isPending ||
+    updateRating.isPending ||
+    deleteRating.isPending ||
+    installEvents.isPending;
+
+  const hasEvents = (ratings.data ?? []).some((rating) => rating.kind === 'EVENT');
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newName.trim()) return;
     await createRating.mutateAsync({
       name: newName.trim(),
+      kind: newKind,
       maxValue: newMax,
       linkedForm: newLinkedForm,
     });
@@ -162,9 +180,32 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
                 <span className="ml-1">Aggiungi</span>
               </button>
             </div>
+            <div className="flex gap-1">
+              {RATING_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setNewKind(kind)}
+                  aria-pressed={newKind === kind}
+                  className={cn(
+                    'px-2 py-1 rounded-full border text-[11px] font-medium transition-colors',
+                    newKind === kind
+                      ? 'border-indigo-500 bg-indigo-500 text-white'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  )}
+                >
+                  {RATING_KIND_LABELS[kind]}
+                </button>
+              ))}
+              <span className="self-center text-[11px] text-slate-400">
+                {newKind === 'SCALE'
+                  ? 'una riga di caselle, ogni giorno'
+                  : 'un chip da toccare quando succede'}
+              </span>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               <label className="text-[11px] text-slate-500">
-                Voto massimo
+                {newKind === 'SCALE' ? 'Voto massimo' : 'Intensità massima'}
                 <select
                   value={newMax}
                   onChange={(event) => setNewMax(Number(event.target.value))}
@@ -177,14 +218,34 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
                   ))}
                 </select>
               </label>
-              <span className="text-[11px] text-slate-500">Popup collegato</span>
-              <LinkedFormPicker
-                value={newLinkedForm}
-                onChange={setNewLinkedForm}
-                disabled={isPending}
-              />
+              {newKind === 'SCALE' && (
+                <>
+                  <span className="text-[11px] text-slate-500">Popup collegato</span>
+                  <LinkedFormPicker
+                    value={newLinkedForm}
+                    onChange={setNewLinkedForm}
+                    disabled={isPending}
+                  />
+                </>
+              )}
             </div>
           </form>
+
+          {!hasEvents && (
+            <button
+              type="button"
+              onClick={() => installEvents.mutate()}
+              disabled={isPending}
+              className="w-full btn btn-secondary text-sm"
+            >
+              {installEvents.isPending ? (
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4 mr-1.5" />
+              )}
+              Aggiungi i tipi di episodio suggeriti
+            </button>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
@@ -260,7 +321,7 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-800 truncate">{rating.name}</p>
                         <p className="text-[11px] text-slate-400">
-                          da 1 a {rating.maxValue}
+                          {RATING_KIND_LABELS[rating.kind]} · da 1 a {rating.maxValue}
                           {rating.linkedForm !== 'NONE'
                             ? ` · ${RATING_LINKED_FORM_LABELS[rating.linkedForm]}`
                             : ''}

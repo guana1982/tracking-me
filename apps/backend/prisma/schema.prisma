@@ -42,6 +42,9 @@ model User {
   checkInEntries         CheckInEntry[]
   ratingDefinitions      RatingDefinition[]
   ratingEntries          RatingEntry[]
+  titrationSteps         TitrationStep[]
+  milestones             Milestone[]
+  weightEntries          WeightEntry[]
 
   @@index([googleId])
   @@index([email])
@@ -534,8 +537,9 @@ model TreatmentDefinition {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  intakes TreatmentIntake[]
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  intakes    TreatmentIntake[]
+  titrations TitrationStep[]
 
   @@unique([userId, key])
   @@index([userId, position])
@@ -579,6 +583,9 @@ model CheckInScale {
   maxValue    Int      @default(10)
   isPositive  Boolean  @default(false)
   isCore      Boolean  @default(true)
+  // A side effect is read differently from a symptom: what matters is when it
+  // appeared and whether it faded, not the shape of its curve
+  isSideEffect Boolean @default(false)
   position    Int
   isActive    Boolean  @default(true)
   isDefault   Boolean  @default(false)
@@ -623,6 +630,13 @@ enum RatingLinkedForm {
   MOOD
 }
 
+// SCALE = a periodic mark (a row of boxes); EVENT = an episode logged the
+// moment it happens (a chip to tap). One storage, two ways in.
+enum RatingKind {
+  SCALE
+  EVENT
+}
+
 // One characteristic the user rates. Everything about it is editable: the
 // three installed at first run are a suggestion, not a fixed set.
 model RatingDefinition {
@@ -630,6 +644,7 @@ model RatingDefinition {
   userId     String
   key        String
   name       String
+  kind       RatingKind       @default(SCALE)
   maxValue   Int              @default(10)
   linkedForm RatingLinkedForm @default(NONE)
   position   Int
@@ -655,9 +670,15 @@ model RatingEntry {
   ratingId   String?
   ratingKey  String
   ratingName String
+  // Snapshot too: a recorded episode keeps reading as an episode even if the
+  // characteristic is later turned into a periodic mark
+  kind       RatingKind @default(SCALE)
   value      Int?
   maxValue   Int      @default(10)
   note       String?
+  // What set the episode off. Free text on purpose: the vocabulary of the
+  // triggers has to be the user's own, and it is what the ranking reads
+  trigger    String?
   quickLogId String?  @unique
   date       DateTime @db.Date
   loggedAt   DateTime @default(now())
@@ -671,6 +692,77 @@ model RatingEntry {
   @@index([userId, date])
   @@index([userId, ratingKey])
   @@map("rating_entries")
+}
+
+// ============================================================
+// Therapy plan - the parts that sit on a calendar rather than in the day
+// ============================================================
+
+enum MilestoneKind {
+  EXAM
+  APPOINTMENT
+  OTHER
+}
+
+// A planned dose change. Kept apart from the treatment's current dose so the
+// plan stays readable after the change has been applied, and so the weekly
+// charts can mark the day the dose actually moved.
+model TitrationStep {
+  id          String   @id @default(cuid())
+  userId      String
+  treatmentId String
+  date        DateTime @db.Date
+  dose        String
+  applied     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  treatment TreatmentDefinition @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([treatmentId])
+  @@map("titration_steps")
+}
+
+// Exams, appointments and anything else with a date. `advisories` holds the
+// conditional reminders that make an exam valid (no heavy training for 72 h,
+// creatine stopped days before), which are worthless if remembered too late.
+model Milestone {
+  id         String        @id @default(cuid())
+  userId     String
+  kind       MilestoneKind @default(OTHER)
+  title      String
+  date       DateTime      @db.Date
+  notes      String?
+  items      String[]      @default([])
+  advisories String[]      @default([])
+  isDone     Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("milestones")
+}
+
+// Weight, weekly by design (§3.6): one entry per day at most, and the diary
+// only asks again once a week has gone by.
+model WeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  weightKg  Float
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("weight_entries")
 }
 
 // CashFlow Settings - per-user commission/ETF configuration

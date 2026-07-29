@@ -123,6 +123,23 @@ export function useDeleteCheckInScale() {
   });
 }
 
+/** What is worth asking about, given what the user is actually taking */
+export function useSuggestedSideEffects(enabled = true) {
+  return useQuery({
+    queryKey: ['foodSideEffectSuggestions'],
+    queryFn: checkInApi.getSuggestedSideEffects,
+    enabled,
+  });
+}
+
+export function useInstallSideEffects() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => checkInApi.installSideEffects(names),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
 export function useCheckInDay(date: string, enabled = true) {
   return useQuery({
     queryKey: therapyQueryKeys.checkInDay(date),

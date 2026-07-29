@@ -36,6 +36,11 @@ export const ratingsApi = {
   remove: (key: string) =>
     fetchApi<void>(`/ratings/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 
+  installDefaultEvents: () =>
+    fetchApi<RatingDefinitionDTO[]>('/ratings/events/defaults', { method: 'POST' }),
+
+  getTriggers: () => fetchApi<string[]>('/ratings/triggers'),
+
   getEntries: (from?: string, to?: string) =>
     fetchApi<RatingEntryDTO[]>(`/ratings/entries${buildQuery({ from, to })}`),
 

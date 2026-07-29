@@ -8,6 +8,7 @@ import {
   useInstallDefaultScales,
   useUpdateCheckInScale,
 } from '../../hooks/useTherapyQueries';
+import { SideEffectPicker } from './SideEffectPicker';
 import type { CheckInScaleDTO } from '@budget/shared';
 
 interface CheckInScaleManagerProps {
@@ -177,6 +178,9 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
             </button>
           )}
 
+          <SideEffectPicker />
+
+
           {isFormOpen && (
             <form
               onSubmit={handleSubmit}
@@ -297,7 +301,11 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
                             }`}
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {scale.isPositive ? 'alto = meglio' : 'alto = sintomo più forte'}
+                        {scale.isSideEffect
+                          ? 'effetto collaterale'
+                          : scale.isPositive
+                            ? 'alto = meglio'
+                            : 'alto = sintomo più forte'}
                         {scale.isCore ? ' · sempre visibile' : ' · facoltativa'}
                         {scale.isUsed ? ' · presente nello storico' : ''}
                       </p>

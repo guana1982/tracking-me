@@ -45,6 +45,11 @@ import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 //                 popup states also appear as their own mood_log row at the
 //                 same minute - one event seen from the two tracks, not two
 //                 separate events
+//   event       - an episode logged the moment it happened (category = its
+//                 type, valence = the trigger that set it off, scale_value =
+//                 its intensity when given, text = the note). The trigger is
+//                 the field to count: its ranking is the point of the log
+//   weight      - a weekly weighing (quantity = kg)
 //   day_summary - one per tracked day (time 00:00), carrying the two day scores
 // body_state / mood_state are averages in [-1, +1] (positive/neutral/negative
 // = +1/0/-1) and are INDEPENDENT: an empty one means "not tracked that day".
@@ -107,6 +112,16 @@ export interface CsvRatingInput {
   note: string | null;
   /** Text of the entry picked in the row's popup, when the row has one */
   linkedText: string | null;
+  /** EVENT rows are episodes, SCALE rows are periodic marks */
+  isEvent?: boolean;
+  /** What set the episode off */
+  trigger?: string | null;
+}
+
+export interface CsvWeightInput {
+  date: string; // YYYY-MM-DD
+  weightKg: number;
+  note: string | null;
 }
 
 function escapeCsvField(value: string): string {
@@ -136,7 +151,8 @@ export function buildFoodCsv(
   daySummaries: CsvDaySummaryInput[] = [],
   intakes: CsvIntakeInput[] = [],
   checkIns: CsvCheckInInput[] = [],
-  ratings: CsvRatingInput[] = []
+  ratings: CsvRatingInput[] = [],
+  weights: CsvWeightInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -310,11 +326,15 @@ export function buildFoodCsv(
     // they are shown together in the diary
     const recap = [rating.note, rating.linkedText].filter((part) => Boolean(part)).join(' · ');
     const line = [
-      'rating',
+      // An episode and a periodic mark answer different questions, so they
+      // must be separable without reading the name of the characteristic
+      rating.isEvent ? 'event' : 'rating',
       rating.date,
       time,
       escapeCsvField(rating.ratingName),
-      '',
+      // The trigger rides in `valence` on event rows: it is the dimension
+      // that qualifies the episode, and it stays one column to count
+      rating.isEvent ? escapeCsvField(rating.trigger ?? '') : '',
       '',
       '',
       '',
@@ -328,6 +348,30 @@ export function buildFoodCsv(
       '',
     ].join(',');
     rows.push({ sortKey: `${rating.date} ${time} 1`, line });
+  }
+
+  // Weight sits at the top of its day: it is a measure of the day, not of a
+  // moment, and the hour it was taken carries no information
+  for (const weight of weights) {
+    const line = [
+      'weight',
+      weight.date,
+      '00:00',
+      'peso',
+      '',
+      '',
+      '',
+      String(weight.weightKg),
+      'kg',
+      escapeCsvField(weight.note ?? ''),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ].join(',');
+    rows.push({ sortKey: `${weight.date} 00:00 0`, line });
   }
 
   rows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
@@ -393,7 +437,7 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns, ratings] = await Promise.all([
+    const [intakes, checkIns, ratings, weights] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
@@ -406,6 +450,10 @@ class FoodExportService {
         where: { userId, ...dayFilter },
         // The linked entry travels with the vote so the recap stays whole
         include: { quickLog: { select: { text: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.weightEntry.findMany({
+        where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
       }),
     ]);
@@ -466,6 +514,13 @@ class FoodExportService {
         maxValue: entry.maxValue,
         note: entry.note,
         linkedText: entry.quickLog?.text ?? null,
+        isEvent: entry.kind === 'EVENT',
+        trigger: entry.trigger,
+      })),
+      weights.map((entry) => ({
+        date: entry.date.toISOString().slice(0, 10),
+        weightKg: entry.weightKg,
+        note: entry.note,
       }))
     );
   }

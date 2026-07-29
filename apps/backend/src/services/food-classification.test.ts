@@ -322,6 +322,42 @@ describe('CSV export', () => {
     );
   });
 
+  it('separates an episode from a mark, and puts its trigger in its own column', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T18:20:00Z'),
+          ratingName: 'Picco di irritazione',
+          value: 6,
+          maxValue: 10,
+          note: null,
+          linkedText: null,
+          isEvent: true,
+          trigger: 'rientro a casa',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'event,2026-07-16,18:20,Picco di irritazione,rientro a casa,,,,,,,,,6,10,'
+    );
+  });
+
+  it('opens the day with the weekly weight, which belongs to the day not to an hour', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [
+      { date: '2026-07-16', weightKg: 78.4, note: null },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('weight,2026-07-16,00:00,peso,,,,78.4,kg,,,,,,,');
+  });
+
   it('uses the named steps of a scale instead of the generic wording', () => {
     const label = describeScaleValue(2, 3, false, ['nessuna', 'poche', 'molte', 'continue']);
     expect(label).toBe('molte');

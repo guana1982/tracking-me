@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Check, Gauge, Loader2, Smile, Trash2, X } from 'lucide-react';
+import { Check, Crosshair, Gauge, Loader2, Smile, Trash2, X, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { localTimeOf, quickLogValenceLabel, valenceColor } from '../../lib/foodUtils';
-import { useUpdateRatingEntry } from '../../hooks/useRatingQueries';
+import { useTriggers, useUpdateRatingEntry } from '../../hooks/useRatingQueries';
 import { useUpdateQuickLog } from '../../hooks/useFoodQueries';
 import type { QuickLogDTO, RatingEntryDTO } from '@budget/shared';
 
@@ -22,13 +22,26 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
   const [isEditingValue, setIsEditingValue] = useState(false);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [linkedDraft, setLinkedDraft] = useState<string | null>(null);
+  const [triggerDraft, setTriggerDraft] = useState<string | null>(null);
 
   const updateEntry = useUpdateRatingEntry();
   const updateLog = useUpdateQuickLog();
+  const isEvent = entry.kind === 'EVENT';
+  // Only fetched while the trigger is actually being edited
+  const triggers = useTriggers(triggerDraft !== null);
 
   const linkedColors = valenceColor(linkedLog?.derivedValence ?? null);
   const boxes = Array.from({ length: entry.maxValue }, (_, index) => index + 1);
   const isSaving = updateEntry.isPending || updateLog.isPending;
+
+  const commitTrigger = () => {
+    if (triggerDraft === null) return;
+    const trimmed = triggerDraft.trim();
+    if (trimmed !== (entry.trigger ?? '')) {
+      updateEntry.mutate({ id: entry.id, data: { trigger: trimmed || null } });
+    }
+    setTriggerDraft(null);
+  };
 
   const commitNote = () => {
     if (noteDraft === null) return;
@@ -49,10 +62,19 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
   };
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+    <div
+      className={cn(
+        'rounded-xl border p-3',
+        isEvent ? 'border-amber-200 bg-amber-50/50' : 'border-indigo-100 bg-indigo-50/40'
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <Gauge className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          {isEvent ? (
+            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          ) : (
+            <Gauge className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          )}
           <span className="text-xs text-slate-400">{localTimeOf(entry.loggedAt)}</span>
           <span className="text-sm font-medium text-slate-800 truncate">{entry.ratingName}</span>
           {/* The mark is the handle: one tap opens the boxes right here */}
@@ -62,12 +84,23 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
             className={cn(
               'px-2 py-0.5 rounded-full text-xs font-semibold transition-colors',
               entry.value === null
-                ? 'border border-dashed border-indigo-300 text-indigo-500'
-                : 'bg-indigo-500 text-white hover:bg-indigo-600'
+                ? cn(
+                    'border border-dashed',
+                    isEvent
+                      ? 'border-amber-400 text-amber-700'
+                      : 'border-indigo-300 text-indigo-500'
+                  )
+                : isEvent
+                  ? 'bg-amber-500 text-white hover:bg-amber-600'
+                  : 'bg-indigo-500 text-white hover:bg-indigo-600'
             )}
-            title="Modifica il voto"
+            title={isEvent ? 'Intensità' : 'Modifica il voto'}
           >
-            {entry.value === null ? 'voto' : `${entry.value}/${entry.maxValue}`}
+            {entry.value === null
+              ? isEvent
+                ? 'intensità'
+                : 'voto'
+              : `${entry.value}/${entry.maxValue}`}
           </button>
           {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-300" />}
         </div>
@@ -98,8 +131,10 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
               className={cn(
                 'aspect-square rounded-md border text-[11px] font-medium transition-colors',
                 entry.value !== null && box <= entry.value
-                  ? 'bg-indigo-500 border-indigo-500 text-white'
-                  : 'border-indigo-200 bg-white text-slate-400 hover:border-indigo-400 hover:text-indigo-500'
+                  ? isEvent
+                    ? 'bg-amber-500 border-amber-500 text-white'
+                    : 'bg-indigo-500 border-indigo-500 text-white'
+                  : 'border-slate-200 bg-white text-slate-400 hover:border-indigo-400 hover:text-indigo-500'
               )}
               aria-label={`Correggi in ${box} su ${entry.maxValue}`}
             >
@@ -108,6 +143,79 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
           ))}
         </div>
       )}
+
+      {/* The trigger, on episodes only: the field the whole log is really for */}
+      {isEvent &&
+        (triggerDraft !== null ? (
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5">
+              <Crosshair className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                list={`triggers-${entry.id}`}
+                value={triggerDraft}
+                onChange={(event) => setTriggerDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitTrigger();
+                  if (event.key === 'Escape') setTriggerDraft(null);
+                }}
+                placeholder="Cosa l'ha innescato?"
+                className="flex-1 px-2 py-1 rounded-md border border-slate-300 bg-white text-sm text-slate-700 focus:border-slate-500 focus:outline-none"
+                maxLength={80}
+              />
+              {/* Autocomplete from the triggers already used: the vocabulary
+                  has to converge, otherwise the ranking never adds up */}
+              <datalist id={`triggers-${entry.id}`}>
+                {(triggers.data ?? []).map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+              <button
+                type="button"
+                onClick={commitTrigger}
+                className="p-1.5 text-emerald-600 hover:bg-white/70 rounded-lg"
+                title="Salva innesco"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriggerDraft(null)}
+                className="p-1.5 text-slate-400 hover:bg-white/70 rounded-lg"
+                title="Annulla"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {(triggers.data ?? []).length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {(triggers.data ?? []).slice(0, 6).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setTriggerDraft(option)}
+                    className="px-2 py-0.5 rounded-full border border-amber-200 bg-white text-[11px] text-amber-800 hover:border-amber-400"
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setTriggerDraft(entry.trigger ?? '')}
+            className="mt-2 flex items-center gap-1.5 text-xs rounded px-1 -mx-1 hover:bg-white/70 transition-colors"
+            title="Modifica l'innesco"
+          >
+            <Crosshair className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className={entry.trigger ? 'text-amber-900 font-medium' : 'text-slate-400 italic'}>
+              {entry.trigger ?? 'Aggiungi un innesco'}
+            </span>
+          </button>
+        ))}
 
       {/* Note: the text itself is the edit affordance */}
       {noteDraft !== null ? (

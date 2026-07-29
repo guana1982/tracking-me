@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   checkInDayQuerySchema,
   createCheckInScaleSchema,
+  installSideEffectsSchema,
   saveCheckInSchema,
   updateCheckInScaleSchema,
 } from '@budget/shared';
@@ -22,6 +23,24 @@ export const checkInRoutes: FastifyPluginAsync = async (fastify) => {
     schema: { tags: ['Check-in'], summary: 'Install the suggested set of scales' },
     handler: async (request, reply) => {
       const scales = await checkInService.installDefaultScales(request.authUser!.id);
+      reply.status(201);
+      return { success: true, data: scales };
+    },
+  });
+
+  fastify.get('/side-effects/suggested', {
+    schema: { tags: ['Check-in'], summary: 'Side effects suggested by the active treatments' },
+    handler: async (request) => ({
+      success: true,
+      data: await checkInService.suggestSideEffects(request.authUser!.id),
+    }),
+  });
+
+  fastify.post('/side-effects', {
+    schema: { tags: ['Check-in'], summary: 'Install side effects as optional scales' },
+    handler: async (request, reply) => {
+      const { names } = installSideEffectsSchema.parse(request.body);
+      const scales = await checkInService.installSideEffects(request.authUser!.id, names);
       reply.status(201);
       return { success: true, data: scales };
     },

@@ -9,3 +9,5 @@ export * from './therapy-schemas';
 export * from './therapy-dictionaries';
 export * from './rating-types';
 export * from './rating-schemas';
+export * from './therapy-plan-types';
+export * from './therapy-plan-schemas';

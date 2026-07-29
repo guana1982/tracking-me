@@ -14,6 +14,7 @@ export const ratingQueryKeys = {
   definitions: ['foodRatings'] as const,
   entries: (from?: string, to?: string) =>
     ['foodRatingEntries', from ?? 'all', to ?? 'all'] as const,
+  triggers: ['foodRatingTriggers'] as const,
 };
 
 function invalidateFoodData(queryClient: QueryClient) {
@@ -53,6 +54,23 @@ export function useDeleteRating() {
   return useMutation({
     mutationFn: (key: string) => ratingsApi.remove(key),
     onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useInstallDefaultEvents() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ratingsApi.installDefaultEvents(),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+/** Autocomplete source, and in time the ranking of the real triggers */
+export function useTriggers(enabled = true) {
+  return useQuery({
+    queryKey: ratingQueryKeys.triggers,
+    queryFn: ratingsApi.getTriggers,
+    enabled,
   });
 }
 

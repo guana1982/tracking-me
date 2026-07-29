@@ -11,6 +11,7 @@ import { ComparisonPanel } from '../components/food/ComparisonPanel';
 import { AssociationsPanel } from '../components/food/AssociationsPanel';
 import { StatsPanel } from '../components/food/StatsPanel';
 import { PeriodComparePanel } from '../components/food/PeriodComparePanel';
+import { TherapyTrendsPanel } from '../components/therapy/TherapyTrendsPanel';
 
 const MIN_DAYS_FOR_ANALYTICS = 7;
 
@@ -93,6 +94,10 @@ export function FoodTrends() {
           </p>
         </div>
       )}
+
+      {/* 0. Terapia: letture settimanali, mai giornaliere (§4.4). Prima di
+             tutto il resto perché è la domanda "sta funzionando?" */}
+      <TherapyTrendsPanel />
 
       {/* 1. Calendario mensile a semaforo (fisico + umore) */}
       <MonthCalendar track={track} onTrackChange={setTrack} />

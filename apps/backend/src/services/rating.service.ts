@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
-import { DEFAULT_RATING_DEFINITIONS } from '@budget/shared';
+import { DEFAULT_EVENT_DEFINITIONS, DEFAULT_RATING_DEFINITIONS } from '@budget/shared';
 import type {
   CreateRatingDefinitionDTO,
   CreateRatingEntryDTO,
@@ -50,22 +50,68 @@ class RatingService {
 
   async create(userId: string, data: CreateRatingDefinitionDTO): Promise<RatingDefinitionDTO> {
     await this.assertUniqueName(userId, data.name);
-    const last = await prisma.ratingDefinition.findFirst({
-      where: { userId },
-      orderBy: { position: 'desc' },
-      select: { position: true },
-    });
     const definition = await prisma.ratingDefinition.create({
       data: {
         userId,
         key: `r-${randomUUID()}`,
         name: data.name.trim(),
+        kind: data.kind ?? 'SCALE',
         maxValue: data.maxValue ?? 10,
         linkedForm: data.linkedForm ?? 'NONE',
-        position: (last?.position ?? -1) + 1,
+        position: await this.nextPosition(userId),
       },
     });
     return this.toDefinitionDTO(definition, false);
+  }
+
+  /**
+   * Installs the suggested episode types, skipping any name already there.
+   * On request only - the catalogue is never populated behind the user's back.
+   */
+  async installDefaultEvents(userId: string): Promise<RatingDefinitionDTO[]> {
+    const existing = await prisma.ratingDefinition.findMany({
+      where: { userId },
+      select: { name: true },
+    });
+    const taken = new Set(existing.map((definition) => definition.name.toLowerCase()));
+    const missing = DEFAULT_EVENT_DEFINITIONS.filter((name) => !taken.has(name.toLowerCase()));
+
+    if (missing.length > 0) {
+      const start = await this.nextPosition(userId);
+      await prisma.ratingDefinition.createMany({
+        data: missing.map((name, index) => ({
+          userId,
+          key: `r-${randomUUID()}`,
+          name,
+          kind: 'EVENT' as const,
+          // An episode is rated 1-10 like everything else, but the intensity
+          // is optional: the tap that records it must stay a single tap
+          maxValue: 10,
+          position: start + index,
+          isDefault: true,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    return this.list(userId);
+  }
+
+  /**
+   * The triggers already used, most frequent first. This is the autocomplete
+   * source, and over time the same list becomes the ranking the spec calls
+   * the most valuable output of the module.
+   */
+  async listTriggers(userId: string, limit = 40): Promise<string[]> {
+    const grouped = await prisma.ratingEntry.groupBy({
+      by: ['trigger'],
+      where: { userId, trigger: { not: null } },
+      _count: { _all: true },
+      orderBy: { _count: { trigger: 'desc' } },
+      take: limit,
+    });
+    return grouped
+      .map((row) => row.trigger)
+      .filter((trigger): trigger is string => trigger !== null);
   }
 
   async update(
@@ -81,6 +127,7 @@ class RatingService {
       where: { id: existing.id },
       data: {
         name: data.name?.trim(),
+        kind: data.kind,
         maxValue: data.maxValue,
         linkedForm: data.linkedForm,
         position: data.position,
@@ -129,7 +176,12 @@ class RatingService {
       where: { userId, key: data.ratingKey },
     });
     if (!definition) throw new AppError('Caratteristica non trovata', 404, 'NOT_FOUND');
-    if (data.value > definition.maxValue) {
+    // An episode is worth recording even without an intensity: the tap that
+    // logs it has to stay one tap. A mark, on the other hand, is the mark
+    if (definition.kind === 'SCALE' && data.value == null) {
+      throw new AppError('Voto mancante', 400, 'VALUE_REQUIRED');
+    }
+    if (data.value != null && data.value > definition.maxValue) {
       throw new AppError('Voto fuori scala', 400, 'VALUE_OUT_OF_RANGE');
     }
     if (data.quickLogId) {
@@ -149,9 +201,11 @@ class RatingService {
         // Snapshots, like intakes and check-in values: renaming or deleting
         // the characteristic never rewrites what a past day says
         ratingName: definition.name,
+        kind: definition.kind,
         maxValue: definition.maxValue,
-        value: data.value,
+        value: data.value ?? null,
         note: data.note?.trim() || null,
+        trigger: data.trigger?.trim() || null,
         quickLogId: data.quickLogId ?? null,
         loggedAt: data.loggedAt ? new Date(data.loggedAt) : new Date(),
       },
@@ -171,7 +225,7 @@ class RatingService {
   ): Promise<RatingEntryDTO> {
     const existing = await prisma.ratingEntry.findFirst({ where: { userId, id } });
     if (!existing) throw new AppError('Voto non trovato', 404, 'NOT_FOUND');
-    if (data.value !== undefined && data.value > existing.maxValue) {
+    if (data.value != null && data.value > existing.maxValue) {
       throw new AppError('Voto fuori scala', 400, 'VALUE_OUT_OF_RANGE');
     }
 
@@ -180,6 +234,7 @@ class RatingService {
       data: {
         value: data.value,
         note: data.note === undefined ? undefined : data.note?.trim() || null,
+        trigger: data.trigger === undefined ? undefined : data.trigger?.trim() || null,
         // loggedAt untouched on purpose: fixing a mark does not move the
         // moment it was given, so the recap keeps its place in the timeline
       },
@@ -219,10 +274,20 @@ class RatingService {
     });
   }
 
+  private async nextPosition(userId: string): Promise<number> {
+    const last = await prisma.ratingDefinition.findFirst({
+      where: { userId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    return (last?.position ?? -1) + 1;
+  }
+
   private toDefinitionDTO(definition: RatingDefinition, isUsed: boolean): RatingDefinitionDTO {
     return {
       key: definition.key,
       name: definition.name,
+      kind: definition.kind,
       maxValue: definition.maxValue,
       linkedForm: definition.linkedForm,
       position: definition.position,
@@ -238,9 +303,11 @@ class RatingService {
       date: toIsoDate(entry.date),
       ratingKey: entry.ratingKey,
       ratingName: entry.ratingName,
+      kind: entry.kind,
       value: entry.value,
       maxValue: entry.maxValue,
       note: entry.note,
+      trigger: entry.trigger,
       quickLogId: entry.quickLogId,
       loggedAt: entry.loggedAt.toISOString(),
     };

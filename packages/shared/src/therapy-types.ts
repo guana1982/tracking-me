@@ -106,6 +106,8 @@ export interface CheckInScaleDTO {
   maxValue: number;
   isPositive: boolean;
   isCore: boolean;
+  /** Read as "when did it appear and did it fade", not as a curve */
+  isSideEffect: boolean;
   position: number;
   isActive: boolean;
   isDefault: boolean;
@@ -120,6 +122,7 @@ export interface CreateCheckInScaleDTO {
   maxValue?: number;
   isPositive?: boolean;
   isCore?: boolean;
+  isSideEffect?: boolean;
 }
 
 export interface UpdateCheckInScaleDTO {
@@ -130,6 +133,7 @@ export interface UpdateCheckInScaleDTO {
   maxValue?: number;
   isPositive?: boolean;
   isCore?: boolean;
+  isSideEffect?: boolean;
   position?: number;
   isActive?: boolean;
 }

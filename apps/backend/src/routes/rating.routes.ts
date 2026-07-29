@@ -19,6 +19,23 @@ export const ratingRoutes: FastifyPluginAsync = async (fastify) => {
     }),
   });
 
+  fastify.post('/events/defaults', {
+    schema: { tags: ['Ratings'], summary: 'Install the suggested episode types' },
+    handler: async (request, reply) => {
+      const definitions = await ratingService.installDefaultEvents(request.authUser!.id);
+      reply.status(201);
+      return { success: true, data: definitions };
+    },
+  });
+
+  fastify.get('/triggers', {
+    schema: { tags: ['Ratings'], summary: 'Triggers already used, most frequent first' },
+    handler: async (request) => ({
+      success: true,
+      data: await ratingService.listTriggers(request.authUser!.id),
+    }),
+  });
+
   fastify.post('/', {
     schema: { tags: ['Ratings'], summary: 'Add a characteristic to rate' },
     handler: async (request, reply) => {
