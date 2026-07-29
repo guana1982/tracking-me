@@ -7,3 +7,5 @@ export * from './food-dictionaries';
 export * from './therapy-types';
 export * from './therapy-schemas';
 export * from './therapy-dictionaries';
+export * from './rating-types';
+export * from './rating-schemas';

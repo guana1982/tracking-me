@@ -35,6 +35,10 @@ import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 //                 on these rows `valence` says which direction is good:
 //                 "negativo" = it measures a symptom, so lower is better;
 //                 "positivo" = higher is better
+//   rating      - a vote given in the diary on a user-defined characteristic
+//                 (category = its name, scale_value/scale_max = the vote,
+//                 text = the note written next to it). These are marks out of
+//                 scale_max, so a higher value always reads as better
 //   day_summary - one per tracked day (time 00:00), carrying the two day scores
 // body_state / mood_state are averages in [-1, +1] (positive/neutral/negative
 // = +1/0/-1) and are INDEPENDENT: an empty one means "not tracked that day".
@@ -88,6 +92,15 @@ export interface CsvCheckInInput {
   note: string | null;
 }
 
+export interface CsvRatingInput {
+  date: string; // YYYY-MM-DD
+  loggedAt: Date;
+  ratingName: string;
+  value: number | null;
+  maxValue: number;
+  note: string | null;
+}
+
 function escapeCsvField(value: string): string {
   if (/[",\n\r]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -114,7 +127,8 @@ export function buildFoodCsv(
   tzOffset: number,
   daySummaries: CsvDaySummaryInput[] = [],
   intakes: CsvIntakeInput[] = [],
-  checkIns: CsvCheckInInput[] = []
+  checkIns: CsvCheckInInput[] = [],
+  ratings: CsvRatingInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -279,6 +293,34 @@ export function buildFoodCsv(
     }
   }
 
+  // Diary votes, at the minute they were given so they interleave with meals
+  for (const rating of ratings) {
+    // A row holding only a linked mood entry has nothing of its own to say:
+    // that entry is already exported as its own mood_log
+    if (rating.value === null && !rating.note) continue;
+    const local = toLocalParts(rating.loggedAt, tzOffset);
+    const time = hhmm(local.hour, local.minutes);
+    const line = [
+      'rating',
+      rating.date,
+      time,
+      escapeCsvField(rating.ratingName),
+      '',
+      '',
+      '',
+      '',
+      '',
+      escapeCsvField(rating.note ?? ''),
+      '',
+      '',
+      '',
+      rating.value === null ? '' : String(rating.value),
+      String(rating.maxValue),
+      '',
+    ].join(',');
+    rows.push({ sortKey: `${rating.date} ${time} 1`, line });
+  }
+
   rows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
 
   // BOM so Excel detects UTF-8
@@ -342,12 +384,16 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns] = await Promise.all([
+    const [intakes, checkIns, ratings] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
       }),
       prisma.checkInEntry.findMany({
+        where: { userId, ...dayFilter },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.ratingEntry.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
       }),
@@ -399,6 +445,14 @@ class FoodExportService {
         values: Array.isArray(entry.valuesJson)
           ? (entry.valuesJson as unknown as CheckInValueDTO[])
           : [],
+        note: entry.note,
+      })),
+      ratings.map((entry) => ({
+        date: entry.date.toISOString().slice(0, 10),
+        loggedAt: entry.loggedAt,
+        ratingName: entry.ratingName,
+        value: entry.value,
+        maxValue: entry.maxValue,
         note: entry.note,
       }))
     );

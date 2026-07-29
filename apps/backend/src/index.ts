@@ -22,6 +22,7 @@ import { moodDefinitionRoutes } from './routes/mood-definition.routes.js';
 import { quickLogRoutes } from './routes/quick-log.routes.js';
 import { treatmentRoutes } from './routes/treatment.routes.js';
 import { checkInRoutes } from './routes/check-in.routes.js';
+import { ratingRoutes } from './routes/rating.routes.js';
 import { foodDashboardRoutes } from './routes/food-dashboard.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
@@ -109,6 +110,7 @@ await fastify.register(swagger, {
       { name: 'Moods', description: 'User-owned catalog of mood states' },
       { name: 'Intakes', description: 'User-owned catalog of things taken daily, and adherence' },
       { name: 'Check-in', description: 'Configurable daily self-report scales' },
+      { name: 'Ratings', description: 'User-defined characteristics rated daily in the diary' },
       { name: 'Food Dashboard', description: 'Food diary trends, correlations and CSV export' },
     ],
   },
@@ -170,6 +172,7 @@ await fastify.register(moodDefinitionRoutes, { prefix: '/api/moods' });
 await fastify.register(quickLogRoutes, { prefix: '/api/quick-logs' });
 await fastify.register(treatmentRoutes, { prefix: '/api/treatments' });
 await fastify.register(checkInRoutes, { prefix: '/api/check-in' });
+await fastify.register(ratingRoutes, { prefix: '/api/ratings' });
 await fastify.register(foodDashboardRoutes, { prefix: '/api/food-dashboard' });
 
 // Graceful shutdown

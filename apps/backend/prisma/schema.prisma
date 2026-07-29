@@ -14,6 +14,9 @@ model User {
   email     String   @unique
   name      String?
   picture   String?
+  // Stamped the first time the diary asks for the rating rows, so the
+  // suggested set is installed exactly once and a deletion stays deleted
+  ratingsSeededAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -37,6 +40,8 @@ model User {
   treatmentIntakes       TreatmentIntake[]
   checkInScales          CheckInScale[]
   checkInEntries         CheckInEntry[]
+  ratingDefinitions      RatingDefinition[]
+  ratingEntries          RatingEntry[]
 
   @@index([googleId])
   @@index([email])
@@ -482,6 +487,9 @@ model QuickLog {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   meal Meal? @relation(fields: [mealId], references: [id], onDelete: SetNull)
+  // Set when the log was written from a rating row: the two are shown as one
+  // recap in the timeline instead of two entries at the same minute
+  ratingEntry RatingEntry?
 
   @@index([userId])
   @@index([userId, loggedAt])
@@ -602,6 +610,67 @@ model CheckInEntry {
   @@unique([userId, date])
   @@index([userId, date])
   @@map("check_in_entries")
+}
+
+// ============================================================
+// Daily ratings - the 1..n rows of clickable boxes at the top of the diary.
+// A rating is timestamped and lands in the day timeline, which is what
+// separates it from the check-in (one silent evaluation of the whole day).
+// ============================================================
+
+enum RatingLinkedForm {
+  NONE
+  MOOD
+}
+
+// One characteristic the user rates. Everything about it is editable: the
+// three installed at first run are a suggestion, not a fixed set.
+model RatingDefinition {
+  id         String           @id @default(cuid())
+  userId     String
+  key        String
+  name       String
+  maxValue   Int              @default(10)
+  linkedForm RatingLinkedForm @default(NONE)
+  position   Int
+  isActive   Boolean          @default(true)
+  isDefault  Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries RatingEntry[]
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("rating_definitions")
+}
+
+// One vote per characteristic per day: voting again edits it and moves the
+// clock, it never stacks a second card in the timeline. `value` is nullable
+// because a row can carry only a note or only a linked mood entry.
+model RatingEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  ratingId   String?
+  ratingKey  String
+  ratingName String
+  value      Int?
+  maxValue   Int      @default(10)
+  note       String?
+  quickLogId String?  @unique
+  date       DateTime @db.Date
+  loggedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating   RatingDefinition? @relation(fields: [ratingId], references: [id], onDelete: SetNull)
+  quickLog QuickLog?         @relation(fields: [quickLogId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, date, ratingKey])
+  @@index([userId, date])
+  @@map("rating_entries")
 }
 
 // CashFlow Settings - per-user commission/ETF configuration

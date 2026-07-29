@@ -11,12 +11,17 @@ import { MealCard } from '../components/food/MealCard';
 import { QuickLogNote } from '../components/food/QuickLogNote';
 import { QuickLogBar } from '../components/food/QuickLogBar';
 import { MoodPickerModal } from '../components/food/MoodPickerModal';
+import { DailyRatingsCard } from '../components/food/DailyRatingsCard';
+import { RatingNote } from '../components/food/RatingNote';
 import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
-import type { MealDTO, QuickLogDTO } from '@budget/shared';
+import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
+import { useDeleteQuickLog } from '../hooks/useFoodQueries';
+import type { MealDTO, QuickLogDTO, RatingEntryDTO } from '@budget/shared';
 
 type TimelineEntry =
   | { kind: 'meal'; timestamp: string; meal: MealDTO }
-  | { kind: 'log'; timestamp: string; log: QuickLogDTO };
+  | { kind: 'log'; timestamp: string; log: QuickLogDTO }
+  | { kind: 'rating'; timestamp: string; rating: RatingEntryDTO; linkedLog?: QuickLogDTO };
 
 /** Monday of the week containing the date */
 function weekStart(date: string): string {
@@ -38,7 +43,10 @@ export function FoodDiary() {
 
   const meals = useMeals(from, to);
   const quickLogs = useQuickLogs(from, to);
+  const ratingEntries = useRatingEntries(from, to);
   const deleteMeal = useDeleteMeal();
+  const deleteRatingEntry = useDeleteRatingEntry();
+  const deleteQuickLog = useDeleteQuickLog();
 
   const showToast = (message: string) => {
     setToast(message);
@@ -69,24 +77,53 @@ export function FoodDiary() {
     }
   };
 
-  // Meals and quick logs of the selected day, interleaved chronologically
+  // Meals, quick logs and votes of the selected day, interleaved chronologically
   const timeline = useMemo((): TimelineEntry[] => {
     const dayMeals = (meals.data ?? []).filter((meal) => meal.date === selectedDate);
-    const dayLogs = (quickLogs.data ?? []).filter(
-      (log) => localDateOf(log.loggedAt) === selectedDate
+    const dayRatings = (ratingEntries.data ?? []).filter((entry) => entry.date === selectedDate);
+    const logs = quickLogs.data ?? [];
+
+    // A mood entry opened from a rating row is shown inside that row's recap,
+    // so it must not also appear on its own line at the same minute
+    const linkedLogIds = new Set(
+      dayRatings.map((entry) => entry.quickLogId).filter((id): id is string => id !== null)
     );
+    const dayLogs = logs.filter(
+      (log) => localDateOf(log.loggedAt) === selectedDate && !linkedLogIds.has(log.id)
+    );
+
     return [
       ...dayMeals.map((meal): TimelineEntry => ({ kind: 'meal', timestamp: meal.createdAt, meal })),
       ...dayLogs.map((log): TimelineEntry => ({ kind: 'log', timestamp: log.loggedAt, log })),
+      ...dayRatings.map(
+        (rating): TimelineEntry => ({
+          kind: 'rating',
+          timestamp: rating.loggedAt,
+          rating,
+          linkedLog: logs.find((log) => log.id === rating.quickLogId),
+        })
+      ),
     ].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  }, [meals.data, quickLogs.data, selectedDate]);
+  }, [meals.data, quickLogs.data, ratingEntries.data, selectedDate]);
 
   const daysWithData = useMemo(() => {
     const days = new Set<string>();
     for (const meal of meals.data ?? []) days.add(meal.date);
     for (const log of quickLogs.data ?? []) days.add(localDateOf(log.loggedAt));
+    for (const entry of ratingEntries.data ?? []) days.add(entry.date);
     return days;
-  }, [meals.data, quickLogs.data]);
+  }, [meals.data, quickLogs.data, ratingEntries.data]);
+
+  const handleDeleteRating = async (entry: RatingEntryDTO) => {
+    const message = entry.quickLogId
+      ? 'Eliminare questo voto e la nota d’umore collegata?'
+      : 'Eliminare questo voto?';
+    if (!window.confirm(message)) return;
+    await deleteRatingEntry.mutateAsync({ date: entry.date, ratingKey: entry.ratingKey });
+    // Order matters: the link is dropped first, so the log is never orphaned
+    if (entry.quickLogId) await deleteQuickLog.mutateAsync(entry.quickLogId);
+    showToast('Voto eliminato');
+  };
 
   const isLoading = meals.isLoading || quickLogs.isLoading;
   const loadError = meals.error || quickLogs.error;
@@ -183,6 +220,9 @@ export function FoodDiary() {
         })}
       </div>
 
+      {/* Votes of the day, between the dates and the intakes */}
+      <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
+
       {/* Intakes of the day: part of the diary, above the timeline */}
       <DailyIntakeCard date={selectedDate} />
 
@@ -223,6 +263,13 @@ export function FoodDiary() {
                 onEdit={openEdit}
                 onDuplicate={openDuplicate}
                 onDelete={handleDelete}
+              />
+            ) : entry.kind === 'rating' ? (
+              <RatingNote
+                key={`rating-${entry.rating.ratingKey}`}
+                entry={entry.rating}
+                linkedLog={entry.linkedLog}
+                onDelete={handleDeleteRating}
               />
             ) : (
               <QuickLogNote key={`log-${entry.log.id}`} log={entry.log} />

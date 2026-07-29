@@ -254,6 +254,39 @@ describe('CSV export', () => {
     expect(lines[3]).toBe('checkin,2026-07-16,21:30,nota,,,,,,giornata pesante,,,,,,');
   });
 
+  it('records a diary vote at the minute it was given, skipping empty rows', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T13:30:00Z'),
+          ratingName: 'Umore',
+          value: 7,
+          maxValue: 10,
+          note: 'giornata ok',
+        },
+        // Only a linked mood entry: already exported as its own mood_log
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T14:00:00Z'),
+          ratingName: 'Allenamento',
+          value: null,
+          maxValue: 10,
+          note: null,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines).toHaveLength(2); // header + the only row with something to say
+    expect(lines[1]).toBe('rating,2026-07-16,13:30,Umore,,,,,,giornata ok,,,,7,10,');
+  });
+
   it('uses the named steps of a scale instead of the generic wording', () => {
     const label = describeScaleValue(2, 3, false, ['nessuna', 'poche', 'molte', 'continue']);
     expect(label).toBe('molte');

@@ -6,13 +6,15 @@ import { useCreateQuickLog, useMoods } from '../../hooks/useFoodQueries';
 import { useCheckInDay, useSaveCheckIn } from '../../hooks/useTherapyQueries';
 import { MoodManager } from './MoodManager';
 import { CheckInSection } from '../therapy/CheckInSection';
-import type { QuickLogValenceDTO } from '@budget/shared';
+import type { QuickLogDTO, QuickLogValenceDTO } from '@budget/shared';
 
 interface MoodPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
   date: string; // the diary day being viewed (YYYY-MM-DD)
+  /** Set when the modal was opened from a rating row, to attach what was chosen */
+  onMoodLogged?: (log: QuickLogDTO) => void;
 }
 
 const GROUPS: { title: string; valence: QuickLogValenceDTO }[] = [
@@ -50,7 +52,13 @@ function resolveValence(valences: QuickLogValenceDTO[]): QuickLogValenceDTO {
  * or more mood chips, optionally add a note, save. The chips pin category and
  * valence explicitly, so the mood track never depends on keyword matching.
  */
-export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerModalProps) {
+export function MoodPickerModal({
+  isOpen,
+  onClose,
+  onSaved,
+  date,
+  onMoodLogged,
+}: MoodPickerModalProps) {
   const [selected, setSelected] = useState<string[]>([]); // definition keys
   const [note, setNote] = useState('');
   const [isManagerOpen, setIsManagerOpen] = useState(false);
@@ -147,7 +155,7 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
         trimmedNote ? ` — ${trimmedNote}` : ''
       }`;
 
-      await createLog.mutateAsync({
+      const log = await createLog.mutateAsync({
         text,
         derivedCategory: 'MOOD',
         derivedValence: resolveValence(valences),
@@ -155,6 +163,7 @@ export function MoodPickerModal({ isOpen, onClose, onSaved, date }: MoodPickerMo
         loggedAt:
           date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
       });
+      onMoodLogged?.(log);
     }
 
     if (checkInTouched) {
