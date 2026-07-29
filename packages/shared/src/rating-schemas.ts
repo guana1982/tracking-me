@@ -28,18 +28,14 @@ export const updateRatingDefinitionSchema = z
     message: 'At least one field must be provided',
   });
 
-export const setRatingSchema = z.object({
+export const createRatingEntrySchema = z.object({
   date: ratingDateSchema,
   ratingKey: z.string().trim().min(1).max(80),
   // The vote is 1-based: box 1 is the lowest, there is no "zero" to tap
-  value: z.number().int().min(1).max(RATING_MAX_MAX).nullable().optional(),
+  value: z.number().int().min(1).max(RATING_MAX_MAX),
   note: z.string().trim().max(500).nullable().optional(),
   quickLogId: z.string().trim().min(1).max(60).nullable().optional(),
   loggedAt: z.string().datetime().optional(),
-});
-
-export const ratingDayQuerySchema = z.object({
-  date: ratingDateSchema,
 });
 
 export const ratingRangeQuerySchema = z.object({
@@ -51,4 +47,4 @@ export const ratingRangeQuerySchema = z.object({
 
 export type CreateRatingDefinitionInput = z.infer<typeof createRatingDefinitionSchema>;
 export type UpdateRatingDefinitionInput = z.infer<typeof updateRatingDefinitionSchema>;
-export type SetRatingInput = z.infer<typeof setRatingSchema>;
+export type CreateRatingEntryInput = z.infer<typeof createRatingEntrySchema>;

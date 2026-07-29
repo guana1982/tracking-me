@@ -1,45 +1,54 @@
 import { useState } from 'react';
 import { Gauge, Loader2, Settings2 } from 'lucide-react';
 import { todayLocal } from '../../lib/foodUtils';
-import { useRatingEntries, useRatings, useSetRating } from '../../hooks/useRatingQueries';
+import { useCreateRatingEntry, useRatings } from '../../hooks/useRatingQueries';
 import { RatingRow } from './RatingRow';
 import { RatingManager } from './RatingManager';
 import { MoodPickerModal } from './MoodPickerModal';
-import type { QuickLogDTO, SetRatingDTO } from '@budget/shared';
+import type { QuickLogDTO } from '@budget/shared';
 
 interface DailyRatingsCardProps {
   date: string;
-  /** Visible week, so the votes are read from (and written into) one cache */
+  /** Visible week, so a new vote is written into the cache the diary reads */
   from: string;
   to: string;
   onToast: (message: string) => void;
 }
 
 /**
- * The rating rows, at the top of the diary above the intakes. Voting writes
- * the moment as well as the mark, which is what puts the vote in the day
- * timeline instead of leaving it in a panel of its own.
+ * The rating rows, at the top of the diary above the intakes. They are a way
+ * in and nothing else: a vote is written with its moment and then the row is
+ * empty again, ready for the next one. What was voted lives in the timeline.
  */
 export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardProps) {
   const [isManagerOpen, setIsManagerOpen] = useState(false);
   // The characteristic whose picker is open, if any
   const [linkedFormFor, setLinkedFormFor] = useState<string | null>(null);
+  // Mood entries picked but not yet sent: they travel with the next vote of
+  // their row, so vote, note and states end up in one single recap
+  const [pendingLinks, setPendingLinks] = useState<Record<string, string>>({});
 
   const ratings = useRatings();
-  const entries = useRatingEntries(from, to);
-  const setRating = useSetRating(from, to);
+  const createEntry = useCreateRatingEntry(from, to);
 
-  if (ratings.isLoading || entries.isLoading) return null;
+  if (ratings.isLoading) return null;
 
   const definitions = (ratings.data ?? []).filter((definition) => definition.isActive);
-  const dayEntries = (entries.data ?? []).filter((entry) => entry.date === date);
 
-  // A vote on a past day belongs to that day at local noon, not to "now"
-  const loggedAt =
-    date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString();
-
-  const submit = (data: Omit<SetRatingDTO, 'date' | 'loggedAt'>) => {
-    setRating.mutate({ date, loggedAt, ...data });
+  const handleVote = (ratingKey: string, value: number, note: string | null) => {
+    createEntry.mutate({
+      date,
+      ratingKey,
+      value,
+      note,
+      quickLogId: pendingLinks[ratingKey] ?? null,
+      // A vote on a past day belongs to that day at local noon, not to "now"
+      loggedAt: date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
+    });
+    setPendingLinks((previous) => {
+      const { [ratingKey]: _sent, ...rest } = previous;
+      return rest;
+    });
   };
 
   if (definitions.length === 0) {
@@ -68,7 +77,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
           <p className="text-sm font-semibold text-slate-900">Valutazioni</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {setRating.isPending && <Loader2 className="w-4 h-4 animate-spin text-slate-300" />}
+          {createEntry.isPending && <Loader2 className="w-4 h-4 animate-spin text-slate-300" />}
           <button
             type="button"
             onClick={() => setIsManagerOpen(true)}
@@ -82,30 +91,23 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
       </div>
 
       <div className="space-y-3">
-        {definitions.map((definition) => {
-          const entry = dayEntries.find((item) => item.ratingKey === definition.key);
-          return (
-            <RatingRow
-              // Remounted per day: the note field starts from the stored value
-              key={`${date}-${definition.key}`}
-              definition={definition}
-              entry={entry}
-              hasLinkedEntry={Boolean(entry?.quickLogId)}
-              onSetValue={(value) => submit({ ratingKey: definition.key, value })}
-              onSetNote={(note) => submit({ ratingKey: definition.key, note: note || null })}
-              onOpenLinkedForm={
-                definition.linkedForm === 'MOOD'
-                  ? () => setLinkedFormFor(definition.key)
-                  : undefined
-              }
-            />
-          );
-        })}
+        {definitions.map((definition) => (
+          <RatingRow
+            // Remounted when the day changes, so a draft never follows the user
+            key={`${date}-${definition.key}`}
+            definition={definition}
+            hasPendingLink={Boolean(pendingLinks[definition.key])}
+            onSubmit={(value, note) => handleVote(definition.key, value, note)}
+            onOpenLinkedForm={
+              definition.linkedForm === 'MOOD' ? () => setLinkedFormFor(definition.key) : undefined
+            }
+          />
+        ))}
       </div>
 
-      {setRating.error && (
+      {createEntry.error && (
         <p className="mt-2 text-xs text-red-600">
-          {setRating.error instanceof Error ? setRating.error.message : 'Voto non registrato'}
+          {createEntry.error instanceof Error ? createEntry.error.message : 'Voto non registrato'}
         </p>
       )}
 
@@ -116,10 +118,10 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
         onClose={() => setLinkedFormFor(null)}
         onSaved={onToast}
         date={date}
-        // What was chosen is attached to the row, so vote, note and states
-        // are one single recap in the timeline
         onMoodLogged={(log: QuickLogDTO) => {
-          if (linkedFormFor) submit({ ratingKey: linkedFormFor, quickLogId: log.id });
+          if (linkedFormFor) {
+            setPendingLinks((previous) => ({ ...previous, [linkedFormFor]: log.id }));
+          }
         }}
       />
     </div>

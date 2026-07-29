@@ -1,9 +1,9 @@
 import { fetchApi } from './api';
 import type {
   CreateRatingDefinitionDTO,
+  CreateRatingEntryDTO,
   RatingDefinitionDTO,
   RatingEntryDTO,
-  SetRatingDTO,
   UpdateRatingDefinitionDTO,
 } from '@budget/shared';
 
@@ -38,15 +38,12 @@ export const ratingsApi = {
   getEntries: (from?: string, to?: string) =>
     fetchApi<RatingEntryDTO[]>(`/ratings/entries${buildQuery({ from, to })}`),
 
-  // Returns the entry, or null when the last field was cleared
-  setEntry: (data: SetRatingDTO) =>
-    fetchApi<RatingEntryDTO | null>('/ratings/entries', {
+  createEntry: (data: CreateRatingEntryDTO) =>
+    fetchApi<RatingEntryDTO>('/ratings/entries', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  removeEntry: (date: string, key: string) =>
-    fetchApi<void>(`/ratings/entries/${encodeURIComponent(date)}/${encodeURIComponent(key)}`, {
-      method: 'DELETE',
-    }),
+  removeEntry: (id: string) =>
+    fetchApi<void>(`/ratings/entries/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };

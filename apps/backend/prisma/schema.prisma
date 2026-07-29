@@ -646,9 +646,9 @@ model RatingDefinition {
   @@map("rating_definitions")
 }
 
-// One vote per characteristic per day: voting again edits it and moves the
-// clock, it never stacks a second card in the timeline. `value` is nullable
-// because a row can carry only a note or only a linked mood entry.
+// One vote, at one moment. Deliberately NOT unique per day: the rating row is
+// an input, not a display of state, so the same characteristic can be voted
+// again later and each vote keeps its own place in the timeline.
 model RatingEntry {
   id         String   @id @default(cuid())
   userId     String
@@ -668,8 +668,8 @@ model RatingEntry {
   rating   RatingDefinition? @relation(fields: [ratingId], references: [id], onDelete: SetNull)
   quickLog QuickLog?         @relation(fields: [quickLogId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, date, ratingKey])
   @@index([userId, date])
+  @@index([userId, ratingKey])
   @@map("rating_entries")
 }
 

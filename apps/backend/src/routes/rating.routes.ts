@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
   createRatingDefinitionSchema,
+  createRatingEntrySchema,
   ratingRangeQuerySchema,
-  setRatingSchema,
   updateRatingDefinitionSchema,
 } from '@budget/shared';
 import { ratingService } from '../services/rating.service.js';
@@ -56,21 +56,19 @@ export const ratingRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/entries', {
-    schema: { tags: ['Ratings'], summary: 'Set the vote, note or linked entry of a day' },
-    handler: async (request) => {
-      const data = setRatingSchema.parse(request.body);
-      return { success: true, data: await ratingService.setEntry(request.authUser!.id, data) };
+    schema: { tags: ['Ratings'], summary: 'Record a vote (repeatable within the day)' },
+    handler: async (request, reply) => {
+      const data = createRatingEntrySchema.parse(request.body);
+      const entry = await ratingService.createEntry(request.authUser!.id, data);
+      reply.status(201);
+      return { success: true, data: entry };
     },
   });
 
-  fastify.delete<{ Params: { date: string; key: string } }>('/entries/:date/:key', {
-    schema: { tags: ['Ratings'], summary: 'Remove the vote of a day' },
+  fastify.delete<{ Params: { id: string } }>('/entries/:id', {
+    schema: { tags: ['Ratings'], summary: 'Remove a single vote' },
     handler: async (request) => {
-      await ratingService.deleteEntry(
-        request.authUser!.id,
-        request.params.date,
-        request.params.key
-      );
+      await ratingService.deleteEntry(request.authUser!.id, request.params.id);
       return { success: true };
     },
   });

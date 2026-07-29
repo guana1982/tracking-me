@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { ratingsApi } from '../lib/ratingApi';
 import type {
   CreateRatingDefinitionDTO,
+  CreateRatingEntryDTO,
   RatingEntryDTO,
-  SetRatingDTO,
   UpdateRatingDefinitionDTO,
 } from '@budget/shared';
 
@@ -65,23 +65,18 @@ export function useRatingEntries(from?: string, to?: string) {
 }
 
 /**
- * The visible range is passed in so the answer can be written straight into
- * that cache entry: tapping a box must light up immediately, not after a
- * refetch round trip.
+ * The visible range is passed in so the new vote can be written straight into
+ * that cache entry: the recap must show up in the timeline immediately, not
+ * after a refetch round trip.
  */
-export function useSetRating(from?: string, to?: string) {
+export function useCreateRatingEntry(from?: string, to?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: SetRatingDTO) => ratingsApi.setEntry(data),
-    onSuccess: (entry, variables) => {
+    mutationFn: (data: CreateRatingEntryDTO) => ratingsApi.createEntry(data),
+    onSuccess: (entry) => {
       queryClient.setQueryData<RatingEntryDTO[]>(
         ratingQueryKeys.entries(from, to),
-        (previous) => {
-          const others = (previous ?? []).filter(
-            (item) => !(item.date === variables.date && item.ratingKey === variables.ratingKey)
-          );
-          return entry ? [...others, entry] : others;
-        }
+        (previous) => [...(previous ?? []), entry]
       );
       invalidateFoodData(queryClient);
     },
@@ -91,8 +86,7 @@ export function useSetRating(from?: string, to?: string) {
 export function useDeleteRatingEntry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ date, ratingKey }: { date: string; ratingKey: string }) =>
-      ratingsApi.removeEntry(date, ratingKey),
+    mutationFn: (id: string) => ratingsApi.removeEntry(id),
     onSuccess: () => invalidateFoodData(queryClient),
   });
 }

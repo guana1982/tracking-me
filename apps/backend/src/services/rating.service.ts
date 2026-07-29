@@ -4,9 +4,9 @@ import { AppError } from '../lib/error-handler.js';
 import { DEFAULT_RATING_DEFINITIONS } from '@budget/shared';
 import type {
   CreateRatingDefinitionDTO,
+  CreateRatingEntryDTO,
   RatingDefinitionDTO,
   RatingEntryDTO,
-  SetRatingDTO,
   UpdateRatingDefinitionDTO,
 } from '@budget/shared';
 import type { RatingDefinition, RatingEntry } from '@prisma/client';
@@ -119,19 +119,16 @@ class RatingService {
   }
 
   /**
-   * One vote per characteristic per day, edited in place. Fields left out are
-   * untouched and an explicit null clears them: when nothing is left the entry
-   * disappears, so an accidental tap is undoable.
-   *
-   * Returns the entry, or null when it was removed.
+   * Always an insert. The row that produced this vote forgets it immediately,
+   * so voting the same characteristic again a few hours later records a
+   * second moment rather than correcting the first.
    */
-  async setEntry(userId: string, data: SetRatingDTO): Promise<RatingEntryDTO | null> {
-    const day = dateOnly(data.date);
+  async createEntry(userId: string, data: CreateRatingEntryDTO): Promise<RatingEntryDTO> {
     const definition = await prisma.ratingDefinition.findFirst({
       where: { userId, key: data.ratingKey },
     });
     if (!definition) throw new AppError('Caratteristica non trovata', 404, 'NOT_FOUND');
-    if (data.value != null && data.value > definition.maxValue) {
+    if (data.value > definition.maxValue) {
       throw new AppError('Voto fuori scala', 400, 'VALUE_OUT_OF_RANGE');
     }
     if (data.quickLogId) {
@@ -142,57 +139,28 @@ class RatingService {
       if (!log) throw new AppError('Nota non trovata', 404, 'NOT_FOUND');
     }
 
-    const existing = await prisma.ratingEntry.findFirst({
-      where: { userId, date: day, ratingKey: data.ratingKey },
-    });
-
-    const value = data.value === undefined ? existing?.value ?? null : data.value;
-    const note =
-      data.note === undefined ? existing?.note ?? null : data.note?.trim() || null;
-    const quickLogId =
-      data.quickLogId === undefined ? existing?.quickLogId ?? null : data.quickLogId;
-
-    // An empty row is no row: nothing to show in the timeline, nothing to keep
-    if (value === null && note === null && quickLogId === null) {
-      if (existing) await prisma.ratingEntry.delete({ where: { id: existing.id } });
-      return null;
-    }
-
-    // The clock follows the act of rating, not a typo fixed in the note later
-    const touchesMoment = data.value !== undefined || Boolean(data.quickLogId);
-    const loggedAt = data.loggedAt
-      ? new Date(data.loggedAt)
-      : touchesMoment || !existing
-        ? new Date()
-        : existing.loggedAt;
-
-    const entry = await prisma.ratingEntry.upsert({
-      where: {
-        userId_date_ratingKey: { userId, date: day, ratingKey: data.ratingKey },
-      },
-      create: {
+    const entry = await prisma.ratingEntry.create({
+      data: {
         userId,
-        date: day,
+        date: dateOnly(data.date),
         ratingId: definition.id,
         ratingKey: definition.key,
         // Snapshots, like intakes and check-in values: renaming or deleting
         // the characteristic never rewrites what a past day says
         ratingName: definition.name,
         maxValue: definition.maxValue,
-        value,
-        note,
-        quickLogId,
-        loggedAt,
+        value: data.value,
+        note: data.note?.trim() || null,
+        quickLogId: data.quickLogId ?? null,
+        loggedAt: data.loggedAt ? new Date(data.loggedAt) : new Date(),
       },
-      update: { value, note, quickLogId, loggedAt },
     });
     return this.toEntryDTO(entry);
   }
 
-  async deleteEntry(userId: string, date: string, ratingKey: string): Promise<void> {
-    await prisma.ratingEntry.deleteMany({
-      where: { userId, date: dateOnly(date), ratingKey },
-    });
+  /** Correcting a vote means deleting that one, not editing the day */
+  async deleteEntry(userId: string, id: string): Promise<void> {
+    await prisma.ratingEntry.deleteMany({ where: { userId, id } });
   }
 
   /**
@@ -237,6 +205,7 @@ class RatingService {
 
   private toEntryDTO(entry: RatingEntry): RatingEntryDTO {
     return {
+      id: entry.id,
       date: toIsoDate(entry.date),
       ratingKey: entry.ratingKey,
       ratingName: entry.ratingName,

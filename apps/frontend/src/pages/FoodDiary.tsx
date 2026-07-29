@@ -119,7 +119,7 @@ export function FoodDiary() {
       ? 'Eliminare questo voto e la nota d’umore collegata?'
       : 'Eliminare questo voto?';
     if (!window.confirm(message)) return;
-    await deleteRatingEntry.mutateAsync({ date: entry.date, ratingKey: entry.ratingKey });
+    await deleteRatingEntry.mutateAsync(entry.id);
     // Order matters: the link is dropped first, so the log is never orphaned
     if (entry.quickLogId) await deleteQuickLog.mutateAsync(entry.quickLogId);
     showToast('Voto eliminato');
@@ -266,7 +266,7 @@ export function FoodDiary() {
               />
             ) : entry.kind === 'rating' ? (
               <RatingNote
-                key={`rating-${entry.rating.ratingKey}`}
+                key={`rating-${entry.rating.id}`}
                 entry={entry.rating}
                 linkedLog={entry.linkedLog}
                 onDelete={handleDeleteRating}

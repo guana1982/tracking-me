@@ -1,10 +1,11 @@
 // ============================================================
 // Daily ratings - DTOs
 //
-// A rating is a quick "how is this going right now" vote on a
-// user-defined characteristic. Unlike the check-in (one evaluation of the
-// whole day, filled in the mood modal), a rating carries the time it was
-// given, so it lands in the diary timeline next to the meals and the notes.
+// A rating is a quick "how is this going right now" vote on a user-defined
+// characteristic. Unlike the check-in (one evaluation of the whole day,
+// filled in the mood modal), a rating carries the time it was given and can
+// be repeated: the same characteristic can be voted again hours later, and
+// each vote is its own entry in the diary timeline.
 // ============================================================
 
 /**
@@ -72,15 +73,16 @@ export interface UpdateRatingDefinitionDTO {
 // ---------- Entries ----------
 
 /**
- * One vote for one characteristic on one day. Name and scale are snapshots,
- * exactly like intakes and check-in values: editing the catalogue never
- * rewrites what a past day says.
+ * One vote, given at one moment. Name and scale are snapshots, exactly like
+ * intakes and check-in values: editing the catalogue never rewrites what a
+ * past day says. Several votes on the same characteristic can share a day.
  */
 export interface RatingEntryDTO {
+  id: string;
   date: string; // YYYY-MM-DD
   ratingKey: string;
   ratingName: string;
-  /** null when the row only carries a note or a linked mood entry */
+  /** Nullable on read only: what the row writes is always a vote */
   value: number | null;
   maxValue: number;
   note: string | null;
@@ -90,14 +92,14 @@ export interface RatingEntryDTO {
 }
 
 /**
- * Partial update: an omitted field is left untouched, an explicit null clears
- * it. When nothing is left the entry is removed, so a mistaken tap is
- * fully undoable.
+ * The vote leaving the row, with whatever was typed or picked next to it.
+ * Always an insert: the row keeps no memory of it, so voting again later in
+ * the day adds a second entry instead of overwriting the first.
  */
-export interface SetRatingDTO {
+export interface CreateRatingEntryDTO {
   date: string;
   ratingKey: string;
-  value?: number | null;
+  value: number;
   note?: string | null;
   quickLogId?: string | null;
   /** Local instant of the vote; defaults to now on the server */
