@@ -105,3 +105,12 @@ export interface CreateRatingEntryDTO {
   /** Local instant of the vote; defaults to now on the server */
   loggedAt?: string;
 }
+
+/**
+ * Correcting a vote already recorded. The moment is deliberately not part of
+ * this: fixing a mark or a note must not move the recap in the timeline.
+ */
+export interface UpdateRatingEntryDTO {
+  value?: number;
+  note?: string | null;
+}

@@ -38,6 +38,15 @@ export const createRatingEntrySchema = z.object({
   loggedAt: z.string().datetime().optional(),
 });
 
+export const updateRatingEntrySchema = z
+  .object({
+    value: z.number().int().min(1).max(RATING_MAX_MAX).optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
 export const ratingRangeQuerySchema = z.object({
   from: ratingDateSchema.optional(),
   to: ratingDateSchema.optional(),
@@ -48,3 +57,4 @@ export const ratingRangeQuerySchema = z.object({
 export type CreateRatingDefinitionInput = z.infer<typeof createRatingDefinitionSchema>;
 export type UpdateRatingDefinitionInput = z.infer<typeof updateRatingDefinitionSchema>;
 export type CreateRatingEntryInput = z.infer<typeof createRatingEntrySchema>;
+export type UpdateRatingEntryInput = z.infer<typeof updateRatingEntrySchema>;

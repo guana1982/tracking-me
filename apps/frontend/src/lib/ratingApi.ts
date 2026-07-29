@@ -5,6 +5,7 @@ import type {
   RatingDefinitionDTO,
   RatingEntryDTO,
   UpdateRatingDefinitionDTO,
+  UpdateRatingEntryDTO,
 } from '@budget/shared';
 
 function buildQuery(params: Record<string, string | undefined>): string {
@@ -41,6 +42,12 @@ export const ratingsApi = {
   createEntry: (data: CreateRatingEntryDTO) =>
     fetchApi<RatingEntryDTO>('/ratings/entries', {
       method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateEntry: (id: string, data: UpdateRatingEntryDTO) =>
+    fetchApi<RatingEntryDTO>(`/ratings/entries/${encodeURIComponent(id)}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     }),
 

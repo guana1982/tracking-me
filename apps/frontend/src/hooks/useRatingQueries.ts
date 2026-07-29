@@ -5,6 +5,7 @@ import type {
   CreateRatingEntryDTO,
   RatingEntryDTO,
   UpdateRatingDefinitionDTO,
+  UpdateRatingEntryDTO,
 } from '@budget/shared';
 
 // "food" prefix again: the votes live in the diary, so any diary mutation
@@ -77,6 +78,28 @@ export function useCreateRatingEntry(from?: string, to?: string) {
       queryClient.setQueryData<RatingEntryDTO[]>(
         ratingQueryKeys.entries(from, to),
         (previous) => [...(previous ?? []), entry]
+      );
+      invalidateFoodData(queryClient);
+    },
+  });
+}
+
+/**
+ * Corrections are written into every cached range that already holds the
+ * vote, whatever week is on screen: an inline edit must not blink through
+ * the old value while the list refetches. Nothing is ever injected into a
+ * range that did not contain it.
+ */
+export function useUpdateRatingEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateRatingEntryDTO }) =>
+      ratingsApi.updateEntry(id, data),
+    onSuccess: (entry) => {
+      queryClient.setQueriesData<RatingEntryDTO[]>(
+        { queryKey: ['foodRatingEntries'] },
+        (previous) =>
+          previous?.map((item) => (item.id === entry.id ? entry : item))
       );
       invalidateFoodData(queryClient);
     },

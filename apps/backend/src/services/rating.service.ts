@@ -8,6 +8,7 @@ import type {
   RatingDefinitionDTO,
   RatingEntryDTO,
   UpdateRatingDefinitionDTO,
+  UpdateRatingEntryDTO,
 } from '@budget/shared';
 import type { RatingDefinition, RatingEntry } from '@prisma/client';
 
@@ -158,7 +159,35 @@ class RatingService {
     return this.toEntryDTO(entry);
   }
 
-  /** Correcting a vote means deleting that one, not editing the day */
+  /**
+   * Corrects a vote already recorded. The scale checked is the one stored on
+   * the entry, not the current one: an old vote stays valid against the scale
+   * it was given on, even after the characteristic has been rescaled.
+   */
+  async updateEntry(
+    userId: string,
+    id: string,
+    data: UpdateRatingEntryDTO
+  ): Promise<RatingEntryDTO> {
+    const existing = await prisma.ratingEntry.findFirst({ where: { userId, id } });
+    if (!existing) throw new AppError('Voto non trovato', 404, 'NOT_FOUND');
+    if (data.value !== undefined && data.value > existing.maxValue) {
+      throw new AppError('Voto fuori scala', 400, 'VALUE_OUT_OF_RANGE');
+    }
+
+    const entry = await prisma.ratingEntry.update({
+      where: { id: existing.id },
+      data: {
+        value: data.value,
+        note: data.note === undefined ? undefined : data.note?.trim() || null,
+        // loggedAt untouched on purpose: fixing a mark does not move the
+        // moment it was given, so the recap keeps its place in the timeline
+      },
+    });
+    return this.toEntryDTO(entry);
+  }
+
+  /** Removing a vote removes that vote, not the whole day */
   async deleteEntry(userId: string, id: string): Promise<void> {
     await prisma.ratingEntry.deleteMany({ where: { userId, id } });
   }

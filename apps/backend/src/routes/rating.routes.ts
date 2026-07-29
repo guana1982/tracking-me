@@ -4,6 +4,7 @@ import {
   createRatingEntrySchema,
   ratingRangeQuerySchema,
   updateRatingDefinitionSchema,
+  updateRatingEntrySchema,
 } from '@budget/shared';
 import { ratingService } from '../services/rating.service.js';
 
@@ -61,6 +62,19 @@ export const ratingRoutes: FastifyPluginAsync = async (fastify) => {
       const data = createRatingEntrySchema.parse(request.body);
       const entry = await ratingService.createEntry(request.authUser!.id, data);
       reply.status(201);
+      return { success: true, data: entry };
+    },
+  });
+
+  fastify.put<{ Params: { id: string } }>('/entries/:id', {
+    schema: { tags: ['Ratings'], summary: 'Correct the mark or the note of a vote' },
+    handler: async (request) => {
+      const data = updateRatingEntrySchema.parse(request.body);
+      const entry = await ratingService.updateEntry(
+        request.authUser!.id,
+        request.params.id,
+        data
+      );
       return { success: true, data: entry };
     },
   });
