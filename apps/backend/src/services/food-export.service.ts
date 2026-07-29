@@ -37,8 +37,14 @@ import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 //                 "positivo" = higher is better
 //   rating      - a vote given in the diary on a user-defined characteristic
 //                 (category = its name, scale_value/scale_max = the vote,
-//                 text = the note written next to it). These are marks out of
-//                 scale_max, so a higher value always reads as better
+//                 text = the note written next to it and, after " · ", the
+//                 states picked in the row's popup). These are marks out of
+//                 scale_max, so a higher value always reads as better. The
+//                 same characteristic can be voted several times a day: each
+//                 vote is its own row, at the minute it was given. Those
+//                 popup states also appear as their own mood_log row at the
+//                 same minute - one event seen from the two tracks, not two
+//                 separate events
 //   day_summary - one per tracked day (time 00:00), carrying the two day scores
 // body_state / mood_state are averages in [-1, +1] (positive/neutral/negative
 // = +1/0/-1) and are INDEPENDENT: an empty one means "not tracked that day".
@@ -99,6 +105,8 @@ export interface CsvRatingInput {
   value: number | null;
   maxValue: number;
   note: string | null;
+  /** Text of the entry picked in the row's popup, when the row has one */
+  linkedText: string | null;
 }
 
 function escapeCsvField(value: string): string {
@@ -293,13 +301,14 @@ export function buildFoodCsv(
     }
   }
 
-  // Diary votes, at the minute they were given so they interleave with meals
+  // Diary votes, at the minute they were given so they interleave with meals.
+  // Every recorded vote produces a row - none is filtered out here
   for (const rating of ratings) {
-    // A row holding only a linked mood entry has nothing of its own to say:
-    // that entry is already exported as its own mood_log
-    if (rating.value === null && !rating.note) continue;
     const local = toLocalParts(rating.loggedAt, tzOffset);
     const time = hhmm(local.hour, local.minutes);
+    // The note and what the popup collected read as one recap, the same way
+    // they are shown together in the diary
+    const recap = [rating.note, rating.linkedText].filter((part) => Boolean(part)).join(' · ');
     const line = [
       'rating',
       rating.date,
@@ -310,7 +319,7 @@ export function buildFoodCsv(
       '',
       '',
       '',
-      escapeCsvField(rating.note ?? ''),
+      escapeCsvField(recap),
       '',
       '',
       '',
@@ -395,6 +404,8 @@ class FoodExportService {
       }),
       prisma.ratingEntry.findMany({
         where: { userId, ...dayFilter },
+        // The linked entry travels with the vote so the recap stays whole
+        include: { quickLog: { select: { text: true } } },
         orderBy: { date: 'asc' },
       }),
     ]);
@@ -454,6 +465,7 @@ class FoodExportService {
         value: entry.value,
         maxValue: entry.maxValue,
         note: entry.note,
+        linkedText: entry.quickLog?.text ?? null,
       }))
     );
   }

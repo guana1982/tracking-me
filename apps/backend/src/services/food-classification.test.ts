@@ -254,7 +254,7 @@ describe('CSV export', () => {
     expect(lines[3]).toBe('checkin,2026-07-16,21:30,nota,,,,,,giornata pesante,,,,,,');
   });
 
-  it('records a diary vote at the minute it was given, skipping empty rows', () => {
+  it('records a diary vote at the minute it was given', () => {
     const csv = buildFoodCsv(
       [],
       [],
@@ -270,21 +270,56 @@ describe('CSV export', () => {
           value: 7,
           maxValue: 10,
           note: 'giornata ok',
-        },
-        // Only a linked mood entry: already exported as its own mood_log
-        {
-          date: '2026-07-16',
-          loggedAt: new Date('2026-07-16T14:00:00Z'),
-          ratingName: 'Allenamento',
-          value: null,
-          maxValue: 10,
-          note: null,
+          linkedText: null,
         },
       ]
     );
     const lines = csv.replace(BOM, '').trim().split('\n');
-    expect(lines).toHaveLength(2); // header + the only row with something to say
     expect(lines[1]).toBe('rating,2026-07-16,13:30,Umore,,,,,,giornata ok,,,,7,10,');
+  });
+
+  it('exports every vote, including repeats of the same characteristic', () => {
+    const vote = (hour: string, value: number) => ({
+      date: '2026-07-16',
+      loggedAt: new Date(`2026-07-16T${hour}:00Z`),
+      ratingName: 'Umore',
+      value,
+      maxValue: 10,
+      note: null,
+      linkedText: null,
+    });
+    const csv = buildFoodCsv([], [], 0, [], [], [], [vote('09:00', 4), vote('19:30', 8)]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // Two votes on the same characteristic in one day stay two rows
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe('rating,2026-07-16,09:00,Umore,,,,,,,,,,4,10,');
+    expect(lines[2]).toBe('rating,2026-07-16,19:30,Umore,,,,,,,,,,8,10,');
+  });
+
+  it('carries the states picked in the row popup into the vote row', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T19:30:00Z'),
+          ratingName: 'Umore',
+          value: 8,
+          maxValue: 10,
+          note: 'serata tranquilla',
+          linkedText: 'Umore: Pace, Buon umore',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'rating,2026-07-16,19:30,Umore,,,,,,"serata tranquilla · Umore: Pace, Buon umore",,,,8,10,'
+    );
   });
 
   it('uses the named steps of a scale instead of the generic wording', () => {
