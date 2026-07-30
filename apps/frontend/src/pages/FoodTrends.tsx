@@ -95,6 +95,12 @@ export function FoodTrends() {
         </button>
       </div>
 
+      {/* 1. Calendario mensile a semaforo (fisico + umore) */}
+      <MonthCalendar track={track} onTrackChange={setTrack} />
+
+      {/* 2. Linee dello stato con eventi sovrapposti */}
+      <StateTimeline track={track} onTrackChange={setTrack} />
+
       {/* Graceful degradation con pochi dati */}
       {!overview.isLoading && !hasEnoughData && (
         <div className="card flex items-start gap-2 text-sm text-slate-600">
@@ -107,26 +113,19 @@ export function FoodTrends() {
         </div>
       )}
 
-      {/* 0. Terapia: letture settimanali, mai giornaliere (§4.4). Prima di
-             tutto il resto perché è la domanda "sta funzionando?" */}
+      {/* 3. Terapia: letture settimanali, mai giornaliere (§4.4) */}
       <TherapyTrendsPanel />
 
-      {/* 1. Calendario mensile a semaforo (fisico + umore) */}
-      <MonthCalendar track={track} onTrackChange={setTrack} />
-
-      {/* 2. Linee dello stato con eventi sovrapposti */}
-      <StateTimeline track={track} onTrackChange={setTrack} />
-
-      {/* 3. Confronto condizionato */}
+      {/* 4. Confronto condizionato */}
       {hasEnoughData && <ComparisonPanel supplementNames={supplementNames} />}
 
-      {/* 4. Alimenti associati alle sensazioni */}
+      {/* 5. Alimenti associati alle sensazioni */}
       {hasEnoughData && <AssociationsPanel />}
 
-      {/* 5-6. Andamento e top alimenti (ultimi 30 giorni) */}
+      {/* 6-7. Andamento e top alimenti (ultimi 30 giorni) */}
       <StatsPanel from={addDaysLocal(to, -29)} to={to} title="Ultimi 30 giorni" />
 
-      {/* 7. Confronto tra periodi */}
+      {/* 8. Confronto tra periodi */}
       {hasEnoughData && <PeriodComparePanel />}
 
       {/* Data export */}
