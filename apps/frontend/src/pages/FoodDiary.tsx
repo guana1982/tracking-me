@@ -130,9 +130,9 @@ export function FoodDiary() {
   const isToday = selectedDate === todayLocal();
 
   return (
-    <div className="max-w-2xl mx-auto pb-28 sm:pb-20">
+    <div className="max-w-6xl mx-auto pb-28 sm:pb-20">
       {/* Header: day nav + actions */}
-      <div className="flex items-center justify-between gap-2 mb-3">
+      <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setSelectedDate(addDaysLocal(selectedDate, -1))}
@@ -179,7 +179,7 @@ export function FoodDiary() {
       </div>
 
       {/* Week strip */}
-      <div className="grid grid-cols-7 gap-1 mb-4">
+      <div className="max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4">
         {Array.from({ length: 7 }, (_, i) => addDaysLocal(from, i)).map((date) => {
           const d = new Date(`${date}T12:00:00`);
           const isSelected = date === selectedDate;
@@ -188,7 +188,7 @@ export function FoodDiary() {
               key={date}
               onClick={() => setSelectedDate(date)}
               className={cn(
-                'flex flex-col items-center py-1.5 rounded-xl text-xs transition-colors',
+                'min-h-11 flex flex-col items-center justify-center py-1.5 rounded-xl text-xs transition-colors',
                 isSelected
                   ? 'bg-slate-900 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -213,17 +213,19 @@ export function FoodDiary() {
         })}
       </div>
 
-      {/* What is coming up: shown before anything is asked of the day */}
-      <ScheduleLine />
+      {/* Mobile is action-first: schedule and intakes precede the longer
+          ratings form. Desktop uses the same DOM order in a compact side rail. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1.65fr)_minmax(19rem,0.85fr)] lg:gap-4 lg:items-start">
+        <aside className="lg:col-start-2 lg:row-start-1">
+          <ScheduleLine />
+          <DailyIntakeCard date={selectedDate} />
+          <WeightLine />
+        </aside>
 
-      {/* Votes and episodes, between the dates and the intakes */}
-      <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
-
-      {/* Intakes of the day: part of the diary, above the timeline */}
-      <DailyIntakeCard date={selectedDate} />
-
-      {/* Weekly, so most days this is a single quiet line */}
-      <WeightLine />
+        <section className="lg:col-start-1 lg:row-start-1">
+          <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
+        </section>
+      </div>
 
       {/* Day timeline */}
       {isLoading ? (
@@ -272,7 +274,7 @@ export function FoodDiary() {
 
       {/* Sticky quick log bar (dictation-friendly, always one tap away) */}
       <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-3 py-2 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <QuickLogBar onSaved={showToast} />
         </div>
       </div>

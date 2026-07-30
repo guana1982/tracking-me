@@ -36,7 +36,7 @@ export function EventChips({ definitions, onLog }: EventChipsProps) {
 
   return (
     <div>
-      <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1.5">
+      <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-2">
         È appena successo
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -48,7 +48,7 @@ export function EventChips({ definitions, onLog }: EventChipsProps) {
               type="button"
               onClick={() => handleTap(definition.key)}
               className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-xs font-medium transition-colors',
+                'min-h-11 sm:min-h-9 flex items-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-full border text-xs font-medium transition-colors',
                 isConfirming
                   ? 'border-amber-500 bg-amber-500 text-white'
                   : 'border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-400'

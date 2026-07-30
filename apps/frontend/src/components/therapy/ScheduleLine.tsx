@@ -38,10 +38,10 @@ export function ScheduleLine() {
         <button
           type="button"
           onClick={() => setIsManagerOpen(true)}
-          className="mb-3 w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          className="mb-3 min-h-11 w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-200 bg-white/70 text-xs font-medium text-slate-500 hover:border-teal-200 hover:bg-teal-50/40 hover:text-teal-700 transition-colors"
         >
           <CalendarClock className="w-3.5 h-3.5" />
-          Segna un controllo o un esame
+          Aggiungi controllo o esame
         </button>
         <MilestoneManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
       </>

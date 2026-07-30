@@ -122,7 +122,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4 sm:space-y-3">
         {definitions.map((definition) => (
           <RatingRow
             // Remounted when the day changes, so a draft never follows the user

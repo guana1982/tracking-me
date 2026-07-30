@@ -87,7 +87,7 @@ export function IntakeChecklist({
                           onSet(item.treatmentKey, slot.slot, isActive ? null : option.status)
                         }
                         className={cn(
-                          'w-8 h-8 rounded-lg border flex items-center justify-center transition-colors disabled:opacity-50',
+                          'w-11 h-11 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center transition-colors disabled:opacity-50',
                           isActive ? option.active : option.idle
                         )}
                       >

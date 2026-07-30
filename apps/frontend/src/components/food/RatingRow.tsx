@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Check, Smile } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Check, MessageSquare, Smile } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { RatingDefinitionDTO } from '@budget/shared';
 
@@ -31,8 +31,10 @@ export function RatingRow({
   hasPendingLink = false,
 }: RatingRowProps) {
   const [noteDraft, setNoteDraft] = useState('');
+  const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [sentValue, setSentValue] = useState<number | null>(null);
   const resetTimer = useRef<number | null>(null);
+  const noteInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(
     () => () => {
@@ -41,11 +43,16 @@ export function RatingRow({
     []
   );
 
+  useEffect(() => {
+    if (isNoteOpen) noteInputRef.current?.focus();
+  }, [isNoteOpen]);
+
   const boxes = Array.from({ length: definition.maxValue }, (_, index) => index + 1);
 
   const handleVote = (box: number) => {
     onSubmit(box, noteDraft.trim() || null);
     setNoteDraft('');
+    setIsNoteOpen(false);
     // Lit just long enough to confirm the tap, then the row is empty again
     setSentValue(box);
     if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
@@ -64,26 +71,41 @@ export function RatingRow({
             </span>
           )}
         </div>
-        {onOpenLinkedForm && (
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
-            onClick={onOpenLinkedForm}
+            onClick={() => setIsNoteOpen((open) => !open)}
             className={cn(
-              'shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors',
-              hasPendingLink
-                ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
-                : 'border-slate-200 text-slate-500 hover:border-fuchsia-200 hover:text-fuchsia-600'
+              'min-h-11 sm:min-h-8 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+              noteDraft.trim()
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                : 'border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600'
             )}
           >
-            <Smile className="w-3 h-3" />
-            Stati d'umore
+            <MessageSquare className="w-3 h-3" />
+            Nota
           </button>
-        )}
+          {onOpenLinkedForm && (
+            <button
+              type="button"
+              onClick={onOpenLinkedForm}
+              className={cn(
+                'min-h-11 sm:min-h-8 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                hasPendingLink
+                  ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
+                  : 'border-slate-200 text-slate-500 hover:border-fuchsia-200 hover:text-fuchsia-600'
+              )}
+            >
+              <Smile className="w-3 h-3" />
+              Stati d'umore
+            </button>
+          )}
+        </div>
       </div>
 
       <div
-        className="grid gap-1"
-        style={{ gridTemplateColumns: `repeat(${definition.maxValue}, minmax(0, 1fr))` }}
+        className="rating-scale-grid grid gap-1"
+        style={{ '--rating-columns': definition.maxValue } as CSSProperties}
       >
         {boxes.map((box) => {
           const isConfirming = sentValue !== null && box <= sentValue;
@@ -93,7 +115,7 @@ export function RatingRow({
               type="button"
               onClick={() => handleVote(box)}
               className={cn(
-                'aspect-square rounded-md border text-[11px] font-medium transition-colors',
+                'h-11 rounded-md border text-xs font-medium transition-colors',
                 isConfirming
                   ? 'bg-indigo-500 border-indigo-500 text-white'
                   : 'border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500'
@@ -106,12 +128,21 @@ export function RatingRow({
         })}
       </div>
 
+      <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+        <span>1 · basso</span>
+        <span>{definition.maxValue} · alto</span>
+      </div>
+
       <input
+        ref={noteInputRef}
         type="text"
         value={noteDraft}
         onChange={(e) => setNoteDraft(e.target.value)}
         placeholder="Nota…"
-        className="mt-1 w-full px-2 py-1 rounded-md border border-slate-200 text-xs text-slate-700 placeholder:text-slate-300 focus:border-slate-400 focus:outline-none"
+        className={cn(
+          'mt-1.5 min-h-11 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 placeholder:text-slate-300 focus:border-indigo-300 focus:outline-none',
+          isNoteOpen ? 'block' : 'hidden'
+        )}
         autoComplete="off"
       />
       {(noteDraft.trim().length > 0 || hasPendingLink) && (

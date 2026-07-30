@@ -88,6 +88,18 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
+/* Rating controls stay comfortably tappable on phones without overflowing.
+   From the tablet breakpoint onward, each configured scale fits on one row. */
+.rating-scale-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .rating-scale-grid {
+    grid-template-columns: repeat(var(--rating-columns), minmax(0, 1fr));
+  }
+}
+
 /* Laptop compact mode: keep 100% browser zoom but show more content on screen */
 @media (min-width: 1024px) and (max-width: 1700px) {
   html {
