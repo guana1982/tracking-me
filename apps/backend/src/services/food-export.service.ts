@@ -22,6 +22,7 @@ import type {
 import { toLocalParts, addDays, foodDashboardService } from './food-dashboard.service.js';
 import { mealTypeDefinitionService } from './meal-type-definition.service.js';
 import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
+import { buildFoodAiPackage } from './food-ai-export.js';
 
 // CSV format (designed to be fed to an external LLM for analysis).
 // One row per record, all chronologically interleaved; record_type says what
@@ -501,6 +502,16 @@ export function buildFoodCsv(
 }
 
 class FoodExportService {
+  async exportAiPackage(
+    userId: string,
+    from?: string,
+    to?: string,
+    tzOffset = 0
+  ): Promise<Uint8Array> {
+    const csv = await this.exportCsv(userId, from, to, tzOffset);
+    return buildFoodAiPackage(csv, { from, to, tzOffset });
+  }
+
   /** Full history by default; optional date range filter */
   async exportCsv(userId: string, from?: string, to?: string, tzOffset = 0): Promise<string> {
     const meals = await prisma.meal.findMany({

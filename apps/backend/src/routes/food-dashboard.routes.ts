@@ -91,4 +91,24 @@ export const foodDashboardRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(csv);
     },
   });
+
+  fastify.get('/export-ai.zip', {
+    schema: {
+      tags: ['Food Dashboard'],
+      summary: 'Export a self-describing ZIP package for external AI analysis',
+    },
+    handler: async (request, reply) => {
+      const { from, to, tzOffset } = foodRangeQuerySchema.parse(request.query);
+      const archive = await foodExportService.exportAiPackage(
+        request.authUser!.id,
+        from,
+        to,
+        tzOffset
+      );
+      reply
+        .header('Content-Type', 'application/zip')
+        .header('Content-Disposition', 'attachment; filename="diario-alimentare-ai.zip"');
+      return reply.send(Buffer.from(archive));
+    },
+  });
 };

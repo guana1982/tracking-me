@@ -181,4 +181,25 @@ export const foodDashboardApi = {
     link.remove();
     URL.revokeObjectURL(url);
   },
+
+  downloadAiPackage: async (from?: string, to?: string): Promise<void> => {
+    const token = useAuthStore.getState().token;
+    const qs = buildQuery({ from, to, tzOffset: tzOffsetMinutes() });
+    const response = await fetch(`${API_BASE}/api/food-dashboard/export-ai.zip${qs}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new ApiError("Errore durante l'export per AI", 'EXPORT_ERROR');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'diario-alimentare-ai.zip';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
 };
