@@ -215,7 +215,7 @@ export function FoodDiary() {
 
       {/* Mobile is action-first: schedule and intakes precede the longer
           ratings form. Desktop uses the same DOM order in a compact side rail. */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1.65fr)_minmax(19rem,0.85fr)] lg:gap-4 lg:items-start">
+      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
         <aside className="lg:col-start-2 lg:row-start-1">
           <ScheduleLine />
           <DailyIntakeCard date={selectedDate} />
