@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { INTAKE_STATUSES, TREATMENT_KINDS } from './therapy-dictionaries';
+import { DAY_TRACKS } from './rating-types';
 
 // ============================================================
 // Intake & check-in module - Zod validation schemas
@@ -75,6 +76,7 @@ export const createCheckInScaleSchema = z.object({
   isPositive: z.boolean().optional(),
   isCore: z.boolean().optional(),
   isSideEffect: z.boolean().optional(),
+  track: z.enum(DAY_TRACKS).optional(),
 });
 
 export const updateCheckInScaleSchema = z

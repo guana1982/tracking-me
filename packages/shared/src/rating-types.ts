@@ -13,6 +13,20 @@
  * EVENT is an episode logged the moment it happens (a chip to tap). Same
  * storage, same recap, same export - only the way in differs.
  */
+/**
+ * Which of the two day tracks an entry feeds. The app never guesses this from
+ * a name: what counts as "physical" or "psychological" is the user's call, and
+ * NONE keeps something out of the day state entirely.
+ */
+export const DAY_TRACKS = ['BODY', 'MOOD', 'NONE'] as const;
+export type DayTrackDTO = (typeof DAY_TRACKS)[number];
+
+export const DAY_TRACK_LABELS: Record<DayTrackDTO, string> = {
+  BODY: 'Condizione fisica',
+  MOOD: 'Umore',
+  NONE: 'Fuori dal grafico',
+};
+
 export const RATING_KINDS = ['SCALE', 'EVENT'] as const;
 export type RatingKindDTO = (typeof RATING_KINDS)[number];
 
@@ -54,6 +68,7 @@ export interface RatingDefinitionSeed {
   name: string;
   maxValue: number;
   linkedForm: RatingLinkedFormDTO;
+  track: DayTrackDTO;
 }
 
 /**
@@ -61,9 +76,9 @@ export interface RatingDefinitionSeed {
  * add others. They are a starting point, not the shape of the feature.
  */
 export const DEFAULT_RATING_DEFINITIONS: RatingDefinitionSeed[] = [
-  { name: 'Umore', maxValue: 10, linkedForm: 'MOOD' },
-  { name: 'Benessere fisico', maxValue: 10, linkedForm: 'NONE' },
-  { name: 'Allenamento', maxValue: 10, linkedForm: 'NONE' },
+  { name: 'Umore', maxValue: 10, linkedForm: 'MOOD', track: 'MOOD' },
+  { name: 'Benessere fisico', maxValue: 10, linkedForm: 'NONE', track: 'BODY' },
+  { name: 'Allenamento', maxValue: 10, linkedForm: 'NONE', track: 'BODY' },
 ];
 
 // ---------- Catalogue ----------
@@ -74,6 +89,8 @@ export interface RatingDefinitionDTO {
   kind: RatingKindDTO;
   /** Highest vote of the row: the boxes run 1..maxValue */
   maxValue: number;
+  /** Which curve of "stato del giorno" this feeds */
+  track: DayTrackDTO;
   linkedForm: RatingLinkedFormDTO;
   position: number;
   isActive: boolean;
@@ -86,6 +103,7 @@ export interface CreateRatingDefinitionDTO {
   name: string;
   kind?: RatingKindDTO;
   maxValue?: number;
+  track?: DayTrackDTO;
   linkedForm?: RatingLinkedFormDTO;
 }
 
@@ -93,6 +111,7 @@ export interface UpdateRatingDefinitionDTO {
   name?: string;
   kind?: RatingKindDTO;
   maxValue?: number;
+  track?: DayTrackDTO;
   linkedForm?: RatingLinkedFormDTO;
   position?: number;
   isActive?: boolean;

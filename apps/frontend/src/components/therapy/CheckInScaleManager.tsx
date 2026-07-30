@@ -9,7 +9,9 @@ import {
   useUpdateCheckInScale,
 } from '../../hooks/useTherapyQueries';
 import { SideEffectPicker } from './SideEffectPicker';
-import type { CheckInScaleDTO } from '@budget/shared';
+import { TrackPicker } from '../food/RatingManager';
+import { DAY_TRACK_LABELS } from '@budget/shared';
+import type { CheckInScaleDTO, DayTrackDTO } from '@budget/shared';
 
 interface CheckInScaleManagerProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ interface FormState {
   levelLabels: string;
   isPositive: boolean;
   isCore: boolean;
+  track: DayTrackDTO;
 }
 
 const EMPTY_FORM: FormState = {
@@ -32,6 +35,9 @@ const EMPTY_FORM: FormState = {
   levelLabels: '',
   isPositive: false,
   isCore: true,
+  // The check-in measures psychological symptoms: that is its default, and
+  // the picker is there for whoever measures something else
+  track: 'MOOD',
 };
 
 function parseLevels(raw: string): string[] {
@@ -88,6 +94,7 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
       levelLabels: scale.levelLabels.join(', '),
       isPositive: scale.isPositive,
       isCore: scale.isCore,
+      track: scale.track,
     });
     setIsFormOpen(true);
   };
@@ -108,6 +115,7 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
       levelLabels: parseLevels(form.levelLabels),
       isPositive: form.isPositive,
       isCore: form.isCore,
+      track: form.track,
     };
     if (editingKey) {
       await updateScale.mutateAsync({ key: editingKey, data: payload });
@@ -253,6 +261,15 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
                 Sempre visibile nel check-in
               </label>
 
+              <div>
+                <label className="label">Entra nel grafico come</label>
+                <TrackPicker
+                  value={form.track}
+                  disabled={isPending}
+                  onChange={(track) => setForm({ ...form, track })}
+                />
+              </div>
+
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -307,6 +324,7 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
                             ? 'alto = meglio'
                             : 'alto = sintomo più forte'}
                         {scale.isCore ? ' · sempre visibile' : ' · facoltativa'}
+                        {` · ${DAY_TRACK_LABELS[scale.track].toLowerCase()}`}
                         {scale.isUsed ? ' · presente nello storico' : ''}
                       </p>
                     </div>

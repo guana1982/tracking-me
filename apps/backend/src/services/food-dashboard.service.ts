@@ -15,10 +15,20 @@ import type {
 
 // ---- "Stato del giorno" formula lives HERE, in one place ----
 // Two INDEPENDENT tracks, never blended:
-//   dayState  = avg valence of the day's BODY logs (workout/sleep/feeling)
-//   moodState = avg valence of the day's MOOD logs
-// (positive = +1, neutral = 0, negative = -1). No logs of a track = null,
-// so each can be read on its own.
+//   dayState  = physical condition, moodState = psychological one
+// Everything the diary records with a direction feeds one of them, all
+// normalised to [-1, +1] before being averaged:
+//   - quick logs: valence (positive = +1, neutral = 0, negative = -1)
+//   - ratings (voti 1..max): 1 -> -1, max -> +1
+//   - episodes: negative by nature; intensity says how much, no intensity
+//     counts as a full -1 ("it happened" is the fact)
+//   - check-in scales: symptom intensity inverted (0 -> +1, max -> -1),
+//     positive scales read straight
+// Which track each one feeds is the USER's choice (DayTrack), never guessed
+// from a name; DayTrack.NONE keeps something out of the state entirely.
+// Weight and adherence are deliberately absent: a kilogram has no valence,
+// and taking a pill is not a way of feeling. Both travel as markers instead.
+// No logs of a track = null, so each can be read on its own.
 // SLEEP logs are attributed to the day they influence: morning logs
 // (before SLEEP_ATTRIBUTION_HOUR) describe last night -> same day;
 // evening logs -> next day.
@@ -32,6 +42,12 @@ interface DayData {
   workoutScores: number[];
   sleepScores: number[];
   feelingScores: number[];
+  // Markers: things that belong on the timeline without a place on a
+  // valence axis
+  eventCount: number;
+  skippedIntakes: number;
+  doseChanges: string[];
+  weightKg: number | null;
 }
 
 function emptyDay(): DayData {
@@ -44,7 +60,25 @@ function emptyDay(): DayData {
     workoutScores: [],
     sleepScores: [],
     feelingScores: [],
+    eventCount: 0,
+    skippedIntakes: 0,
+    doseChanges: [],
+    weightKg: null,
   };
+}
+
+/** A 1..max vote onto [-1, +1]; a single-step scale has no gradient to give */
+export function scoreFromVote(value: number, maxValue: number): number {
+  if (maxValue <= 1) return 0;
+  const clamped = Math.min(Math.max(value, 1), maxValue);
+  return ((clamped - 1) / (maxValue - 1)) * 2 - 1;
+}
+
+/** A 0..max symptom intensity onto [-1, +1], inverted unless it reads upwards */
+export function scoreFromScale(value: number, maxValue: number, isPositive: boolean): number {
+  if (maxValue <= 0) return 0;
+  const ratio = Math.min(Math.max(value, 0), maxValue) / maxValue;
+  return isPositive ? ratio * 2 - 1 : 1 - ratio * 2;
 }
 
 /** Shift a UTC instant by tzOffset minutes and read local date/hour parts */
@@ -112,6 +146,10 @@ class FoodDashboardService {
         workoutValence: valenceFromScores(day.workoutScores),
         sleepValence: valenceFromScores(day.sleepScores),
         dinnerAfter21: day.dinnerAfter21,
+        eventCount: day.eventCount,
+        skippedIntakes: day.skippedIntakes,
+        doseChanges: day.doseChanges,
+        weightKg: day.weightKg,
       });
     }
 
@@ -404,7 +442,123 @@ class FoodDashboardService {
       if (log.derivedCategory === 'FEELING') day.feelingScores.push(score);
     }
 
+    await this.foldRatings(userId, from, to, getDay);
+    await this.foldCheckIns(userId, from, to, getDay);
+    await this.foldMarkers(userId, from, to, getDay);
+
     return dayMap;
+  }
+
+  /**
+   * Votes and episodes. Both are stored on a plain calendar day, so no
+   * timezone shifting applies - the day they belong to is the day they say.
+   */
+  private async foldRatings(
+    userId: string,
+    from: string,
+    to: string,
+    getDay: (date: string) => DayData
+  ): Promise<void> {
+    const entries = await prisma.ratingEntry.findMany({
+      where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
+      include: { rating: { select: { track: true } } },
+    });
+
+    for (const entry of entries) {
+      const date = entry.date.toISOString().slice(0, 10);
+      const day = getDay(date);
+      if (entry.kind === 'EVENT') day.eventCount += 1;
+
+      // The definition may have been deleted; a vote with no track left
+      // simply stops counting rather than guessing where it belonged
+      const track = entry.rating?.track;
+      if (track !== 'BODY' && track !== 'MOOD') continue;
+
+      const score =
+        entry.kind === 'EVENT'
+          ? entry.value === null
+            ? -1
+            : -(Math.min(entry.value, entry.maxValue) / entry.maxValue)
+          : entry.value === null
+            ? null
+            : scoreFromVote(entry.value, entry.maxValue);
+      if (score === null) continue;
+
+      (track === 'MOOD' ? day.moodScores : day.stateScores).push(score);
+    }
+  }
+
+  /** The evening check-in: one entry per day, several answers inside it */
+  private async foldCheckIns(
+    userId: string,
+    from: string,
+    to: string,
+    getDay: (date: string) => DayData
+  ): Promise<void> {
+    const [entries, scales] = await Promise.all([
+      prisma.checkInEntry.findMany({
+        where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
+      }),
+      prisma.checkInScale.findMany({ where: { userId }, select: { key: true, track: true } }),
+    ]);
+    const trackOf = new Map(scales.map((scale) => [scale.key, scale.track]));
+
+    for (const entry of entries) {
+      if (!Array.isArray(entry.valuesJson)) continue;
+      const date = entry.date.toISOString().slice(0, 10);
+      const day = getDay(date);
+
+      for (const raw of entry.valuesJson as unknown[]) {
+        const value = raw as { key?: unknown; value?: unknown; maxValue?: unknown; isPositive?: unknown };
+        if (typeof value.key !== 'string' || typeof value.value !== 'number') continue;
+        const track = trackOf.get(value.key);
+        if (track !== 'BODY' && track !== 'MOOD') continue;
+
+        // The snapshot carries its own scale, so an old answer keeps meaning
+        // what it meant even after the scale was rescaled
+        const max = typeof value.maxValue === 'number' ? value.maxValue : 10;
+        const score = scoreFromScale(value.value, max, value.isPositive === true);
+        (track === 'MOOD' ? day.moodScores : day.stateScores).push(score);
+      }
+    }
+  }
+
+  /** Facts with no valence, carried so the timeline can show them */
+  private async foldMarkers(
+    userId: string,
+    from: string,
+    to: string,
+    getDay: (date: string) => DayData
+  ): Promise<void> {
+    const [skipped, doseChanges, weights] = await Promise.all([
+      prisma.treatmentIntake.findMany({
+        where: {
+          userId,
+          status: 'SKIPPED',
+          date: { gte: new Date(from), lte: new Date(to) },
+        },
+        select: { date: true },
+      }),
+      prisma.titrationStep.findMany({
+        where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
+        include: { treatment: { select: { name: true } } },
+      }),
+      prisma.weightEntry.findMany({
+        where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
+      }),
+    ]);
+
+    for (const intake of skipped) {
+      getDay(intake.date.toISOString().slice(0, 10)).skippedIntakes += 1;
+    }
+    for (const step of doseChanges) {
+      getDay(step.date.toISOString().slice(0, 10)).doseChanges.push(
+        `${step.treatment.name} → ${step.dose}`
+      );
+    }
+    for (const weight of weights) {
+      getDay(weight.date.toISOString().slice(0, 10)).weightKg = weight.weightKg;
+    }
   }
 
   /**

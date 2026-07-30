@@ -57,6 +57,8 @@ class RatingService {
         name: data.name.trim(),
         kind: data.kind ?? 'SCALE',
         maxValue: data.maxValue ?? 10,
+        // A row wired to the mood picker is a mood row unless told otherwise
+        track: data.track ?? (data.linkedForm === 'MOOD' ? 'MOOD' : 'BODY'),
         linkedForm: data.linkedForm ?? 'NONE',
         position: await this.nextPosition(userId),
       },
@@ -87,6 +89,9 @@ class RatingService {
           // An episode is rated 1-10 like everything else, but the intensity
           // is optional: the tap that records it must stay a single tap
           maxValue: 10,
+          // The suggested five are psychological episodes; a user logging
+          // migraines or reflux moves them to the physical track
+          track: 'MOOD' as const,
           position: start + index,
           isDefault: true,
         })),
@@ -129,6 +134,7 @@ class RatingService {
         name: data.name?.trim(),
         kind: data.kind,
         maxValue: data.maxValue,
+        track: data.track,
         linkedForm: data.linkedForm,
         position: data.position,
         isActive: data.isActive,
@@ -267,6 +273,7 @@ class RatingService {
         name: seed.name,
         maxValue: seed.maxValue,
         linkedForm: seed.linkedForm,
+        track: seed.track,
         position: index,
         isDefault: true,
       })),
@@ -289,6 +296,7 @@ class RatingService {
       name: definition.name,
       kind: definition.kind,
       maxValue: definition.maxValue,
+      track: definition.track,
       linkedForm: definition.linkedForm,
       position: definition.position,
       isActive: definition.isActive,

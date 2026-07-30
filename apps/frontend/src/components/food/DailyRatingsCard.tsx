@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gauge, Loader2, Settings2 } from 'lucide-react';
+import { Gauge, Loader2, Settings2, Smile } from 'lucide-react';
 import { todayLocal } from '../../lib/foodUtils';
 import { useCreateRatingEntry, useRatings } from '../../hooks/useRatingQueries';
 import { RatingRow } from './RatingRow';
@@ -62,19 +62,40 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
     createEntry.mutate({ date, ratingKey, loggedAt });
   };
 
+  // The mood modal also holds the daily check-in, so it must stay reachable
+  // even if the row it normally hangs off is renamed away or deleted
+  const hasMoodRow = active.some((definition) => definition.linkedForm === 'MOOD');
+  const moodFallback = hasMoodRow ? null : (
+    <button
+      type="button"
+      onClick={() => setLinkedFormFor('')}
+      className="mt-3 flex items-center gap-1.5 text-xs text-fuchsia-700 hover:underline"
+    >
+      <Smile className="w-3.5 h-3.5" />
+      Stati d'umore e check-in
+    </button>
+  );
+
   if (active.length === 0) {
     return (
-      <>
+      <div className="mb-3 flex flex-col items-center gap-1">
         <button
           type="button"
           onClick={() => setIsManagerOpen(true)}
-          className="mb-3 w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
         >
           <Gauge className="w-3.5 h-3.5" />
           Dai un voto a come sta andando
         </button>
+        {moodFallback}
         <RatingManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
-      </>
+        <MoodPickerModal
+          isOpen={linkedFormFor !== null}
+          onClose={() => setLinkedFormFor(null)}
+          onSaved={onToast}
+          date={date}
+        />
+      </div>
     );
   }
 
@@ -121,6 +142,8 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
           <EventChips definitions={events} onLog={handleLogEvent} />
         </div>
       )}
+
+      {moodFallback}
 
       {createEntry.error && (
         <p className="mt-2 text-xs text-red-600">

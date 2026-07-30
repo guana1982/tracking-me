@@ -5,6 +5,8 @@ import {
   QUICK_LOG_CATEGORY_LABELS,
   QUICK_LOG_VALENCE_LABELS,
   INTAKE_STATUS_LABELS,
+  TREATMENT_KIND_LABELS,
+  MILESTONE_KIND_LABELS,
   BEDTIME_SLOT,
   BEDTIME_SLOT_LABEL,
   describeScaleValue,
@@ -50,6 +52,14 @@ import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 //                 its intensity when given, text = the note). The trigger is
 //                 the field to count: its ranking is the point of the log
 //   weight      - a weekly weighing (quantity = kg)
+//   treatment   - what is being taken (category = name, text = active
+//                 ingredient and notes, quantity/unit = dose, meal_type =
+//                 when); dated on the start day, or on the first exported day
+//                 when it started earlier. This is state, not an event
+//   dose_change - a planned dose change (category = treatment, text = new
+//                 dose, intake_status = "applicata"/"programmata")
+//   milestone   - an exam, an appointment or another date (category = kind,
+//                 text = title, values and conditions to respect)
 //   day_summary - one per tracked day (time 00:00), carrying the two day scores
 // body_state / mood_state are averages in [-1, +1] (positive/neutral/negative
 // = +1/0/-1) and are INDEPENDENT: an empty one means "not tracked that day".
@@ -124,6 +134,35 @@ export interface CsvWeightInput {
   note: string | null;
 }
 
+export interface CsvTreatmentInput {
+  date: string; // start date, or the first exported day
+  name: string;
+  kindLabel: string;
+  dose: string | null;
+  form: string | null;
+  slotNames: string[];
+  detail: string | null;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface CsvDoseChangeInput {
+  date: string;
+  treatmentName: string;
+  dose: string;
+  applied: boolean;
+}
+
+export interface CsvMilestoneInput {
+  date: string;
+  kindLabel: string;
+  title: string;
+  items: string[];
+  advisories: string[];
+  notes: string | null;
+  isDone: boolean;
+}
+
 function escapeCsvField(value: string): string {
   if (/[",\n\r]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -152,7 +191,10 @@ export function buildFoodCsv(
   intakes: CsvIntakeInput[] = [],
   checkIns: CsvCheckInInput[] = [],
   ratings: CsvRatingInput[] = [],
-  weights: CsvWeightInput[] = []
+  weights: CsvWeightInput[] = [],
+  treatments: CsvTreatmentInput[] = [],
+  doseChanges: CsvDoseChangeInput[] = [],
+  milestones: CsvMilestoneInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -374,6 +416,84 @@ export function buildFoodCsv(
     rows.push({ sortKey: `${weight.date} 00:00 0`, line });
   }
 
+  // The therapy itself: without it the rest of the file has no subject
+  for (const treatment of treatments) {
+    const line = [
+      'treatment',
+      treatment.date,
+      '00:00',
+      escapeCsvField(treatment.name),
+      treatment.isActive ? 'attivo' : 'sospeso',
+      escapeCsvField(treatment.slotNames.join(', ')),
+      escapeCsvField(treatment.kindLabel),
+      escapeCsvField(treatment.dose ?? ''),
+      escapeCsvField(treatment.form ?? ''),
+      escapeCsvField([treatment.detail, treatment.notes].filter(Boolean).join(' · ')),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ].join(',');
+    // Sorted before the day summary: an LLM reads the therapy first
+    rows.push({ sortKey: `${treatment.date} 00:00 -1`, line });
+  }
+
+  for (const change of doseChanges) {
+    const line = [
+      'dose_change',
+      change.date,
+      '00:00',
+      escapeCsvField(change.treatmentName),
+      '',
+      '',
+      '',
+      '',
+      '',
+      escapeCsvField(change.dose),
+      '',
+      '',
+      '',
+      '',
+      '',
+      change.applied ? 'applicata' : 'programmata',
+    ].join(',');
+    rows.push({ sortKey: `${change.date} 00:00 0`, line });
+  }
+
+  for (const milestone of milestones) {
+    // Values to check and conditions to respect belong on the same row: they
+    // are what makes the appointment readable months later
+    const detail = [
+      milestone.title,
+      milestone.items.length > 0 ? `valori: ${milestone.items.join(', ')}` : null,
+      milestone.advisories.length > 0 ? `condizioni: ${milestone.advisories.join('; ')}` : null,
+      milestone.notes,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const line = [
+      'milestone',
+      milestone.date,
+      '00:00',
+      escapeCsvField(milestone.kindLabel),
+      milestone.isDone ? 'fatto' : 'da fare',
+      '',
+      '',
+      '',
+      '',
+      escapeCsvField(detail),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ].join(',');
+    rows.push({ sortKey: `${milestone.date} 00:00 0`, line });
+  }
+
   rows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
 
   // BOM so Excel detects UTF-8
@@ -437,7 +557,7 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns, ratings, weights] = await Promise.all([
+    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
@@ -453,6 +573,20 @@ class FoodExportService {
         orderBy: { date: 'asc' },
       }),
       prisma.weightEntry.findMany({
+        where: { userId, ...dayFilter },
+        orderBy: { date: 'asc' },
+      }),
+      // The catalogue is state, not an event: taken whole, whatever the range
+      prisma.treatmentDefinition.findMany({
+        where: { userId },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.titrationStep.findMany({
+        where: { userId, ...dayFilter },
+        include: { treatment: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.milestone.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
       }),
@@ -521,6 +655,41 @@ class FoodExportService {
         date: entry.date.toISOString().slice(0, 10),
         weightKg: entry.weightKg,
         note: entry.note,
+      })),
+      treatments.map((treatment) => {
+        const declared =
+          treatment.startedOn?.toISOString().slice(0, 10) ??
+          treatment.createdAt.toISOString().slice(0, 10);
+        return {
+          // A therapy that began before the window still has to be declared,
+          // so it is dated at the first day the export covers
+          date: from && declared < from ? from : declared,
+          name: treatment.name,
+          kindLabel: TREATMENT_KIND_LABELS[treatment.kind],
+          dose: treatment.dose,
+          form: treatment.form,
+          slotNames: treatment.slots.map((slot) =>
+            slot === BEDTIME_SLOT ? BEDTIME_SLOT_LABEL : names.get(slot) ?? slot
+          ),
+          detail: treatment.detail,
+          notes: treatment.notes,
+          isActive: treatment.isActive,
+        };
+      }),
+      doseSteps.map((step) => ({
+        date: step.date.toISOString().slice(0, 10),
+        treatmentName: step.treatment.name,
+        dose: step.dose,
+        applied: step.applied,
+      })),
+      milestones.map((milestone) => ({
+        date: milestone.date.toISOString().slice(0, 10),
+        kindLabel: MILESTONE_KIND_LABELS[milestone.kind],
+        title: milestone.title,
+        items: milestone.items,
+        advisories: milestone.advisories,
+        notes: milestone.notes,
+        isDone: milestone.isDone,
       }))
     );
   }

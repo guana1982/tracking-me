@@ -9,7 +9,14 @@ import {
   describeScaleValue,
 } from '@budget/shared';
 import { buildFoodCsv, FOOD_CSV_HEADER } from './food-export.service.js';
-import { toLocalParts, addDays, average, valenceFromScores } from './food-dashboard.service.js';
+import {
+  toLocalParts,
+  addDays,
+  average,
+  valenceFromScores,
+  scoreFromVote,
+  scoreFromScale,
+} from './food-dashboard.service.js';
 
 const BOM = '﻿';
 
@@ -91,6 +98,25 @@ describe('day-state helpers', () => {
     expect(valenceFromScores([-1])).toBe('NEGATIVE');
     expect(valenceFromScores([1, -1])).toBe('NEUTRAL');
     expect(valenceFromScores([])).toBeNull();
+  });
+
+  it('maps a 1..max vote onto the day-state range', () => {
+    expect(scoreFromVote(1, 10)).toBe(-1); // lowest vote = worst
+    expect(scoreFromVote(10, 10)).toBe(1);
+    expect(scoreFromVote(5, 10)).toBeCloseTo(-0.11, 2); // middle sits at 5.5
+    // A one-step scale has no gradient to express: neutral, not a crash
+    expect(scoreFromVote(1, 1)).toBe(0);
+  });
+
+  it('inverts a symptom scale so a falling curve always means improvement', () => {
+    expect(scoreFromScale(0, 10, false)).toBe(1); // symptom absent = good day
+    expect(scoreFromScale(10, 10, false)).toBe(-1);
+    expect(scoreFromScale(5, 10, false)).toBe(0);
+    // The one scale flagged positive reads the other way round
+    expect(scoreFromScale(10, 10, true)).toBe(1);
+    expect(scoreFromScale(0, 10, true)).toBe(-1);
+    // Named steps use their own range (compulsioni: 0..3)
+    expect(scoreFromScale(3, 3, false)).toBe(-1);
   });
 
   it('shifts instants into the local day via tzOffset', () => {
@@ -356,6 +382,63 @@ describe('CSV export', () => {
     ]);
     const lines = csv.replace(BOM, '').trim().split('\n');
     expect(lines[1]).toBe('weight,2026-07-16,00:00,peso,,,,78.4,kg,,,,,,,');
+  });
+
+  it('declares the therapy, the dose changes and the dates on the calendar', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          name: 'Sertralina 50 mg',
+          kindLabel: 'Farmaco',
+          dose: '½ cp',
+          form: 'compressa',
+          slotNames: ['Colazione'],
+          detail: 'sertralina',
+          notes: 'dopo colazione',
+          isActive: true,
+        },
+      ],
+      [
+        {
+          date: '2026-07-23',
+          treatmentName: 'Sertralina 50 mg',
+          dose: '1 cp',
+          applied: false,
+        },
+      ],
+      [
+        {
+          date: '2026-08-05',
+          kindLabel: 'Esame',
+          title: 'Emocromo',
+          items: ['Valproatemia', 'Transaminasi'],
+          advisories: ['Niente allenamenti intensi nelle 72 h precedenti'],
+          notes: null,
+          isDone: false,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The therapy opens the file: without it the rest has no subject
+    expect(lines[1]).toBe(
+      'treatment,2026-07-16,00:00,Sertralina 50 mg,attivo,Colazione,Farmaco,½ cp,compressa,sertralina · dopo colazione,,,,,,'
+    );
+    expect(lines[2]).toBe(
+      'dose_change,2026-07-23,00:00,Sertralina 50 mg,,,,,,1 cp,,,,,,programmata'
+    );
+    // Values and conditions travel with the appointment, or they are useless
+    expect(lines[3]).toContain('milestone,2026-08-05,00:00,Esame,da fare');
+    expect(lines[3]).toContain('valori: Valproatemia, Transaminasi');
+    expect(lines[3]).toContain('condizioni: Niente allenamenti intensi nelle 72 h precedenti');
   });
 
   it('uses the named steps of a scale instead of the generic wording', () => {

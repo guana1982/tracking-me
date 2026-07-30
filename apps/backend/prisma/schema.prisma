@@ -586,6 +586,7 @@ model CheckInScale {
   // A side effect is read differently from a symptom: what matters is when it
   // appeared and whether it faded, not the shape of its curve
   isSideEffect Boolean @default(false)
+  track       DayTrack @default(MOOD)
   position    Int
   isActive    Boolean  @default(true)
   isDefault   Boolean  @default(false)
@@ -637,6 +638,15 @@ enum RatingKind {
   EVENT
 }
 
+// Which of the two independent day curves an answer feeds. Never inferred
+// from a name: what is "physical" and what is "psychological" is the user's
+// call, and NONE keeps something out of the day state entirely.
+enum DayTrack {
+  BODY
+  MOOD
+  NONE
+}
+
 // One characteristic the user rates. Everything about it is editable: the
 // three installed at first run are a suggestion, not a fixed set.
 model RatingDefinition {
@@ -646,6 +656,7 @@ model RatingDefinition {
   name       String
   kind       RatingKind       @default(SCALE)
   maxValue   Int              @default(10)
+  track      DayTrack         @default(BODY)
   linkedForm RatingLinkedForm @default(NONE)
   position   Int
   isActive   Boolean          @default(true)

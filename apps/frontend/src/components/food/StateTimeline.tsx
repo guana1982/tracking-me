@@ -8,6 +8,7 @@ import {
   YAxis,
   Tooltip,
   ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
@@ -17,6 +18,21 @@ import { useFoodOverview } from '../../hooks/useFoodQueries';
 import { TrackToggle, type FoodTrack } from './TrackToggle';
 
 const BAND_COLORS = ['#fde68a', '#bae6fd', '#ddd6fe', '#bbf7d0', '#fecaca'];
+
+interface DayRow {
+  date: string;
+  shortDate: string;
+  state: number | null;
+  mood: number | null;
+  workout: number | null;
+  lateDinner: number | null;
+  events: number | null;
+  eventCount: number;
+  skipped: number | null;
+  skippedIntakes: number;
+  doseChange: string | null;
+  weightKg: number | null;
+}
 
 interface StateTimelineProps {
   track: FoodTrack;
@@ -37,13 +53,21 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
   const showBody = track === 'BOTH' || track === 'BODY';
   const showMood = track === 'BOTH' || track === 'MOOD';
 
-  const data = (overview.data?.days ?? []).map((day) => ({
+  const data: DayRow[] = (overview.data?.days ?? []).map((day) => ({
     date: day.date,
     shortDate: day.date.slice(8) + '/' + day.date.slice(5, 7),
     state: day.dayState,
     mood: day.moodState,
     workout: day.workoutPresent ? 1.15 : null,
     lateDinner: day.dinnerAfter21 ? -1.15 : null,
+    // Facts with no valence of their own, placed on their own rows so they
+    // never look like a judgement of the day
+    events: day.eventCount > 0 ? -1.25 : null,
+    eventCount: day.eventCount,
+    skipped: day.skippedIntakes > 0 ? 1.25 : null,
+    skippedIntakes: day.skippedIntakes,
+    doseChange: day.doseChanges.length > 0 ? day.doseChanges.join(', ') : null,
+    weightKg: day.weightKg,
   }));
 
   const periods = overview.data?.supplementPeriods ?? [];
@@ -81,8 +105,8 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
       ) : !hasAnyState ? (
         <p className="text-sm text-slate-500 py-6 text-center">
           {track === 'MOOD'
-            ? "Nessun umore registrato nel periodo: usa il pulsante «Umore» nel diario."
-            : "Nessun quick log nel periodo: la linea dello stato apparirà con l'uso del diario rapido."}
+            ? 'Nessun umore registrato nel periodo: votalo dal diario, o aprilo da «Stati d’umore».'
+            : "Nessun dato nel periodo: la linea appare con i voti, gli episodi, il check-in e le note del diario."}
         </p>
       ) : (
         <>
@@ -109,15 +133,41 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                   fillOpacity={0.3}
                 />
               ))}
+              {/* The day a dose moved: the first thing to look for next to a
+                  curve that changed shape */}
+              {data.map((day) =>
+                day.doseChange === null ? null : (
+                  <ReferenceLine
+                    key={`dose-${day.date}`}
+                    x={day.shortDate}
+                    stroke="#0d9488"
+                    strokeDasharray="4 3"
+                    label={{ value: '↑ dose', position: 'top', fontSize: 9, fill: '#0d9488' }}
+                  />
+                )
+              )}
               <Tooltip
-                formatter={(value: number, name: string) => {
+                formatter={(value: number, name: string, item: { payload?: DayRow }) => {
                   if (name === 'state') return [value, 'Condizione fisica'];
                   if (name === 'mood') return [value, 'Umore'];
                   if (name === 'workout') return ['sì', 'Allenamento'];
                   if (name === 'lateDinner') return ['sì', 'Cena dopo le 21'];
+                  if (name === 'events') return [item.payload?.eventCount ?? 0, 'Episodi'];
+                  if (name === 'skipped') {
+                    return [item.payload?.skippedIntakes ?? 0, 'Dosi saltate'];
+                  }
                   return [value, name];
                 }}
-                labelFormatter={(label) => `Giorno ${label}`}
+                labelFormatter={(label: string) => {
+                  const day = data.find((item) => item.shortDate === label);
+                  const extras = [
+                    day?.doseChange ? `dose: ${day.doseChange}` : null,
+                    day?.weightKg !== null && day?.weightKg !== undefined
+                      ? `peso ${day.weightKg} kg`
+                      : null,
+                  ].filter(Boolean);
+                  return `Giorno ${label}${extras.length > 0 ? ` · ${extras.join(' · ')}` : ''}`;
+                }}
                 contentStyle={{ fontSize: 12, borderRadius: 8 }}
               />
               {showBody && (
@@ -143,6 +193,10 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
               )}
               {showBody && <Scatter dataKey="workout" fill="#0ea5e9" shape="triangle" />}
               {showBody && <Scatter dataKey="lateDinner" fill="#f59e0b" shape="diamond" />}
+              {/* Shown on both tracks: an episode and a skipped dose are
+                  context for either curve */}
+              <Scatter dataKey="events" fill="#f59e0b" shape="star" />
+              <Scatter dataKey="skipped" fill="#a78bfa" shape="cross" />
             </ComposedChart>
           </ResponsiveContainer>
 
@@ -165,6 +219,9 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
             )}
             {showBody && <span className="flex items-center gap-1 text-sky-600">▲ allenamento</span>}
             {showBody && <span className="flex items-center gap-1 text-amber-500">◆ cena dopo le 21</span>}
+            <span className="flex items-center gap-1 text-amber-500">★ episodi</span>
+            <span className="flex items-center gap-1 text-violet-400">✕ dosi saltate</span>
+            <span className="flex items-center gap-1 text-teal-600">┆ cambio dose</span>
             {periods.map((period, index) => (
               <span key={`${period.name}-${period.startDate}`} className="flex items-center gap-1">
                 <span

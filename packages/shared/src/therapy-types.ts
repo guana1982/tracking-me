@@ -1,4 +1,5 @@
 import type { TREATMENT_KINDS, INTAKE_STATUSES } from './therapy-dictionaries';
+import type { DayTrackDTO } from './rating-types';
 
 // ============================================================
 // Intake & check-in module - DTOs
@@ -108,6 +109,8 @@ export interface CheckInScaleDTO {
   isCore: boolean;
   /** Read as "when did it appear and did it fade", not as a curve */
   isSideEffect: boolean;
+  /** Which curve of "stato del giorno" the answers feed */
+  track: DayTrackDTO;
   position: number;
   isActive: boolean;
   isDefault: boolean;
@@ -123,6 +126,7 @@ export interface CreateCheckInScaleDTO {
   isPositive?: boolean;
   isCore?: boolean;
   isSideEffect?: boolean;
+  track?: DayTrackDTO;
 }
 
 export interface UpdateCheckInScaleDTO {
@@ -134,6 +138,7 @@ export interface UpdateCheckInScaleDTO {
   isPositive?: boolean;
   isCore?: boolean;
   isSideEffect?: boolean;
+  track?: DayTrackDTO;
   position?: number;
   isActive?: boolean;
 }

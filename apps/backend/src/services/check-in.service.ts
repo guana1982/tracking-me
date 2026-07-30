@@ -111,6 +111,8 @@ class CheckInService {
         isPositive: data.isPositive ?? false,
         isCore: data.isCore ?? true,
         isSideEffect: data.isSideEffect ?? false,
+        // A side effect is a bodily fact, a symptom scale a psychological one
+        track: data.track ?? (data.isSideEffect ? 'BODY' : 'MOOD'),
         position: (last?.position ?? -1) + 1,
       },
     });
@@ -164,6 +166,7 @@ class CheckInService {
           // Optional by design: the core five stay the five of the spec
           isCore: false,
           isSideEffect: true,
+          track: 'BODY' as const,
           position: nextPosition + index,
         })),
         skipDuplicates: true,
@@ -196,6 +199,7 @@ class CheckInService {
         isPositive: data.isPositive,
         isCore: data.isCore,
         isSideEffect: data.isSideEffect,
+        track: data.track,
         position: data.position,
         isActive: data.isActive,
       },
@@ -320,6 +324,7 @@ class CheckInService {
       isPositive: scale.isPositive,
       isCore: scale.isCore,
       isSideEffect: scale.isSideEffect,
+      track: scale.track,
       position: scale.position,
       isActive: scale.isActive,
       isDefault: scale.isDefault,

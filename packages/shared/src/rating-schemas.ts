@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  DAY_TRACKS,
   RATING_KINDS,
   RATING_LINKED_FORMS,
   RATING_MAX_MAX,
@@ -15,12 +16,14 @@ const maxValueSchema = z.number().int().min(RATING_MIN_MAX).max(RATING_MAX_MAX);
 
 export const ratingLinkedFormSchema = z.enum(RATING_LINKED_FORMS);
 export const ratingKindSchema = z.enum(RATING_KINDS);
+export const dayTrackSchema = z.enum(DAY_TRACKS);
 const triggerSchema = z.string().trim().max(80);
 
 export const createRatingDefinitionSchema = z.object({
   name: z.string().trim().min(1).max(60),
   kind: ratingKindSchema.optional(),
   maxValue: maxValueSchema.optional(),
+  track: dayTrackSchema.optional(),
   linkedForm: ratingLinkedFormSchema.optional(),
 });
 
@@ -29,6 +32,7 @@ export const updateRatingDefinitionSchema = z
     name: z.string().trim().min(1).max(60).optional(),
     kind: ratingKindSchema.optional(),
     maxValue: maxValueSchema.optional(),
+    track: dayTrackSchema.optional(),
     linkedForm: ratingLinkedFormSchema.optional(),
     position: z.number().int().min(0).optional(),
     isActive: z.boolean().optional(),

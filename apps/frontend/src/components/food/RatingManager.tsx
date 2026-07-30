@@ -9,6 +9,8 @@ import {
   useUpdateRating,
 } from '../../hooks/useRatingQueries';
 import {
+  DAY_TRACKS,
+  DAY_TRACK_LABELS,
   RATING_KINDS,
   RATING_KIND_LABELS,
   RATING_LINKED_FORMS,
@@ -16,7 +18,7 @@ import {
   RATING_MAX_MAX,
   RATING_MIN_MAX,
 } from '@budget/shared';
-import type { RatingKindDTO, RatingLinkedFormDTO } from '@budget/shared';
+import type { DayTrackDTO, RatingKindDTO, RatingLinkedFormDTO } from '@budget/shared';
 
 interface RatingManagerProps {
   isOpen: boolean;
@@ -61,6 +63,46 @@ function LinkedFormPicker({
 }
 
 /**
+ * Which curve the answers feed. Asked explicitly because the app must never
+ * decide from a name whether something is physical or psychological.
+ */
+export function TrackPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: DayTrackDTO;
+  onChange: (track: DayTrackDTO) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex gap-1">
+      {DAY_TRACKS.map((track) => (
+        <button
+          key={track}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(track)}
+          aria-pressed={value === track}
+          className={cn(
+            'px-2 py-1 rounded-full border text-[11px] font-medium transition-colors disabled:opacity-50',
+            value === track
+              ? track === 'MOOD'
+                ? 'border-fuchsia-500 bg-fuchsia-500 text-white'
+                : track === 'BODY'
+                  ? 'border-slate-800 bg-slate-800 text-white'
+                  : 'border-slate-400 bg-slate-400 text-white'
+              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+          )}
+        >
+          {DAY_TRACK_LABELS[track]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Full CRUD over the rated characteristics. The three installed at first run
  * have no special status here: they can be renamed, rescaled or removed like
  * any other, which is what makes the rows mean whatever the user needs.
@@ -75,6 +117,7 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
   const [newName, setNewName] = useState('');
   const [newKind, setNewKind] = useState<RatingKindDTO>('SCALE');
   const [newMax, setNewMax] = useState(10);
+  const [newTrack, setNewTrack] = useState<DayTrackDTO>('BODY');
   const [newLinkedForm, setNewLinkedForm] = useState<RatingLinkedFormDTO>('NONE');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -84,6 +127,7 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
       setNewName('');
       setNewKind('SCALE');
       setNewMax(10);
+      setNewTrack('BODY');
       setNewLinkedForm('NONE');
       setEditingKey(null);
       setEditingName('');
@@ -113,6 +157,7 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
       name: newName.trim(),
       kind: newKind,
       maxValue: newMax,
+      track: newTrack,
       linkedForm: newLinkedForm,
     });
     setNewName('');
@@ -229,6 +274,10 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
                 </>
               )}
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-slate-500">Entra nel grafico come</span>
+              <TrackPicker value={newTrack} onChange={setNewTrack} disabled={isPending} />
+            </div>
           </form>
 
           {!hasEvents && (
@@ -315,13 +364,24 @@ export function RatingManager({ isOpen, onClose }: RatingManagerProps) {
                           }
                         />
                       </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-slate-500">Nel grafico</span>
+                        <TrackPicker
+                          value={rating.track}
+                          disabled={isPending}
+                          onChange={(track) =>
+                            updateRating.mutate({ key: rating.key, data: { track } })
+                          }
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-800 truncate">{rating.name}</p>
                         <p className="text-[11px] text-slate-400">
-                          {RATING_KIND_LABELS[rating.kind]} · da 1 a {rating.maxValue}
+                          {RATING_KIND_LABELS[rating.kind]} · da 1 a {rating.maxValue} ·{' '}
+                          {DAY_TRACK_LABELS[rating.track].toLowerCase()}
                           {rating.linkedForm !== 'NONE'
                             ? ` · ${RATING_LINKED_FORM_LABELS[rating.linkedForm]}`
                             : ''}

@@ -210,6 +210,12 @@ export interface FoodDayOverviewDTO {
   workoutValence: QuickLogValenceDTO | null;
   sleepValence: QuickLogValenceDTO | null;
   dinnerAfter21: boolean;
+  // Markers: facts with no place on a valence axis, shown on the timeline
+  // instead of being folded into the two scores
+  eventCount: number;
+  skippedIntakes: number;
+  doseChanges: string[];
+  weightKg: number | null;
 }
 
 export interface SupplementPeriodDTO {
