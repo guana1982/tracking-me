@@ -144,7 +144,9 @@ export function FoodDiary() {
   return (
     <div
       className={cn(
-        'max-w-6xl mx-auto pb-28 sm:pb-20',
+        // Sidebar offset on the page root, like every other page: the nav is
+        // fixed, and without this a full-width layout slides underneath it
+        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl pb-28 sm:pb-20',
         // From xl the page stops scrolling as a whole: it fills the height it
         // has and hands the scrolling to the middle column. Full width, so the
         // rails start at the nav and end at the edge instead of floating in
@@ -153,7 +155,9 @@ export function FoodDiary() {
       )}
     >
       {/* Header: day nav + actions */}
-      <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3 xl:shrink-0">
+      {/* w-full matters: inside the xl flex column, mx-auto without a width
+          would shrink these two bars to their content */}
+      <div className="w-full max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3 xl:shrink-0">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setSelectedDate(addDaysLocal(selectedDate, -1))}
@@ -200,7 +204,7 @@ export function FoodDiary() {
       </div>
 
       {/* Week strip */}
-      <div className="max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4 xl:shrink-0">
+      <div className="w-full max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4 xl:shrink-0">
         {Array.from({ length: 7 }, (_, i) => addDaysLocal(from, i)).map((date) => {
           const d = new Date(`${date}T12:00:00`);
           const isSelected = date === selectedDate;

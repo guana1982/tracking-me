@@ -199,6 +199,8 @@ export function Layout() {
       </header>
 
       {/* Main Content */}
+      {/* No sidebar margin here: by repo convention every page offsets itself
+          on its root wrapper (the sidebar is fixed) */}
       <main className="px-3 sm:px-4 lg:px-6 xl:px-8 py-4 lg:py-5 pb-24 sm:pb-6 md:flex-1 md:overflow-auto">
         <Outlet />
       </main>
