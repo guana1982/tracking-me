@@ -251,7 +251,9 @@ export function FoodDiary() {
       <div
         className={cn(
           'lg:grid lg:grid-cols-2 lg:gap-4',
-          'xl:grid-cols-[22rem_minmax(0,1fr)_22rem] 2xl:grid-cols-[24rem_minmax(0,1fr)_24rem]',
+          // Rails get the room, the feed keeps what is left: cards in the
+          // rails are forms, and forms are what needs the width here
+          'xl:grid-cols-[23rem_minmax(0,1fr)_23rem] 2xl:grid-cols-[28rem_minmax(0,1fr)_28rem]',
           // Takes whatever height is left under the date bar, so the three
           // panes end together instead of pushing the page
           'xl:flex-1 xl:min-h-0'
