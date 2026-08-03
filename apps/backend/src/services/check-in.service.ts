@@ -219,7 +219,9 @@ class CheckInService {
     const values: CheckInValueDTO[] = [];
     for (const answer of data.values) {
       const scale = byKey.get(answer.key);
-      if (!scale) throw new AppError('Scala non trovata', 404, 'NOT_FOUND');
+      // A scale deleted since the day was compiled is skipped, not fatal:
+      // one removed entry must never block saving the rest of the check-in
+      if (!scale) continue;
       if (answer.value < 0 || answer.value > scale.maxValue) {
         throw new AppError('Valore fuori scala', 400, 'VALUE_OUT_OF_RANGE');
       }

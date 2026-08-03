@@ -45,6 +45,7 @@ interface DayData {
   // Markers: things that belong on the timeline without a place on a
   // valence axis
   eventCount: number;
+  sideEffectCount: number;
   skippedIntakes: number;
   doseChanges: string[];
   weightKg: number | null;
@@ -61,6 +62,7 @@ function emptyDay(): DayData {
     sleepScores: [],
     feelingScores: [],
     eventCount: 0,
+    sideEffectCount: 0,
     skippedIntakes: 0,
     doseChanges: [],
     weightKg: null,
@@ -147,6 +149,7 @@ class FoodDashboardService {
         sleepValence: valenceFromScores(day.sleepScores),
         dinnerAfter21: day.dinnerAfter21,
         eventCount: day.eventCount,
+        sideEffectCount: day.sideEffectCount,
         skippedIntakes: day.skippedIntakes,
         doseChanges: day.doseChanges,
         weightKg: day.weightKg,
@@ -467,21 +470,30 @@ class FoodDashboardService {
     for (const entry of entries) {
       const date = entry.date.toISOString().slice(0, 10);
       const day = getDay(date);
+      // An episode and a side effect are both things that happened, and both
+      // are bad news by definition - only a mark can go either way
+      const isMoment = entry.kind === 'EVENT' || entry.kind === 'SIDE_EFFECT';
       if (entry.kind === 'EVENT') day.eventCount += 1;
+      if (entry.kind === 'SIDE_EFFECT') day.sideEffectCount += 1;
 
       // The definition may have been deleted; a vote with no track left
       // simply stops counting rather than guessing where it belonged
       const track = entry.rating?.track;
       if (track !== 'BODY' && track !== 'MOOD') continue;
 
-      const score =
-        entry.kind === 'EVENT'
-          ? entry.value === null
-            ? -1
-            : -(Math.min(entry.value, entry.maxValue) / entry.maxValue)
-          : entry.value === null
-            ? null
-            : scoreFromVote(entry.value, entry.maxValue);
+      const score = isMoment
+        ? entry.value === null
+          ? // An episode is acute by definition, so a bare tap counts in full.
+            // A side effect can be a mild nuisance, and assuming the worst
+            // from one tap would overstate every dry mouth: half weight
+            entry.kind === 'SIDE_EFFECT'
+            ? -0.5
+            : -1
+          : // Intensity says how bad, in proportion to its own scale
+            -(Math.min(entry.value, entry.maxValue) / entry.maxValue)
+        : entry.value === null
+          ? null
+          : scoreFromVote(entry.value, entry.maxValue);
       if (score === null) continue;
 
       (track === 'MOOD' ? day.moodScores : day.stateScores).push(score);

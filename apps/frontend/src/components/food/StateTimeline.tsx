@@ -30,6 +30,8 @@ interface DayRow {
   eventCount: number;
   skipped: number | null;
   skippedIntakes: number;
+  sideEffects: number | null;
+  sideEffectCount: number;
   doseChange: string | null;
   weightKg: number | null;
 }
@@ -66,6 +68,9 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
     eventCount: day.eventCount,
     skipped: day.skippedIntakes > 0 ? 1.25 : null,
     skippedIntakes: day.skippedIntakes,
+    // Grouped with the other therapy facts, at the top of the plot
+    sideEffects: day.sideEffectCount > 0 ? 1.38 : null,
+    sideEffectCount: day.sideEffectCount,
     doseChange: day.doseChanges.length > 0 ? day.doseChanges.join(', ') : null,
     weightKg: day.weightKg,
   }));
@@ -119,7 +124,8 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                 interval="preserveStartEnd"
                 minTickGap={24}
               />
-              <YAxis domain={[-1.3, 1.3]} ticks={[-1, 0, 1]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+              {/* Headroom for the marker rows: the readable range stays -1..+1 */}
+              <YAxis domain={[-1.3, 1.45]} ticks={[-1, 0, 1]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
               {periods.map((period, index) => (
                 <ReferenceArea
                   key={`${period.name}-${period.startDate}`}
@@ -155,6 +161,9 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                   if (name === 'events') return [item.payload?.eventCount ?? 0, 'Episodi'];
                   if (name === 'skipped') {
                     return [item.payload?.skippedIntakes ?? 0, 'Dosi saltate'];
+                  }
+                  if (name === 'sideEffects') {
+                    return [item.payload?.sideEffectCount ?? 0, 'Effetti collaterali'];
                   }
                   return [value, name];
                 }}
@@ -197,6 +206,7 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                   context for either curve */}
               <Scatter dataKey="events" fill="#f59e0b" shape="star" />
               <Scatter dataKey="skipped" fill="#a78bfa" shape="cross" />
+              <Scatter dataKey="sideEffects" fill="#f43f5e" shape="circle" />
             </ComposedChart>
           </ResponsiveContainer>
 
@@ -221,6 +231,7 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
             {showBody && <span className="flex items-center gap-1 text-amber-500">◆ cena dopo le 21</span>}
             <span className="flex items-center gap-1 text-amber-500">★ episodi</span>
             <span className="flex items-center gap-1 text-violet-400">✕ dosi saltate</span>
+            <span className="flex items-center gap-1 text-rose-500">● effetti collaterali</span>
             <span className="flex items-center gap-1 text-teal-600">┆ cambio dose</span>
             {periods.map((period, index) => (
               <span key={`${period.name}-${period.startDate}`} className="flex items-center gap-1">

@@ -9,6 +9,8 @@ interface CheckInSectionProps {
   day: CheckInDayDTO | undefined;
   isLoading: boolean;
   values: Record<string, number>;
+  /** Keys already answered for the day, or moved just now */
+  answeredKeys: string[];
   onChange: (key: string, value: number) => void;
   note: string;
   onNoteChange: (note: string) => void;
@@ -19,10 +21,13 @@ interface CheckInSectionProps {
 function ScaleRow({
   scale,
   value,
+  isAnswered,
   onChange,
 }: {
   scale: CheckInScaleDTO;
   value: number;
+  /** False = never answered. Deliberately not the same as answering zero */
+  isAnswered: boolean;
   onChange: (value: number) => void;
 }) {
   const wording = describeScaleValue(value, scale.maxValue, scale.isPositive, scale.levelLabels);
@@ -46,10 +51,10 @@ function ScaleRow({
               key={label}
               type="button"
               onClick={() => onChange(index)}
-              aria-pressed={value === index}
+              aria-pressed={isAnswered && value === index}
               className={cn(
                 'px-3 py-1.5 rounded-full border text-xs font-medium transition-colors',
-                value === index
+                isAnswered && value === index
                   ? 'border-violet-500 bg-violet-500 text-white'
                   : 'border-slate-200 text-slate-600 hover:bg-slate-50'
               )}
@@ -67,13 +72,18 @@ function ScaleRow({
             step={1}
             value={value}
             onChange={(event) => onChange(Number(event.target.value))}
-            className="mt-1.5 w-full accent-violet-600"
+            className={cn('mt-1.5 w-full accent-violet-600', !isAnswered && 'opacity-50')}
             aria-label={scale.name}
           />
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] text-slate-400 truncate">{scale.lowLabel}</span>
-            <span className="text-xs font-medium text-slate-700 shrink-0">
-              {value} — {wording}
+            <span
+              className={cn(
+                'text-xs font-medium shrink-0',
+                isAnswered ? 'text-slate-700' : 'text-slate-400 italic'
+              )}
+            >
+              {isAnswered ? `${value} — ${wording}` : 'non risposto'}
             </span>
             <span className="text-[10px] text-slate-400 truncate text-right">
               {scale.highLabel}
@@ -94,6 +104,7 @@ export function CheckInSection({
   day,
   isLoading,
   values,
+  answeredKeys,
   onChange,
   note,
   onNoteChange,
@@ -167,6 +178,7 @@ export function CheckInSection({
               key={scale.key}
               scale={scale}
               value={values[scale.key] ?? 0}
+              isAnswered={answeredKeys.includes(scale.key)}
               onChange={(value) => onChange(scale.key, value)}
             />
           ))}
@@ -187,6 +199,7 @@ export function CheckInSection({
                       key={scale.key}
                       scale={scale}
                       value={values[scale.key] ?? 0}
+                      isAnswered={answeredKeys.includes(scale.key)}
                       onChange={(value) => onChange(scale.key, value)}
                     />
                   ))}

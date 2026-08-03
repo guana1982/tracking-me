@@ -65,8 +65,11 @@ export function MoodPickerModal({
   const [checkInValues, setCheckInValues] = useState<Record<string, number>>({});
   const [checkInNote, setCheckInNote] = useState('');
   // Nothing is written unless a scale was actually moved: an untouched form
-  // must never invent an answer for a day
-  const [checkInTouched, setCheckInTouched] = useState(false);
+  // must never invent an answer for a day. Tracked per scale, because the
+  // sliders all start somewhere and saving them wholesale would turn a dozen
+  // untouched zeros into a dozen real answers
+  const [touchedScales, setTouchedScales] = useState<string[]>([]);
+  const [isNoteTouched, setIsNoteTouched] = useState(false);
   const [isCheckInExpanded, setIsCheckInExpanded] = useState(false);
   const checkInInitializedFor = useRef<string | null>(null);
 
@@ -104,7 +107,8 @@ export function MoodPickerModal({
     }
     setCheckInValues(next);
     setCheckInNote(data.entry?.note ?? '');
-    setCheckInTouched(false);
+    setTouchedScales([]);
+    setIsNoteTouched(false);
     setIsCheckInExpanded(Boolean(data.entry));
     checkInInitializedFor.current = date;
   }, [isOpen, date, checkInDay.data]);
@@ -128,14 +132,15 @@ export function MoodPickerModal({
 
   const handleCheckInChange = (key: string, value: number) => {
     setCheckInValues((prev) => ({ ...prev, [key]: value }));
-    setCheckInTouched(true);
+    setTouchedScales((prev) => (prev.includes(key) ? prev : [...prev, key]));
   };
 
   const handleCheckInNoteChange = (value: string) => {
     setCheckInNote(value);
-    setCheckInTouched(true);
+    setIsNoteTouched(true);
   };
 
+  const checkInTouched = touchedScales.length > 0 || isNoteTouched;
   // Either half is enough on its own: some days only the mood is worth saying
   const canSave = (selected.length > 0 || checkInTouched) && !isPending;
 
@@ -167,10 +172,19 @@ export function MoodPickerModal({
     }
 
     if (checkInTouched) {
+      // Only what was answered: the already-saved values of the day, plus the
+      // scales actually moved now. A slider left where it started is not an
+      // answer, and writing it as one would put a "sintomo assente" in the
+      // day state for something never considered
+      const answered = new Map(
+        (checkInDay.data?.entry?.values ?? []).map((value) => [value.key, value.value])
+      );
+      for (const key of touchedScales) answered.set(key, checkInValues[key] ?? 0);
+
       // Upsert on the day: saving again edits, it never adds a second one
       await saveCheckIn.mutateAsync({
         date,
-        values: Object.entries(checkInValues).map(([key, value]) => ({ key, value })),
+        values: [...answered].map(([key, value]) => ({ key, value })),
         note: checkInNote.trim() || null,
       });
     }
@@ -285,6 +299,10 @@ export function MoodPickerModal({
             day={checkInDay.data}
             isLoading={checkInDay.isLoading}
             values={checkInValues}
+            answeredKeys={[
+              ...(checkInDay.data?.entry?.values.map((value) => value.key) ?? []),
+              ...touchedScales,
+            ]}
             onChange={handleCheckInChange}
             note={checkInNote}
             onNoteChange={handleCheckInNoteChange}

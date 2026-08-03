@@ -213,6 +213,7 @@ export interface FoodDayOverviewDTO {
   // Markers: facts with no place on a valence axis, shown on the timeline
   // instead of being folded into the two scores
   eventCount: number;
+  sideEffectCount: number;
   skippedIntakes: number;
   doseChanges: string[];
   weightKg: number | null;
