@@ -63,8 +63,15 @@ export const QUICK_LOG_VALENCE_LABELS: Record<QuickLogValenceDTO, string> = {
 export const FOOD_CONFIG = {
   // Quick log saved within this window after a meal insertion gets linked to it
   MEAL_LINK_WINDOW_HOURS: 4,
-  // Day-state score per valence (dayState = simple average of the day's logs)
+  // Sign of a valence. Full scale, because this is also what tells positive
+  // from negative wherever a day is tallied rather than scored
   VALENCE_SCORES: { POSITIVE: 1, NEUTRAL: 0, NEGATIVE: -1 } as Record<QuickLogValenceDTO, number>,
+  // ...but a free note weighs half of that in the day state. Keywords give
+  // the direction, never the strength: "gambe pesanti" can be a nuisance or a
+  // collapse, and scoring every note at the extreme let a single sentence
+  // outweigh a whole day of graded votes (a 5/10 vote is worth 0.11).
+  // Half puts a note among the other instruments instead of above them.
+  QUICK_LOG_DAY_WEIGHT: 0.5,
   // SLEEP logs written before this hour describe the night that just ended and
   // belong to the same day; logs from this hour onwards affect the NEXT day
   SLEEP_ATTRIBUTION_HOUR: 12,

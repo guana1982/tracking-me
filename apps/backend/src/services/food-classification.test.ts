@@ -16,6 +16,7 @@ import {
   valenceFromScores,
   scoreFromVote,
   scoreFromScale,
+  scoreFromValence,
   groupMeans,
 } from './food-dashboard.service.js';
 
@@ -121,6 +122,21 @@ describe('day-state helpers', () => {
     expect(scoreFromScale(0, 10, true)).toBe(-1);
     // Named steps use their own range (compulsioni: 0..3)
     expect(scoreFromScale(3, 3, false)).toBe(-1);
+  });
+
+  it('gives a free note half weight, so one sentence cannot outvote a day', () => {
+    expect(scoreFromValence('NEGATIVE')).toBe(-0.5);
+    expect(scoreFromValence('POSITIVE')).toBe(0.5);
+    expect(scoreFromValence('NEUTRAL')).toBe(0);
+
+    // Benessere 5/10 (-0.11), Sonno 8/10 (+0.56) and one negative note:
+    // the note bends the day, it no longer flips it
+    const day = new Map([
+      ['rating:benessere', [-0.11]],
+      ['rating:sonno', [0.56]],
+      ['log:WORKOUT', [scoreFromValence('NEGATIVE')]],
+    ]);
+    expect(average(groupMeans(day))).toBe(-0.02); // at full weight it was -0.18
   });
 
   it('averages each instrument before averaging the day, so nothing votes twice', () => {

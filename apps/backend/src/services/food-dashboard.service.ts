@@ -18,9 +18,9 @@ import type {
 //   dayState  = physical condition, moodState = psychological one
 // Everything the diary records with a direction feeds one of them, all
 // normalised to [-1, +1]:
-//   - quick logs: valence (positive = +1, neutral = 0, negative = -1).
-//     A note with NO recognised valence stays out entirely: only what the
-//     dictionaries actually read may score
+//   - quick logs: HALF the valence (+0.5 / 0 / -0.5), because keywords give
+//     the direction and not the strength. A note with NO recognised valence
+//     stays out entirely: only what the dictionaries actually read may score
 //   - ratings (voti 1..max): 1 -> -1, max -> +1
 //   - episodes and side effects: negative by nature; intensity says how much
 //   - check-in scales: symptom intensity inverted (0 -> +1, max -> -1),
@@ -104,6 +104,15 @@ export function scoreFromVote(value: number, maxValue: number): number {
   if (maxValue <= 1) return 0;
   const clamped = Math.min(Math.max(value, 1), maxValue);
   return ((clamped - 1) / (maxValue - 1)) * 2 - 1;
+}
+
+/**
+ * What a free note contributes to the day. Half the valence, because the
+ * dictionaries read the direction and not the strength - see the comment on
+ * FOOD_CONFIG.QUICK_LOG_DAY_WEIGHT.
+ */
+export function scoreFromValence(valence: QuickLogValenceDTO): number {
+  return FOOD_CONFIG.VALENCE_SCORES[valence] * FOOD_CONFIG.QUICK_LOG_DAY_WEIGHT;
 }
 
 /** A 0..max symptom intensity onto [-1, +1], inverted unless it reads upwards */
@@ -463,7 +472,10 @@ class FoodDashboardService {
       if (attributedDate < from || attributedDate > to) continue;
 
       const day = getDay(attributedDate);
-      const score = FOOD_CONFIG.VALENCE_SCORES[log.derivedValence];
+      // Two readings of the same note: the sign, for the tallies that count
+      // good and bad days, and the weighted score, for the day state
+      const sign = FOOD_CONFIG.VALENCE_SCORES[log.derivedValence];
+      const score = scoreFromValence(log.derivedValence);
       // Mood lives on its own track and never enters the physical day state.
       // Grouped per category: three workout notes are one workout opinion
       const source = `log:${log.derivedCategory ?? 'FEELING'}`;
@@ -472,9 +484,9 @@ class FoodDashboardService {
       } else {
         pushScore(day.stateGroups, source, score);
       }
-      if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(score);
-      if (log.derivedCategory === 'SLEEP') day.sleepScores.push(score);
-      if (log.derivedCategory === 'FEELING') day.feelingScores.push(score);
+      if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(sign);
+      if (log.derivedCategory === 'SLEEP') day.sleepScores.push(sign);
+      if (log.derivedCategory === 'FEELING') day.feelingScores.push(sign);
     }
 
     await this.foldRatings(userId, from, to, getDay);
