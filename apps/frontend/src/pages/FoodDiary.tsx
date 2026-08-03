@@ -25,14 +25,16 @@ type TimelineEntry =
   | { kind: 'rating'; timestamp: string; rating: RatingEntryDTO; linkedLog?: QuickLogDTO };
 
 /**
- * A side rail that stands still while the middle column scrolls.
+ * From xl the diary stops being one long page and becomes three panes: the
+ * rails hold still and only the middle one scrolls.
  *
- * On desktop the scroll container is <main>, not the window, so the sticky
- * offset is measured from there. The internal scroll is not optional: the
- * ratings rail is taller than the viewport, and without it the bottom of the
- * column would be unreachable once it sticks.
+ * Each column is its own scroll area rather than a sticky block. Sticky was
+ * the obvious try and it cannot work here: the ratings rail is the tallest
+ * column, so it sets the row height and has no slack to detach from - it just
+ * travels with the page. Giving every column the same fixed height and its own
+ * overflow removes the question entirely.
  */
-const RAIL_CLASS = 'xl:sticky xl:top-0 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:pb-2';
+const COLUMN_CLASS = 'xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1';
 
 /** Monday of the week containing the date */
 function weekStart(date: string): string {
@@ -140,9 +142,18 @@ export function FoodDiary() {
   const isToday = selectedDate === todayLocal();
 
   return (
-    <div className="max-w-6xl xl:max-w-7xl mx-auto pb-28 sm:pb-20">
+    <div
+      className={cn(
+        'max-w-6xl mx-auto pb-28 sm:pb-20',
+        // From xl the page stops scrolling as a whole: it fills the height it
+        // has and hands the scrolling to the middle column. Full width, so the
+        // rails start at the nav and end at the edge instead of floating in
+        // the middle with empty margins either side.
+        'xl:max-w-none xl:h-full xl:pb-14 xl:flex xl:flex-col xl:overflow-hidden'
+      )}
+    >
       {/* Header: day nav + actions */}
-      <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3">
+      <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3 xl:shrink-0">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setSelectedDate(addDaysLocal(selectedDate, -1))}
@@ -189,7 +200,7 @@ export function FoodDiary() {
       </div>
 
       {/* Week strip */}
-      <div className="max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4">
+      <div className="max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4 xl:shrink-0">
         {Array.from({ length: 7 }, (_, i) => addDaysLocal(from, i)).map((date) => {
           const d = new Date(`${date}T12:00:00`);
           const isSelected = date === selectedDate;
@@ -233,23 +244,32 @@ export function FoodDiary() {
         the quick taps come before the longer ratings form. At lg there is room
         for two columns but not three, so the timeline goes full width.
       */}
-      <div className="lg:grid lg:grid-cols-2 lg:gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_18rem]">
-        <aside className="lg:col-start-2 lg:row-start-1 xl:col-start-3">
-          <div className={RAIL_CLASS}>
-            <ScheduleLine />
-            <DailyIntakeCard date={selectedDate} />
-            <WeightLine />
-          </div>
+      <div
+        className={cn(
+          'lg:grid lg:grid-cols-2 lg:gap-4',
+          'xl:grid-cols-[22rem_minmax(0,1fr)_22rem] 2xl:grid-cols-[24rem_minmax(0,1fr)_24rem]',
+          // Takes whatever height is left under the date bar, so the three
+          // panes end together instead of pushing the page
+          'xl:flex-1 xl:min-h-0'
+        )}
+      >
+        <aside className={cn(COLUMN_CLASS, 'lg:col-start-2 lg:row-start-1 xl:col-start-3')}>
+          <ScheduleLine />
+          <DailyIntakeCard date={selectedDate} />
+          <WeightLine />
         </aside>
 
-        <aside className="lg:col-start-1 lg:row-start-1 xl:col-start-1">
-          <div className={RAIL_CLASS}>
-            <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
-          </div>
+        <aside className={cn(COLUMN_CLASS, 'lg:col-start-1 lg:row-start-1 xl:col-start-1')}>
+          <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
         </aside>
 
         {/* The feed */}
-        <section className="lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+        <section
+          className={cn(
+            COLUMN_CLASS,
+            'lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-2 xl:row-start-1'
+          )}
+        >
           {isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -298,7 +318,7 @@ export function FoodDiary() {
 
       {/* Sticky quick log bar (dictation-friendly, always one tap away) */}
       <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-3 py-2 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto">
+        <div className="max-w-6xl xl:max-w-none mx-auto">
           <QuickLogBar onSaved={showToast} />
         </div>
       </div>
