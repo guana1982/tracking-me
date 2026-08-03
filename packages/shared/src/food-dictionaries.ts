@@ -234,18 +234,25 @@ export function classifyQuickLogCategory(text: string): QuickLogCategoryDTO {
   return best;
 }
 
-export function classifyQuickLogValence(text: string): QuickLogValenceDTO {
+/**
+ * Null when no valence keyword matched at all: only what the dictionaries
+ * actually recognised may score, so a note the system cannot read never
+ * dilutes the day toward zero. NEUTRAL is reserved for a real mixed signal
+ * ("gambe pesanti ma testa lucida"), which is information, not ignorance.
+ */
+export function classifyQuickLogValence(text: string): QuickLogValenceDTO | null {
   const normalized = normalizeFoodText(text);
   const positive = countMatches(normalized, QUICK_LOG_VALENCE_KEYWORDS.POSITIVE);
   const negative = countMatches(normalized, QUICK_LOG_VALENCE_KEYWORDS.NEGATIVE);
   if (positive > 0 && negative === 0) return 'POSITIVE';
   if (negative > 0 && positive === 0) return 'NEGATIVE';
-  return 'NEUTRAL';
+  if (positive > 0 && negative > 0) return 'NEUTRAL';
+  return null;
 }
 
 export function classifyQuickLog(text: string): {
   category: QuickLogCategoryDTO;
-  valence: QuickLogValenceDTO;
+  valence: QuickLogValenceDTO | null;
 } {
   return {
     category: classifyQuickLogCategory(text),

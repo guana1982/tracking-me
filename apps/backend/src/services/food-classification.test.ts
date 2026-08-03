@@ -16,6 +16,7 @@ import {
   valenceFromScores,
   scoreFromVote,
   scoreFromScale,
+  groupMeans,
 } from './food-dashboard.service.js';
 
 const BOM = '﻿';
@@ -36,10 +37,13 @@ describe('quick log classification (keyword dictionaries)', () => {
     expect(classifyQuickLogCategory('iniziato magnesio 300 mg')).toBe('SUPPLEMENT');
   });
 
-  it('falls back to FEELING / NEUTRAL on unmatched text', () => {
+  it('leaves unreadable text without a valence, so it cannot score', () => {
     const { category, valence } = classifyQuickLog('giornata come le altre');
     expect(category).toBe('FEELING');
-    expect(valence).toBe('NEUTRAL');
+    // Not NEUTRAL: the dictionaries read nothing, and a note nobody could
+    // read must not dilute the day toward zero
+    expect(valence).toBeNull();
+    expect(classifyQuickLogValence('comprato le vitamine in farmacia')).toBeNull();
   });
 
   it('classifies mood notes as MOOD, separate from physical sensations', () => {
@@ -52,14 +56,14 @@ describe('quick log classification (keyword dictionaries)', () => {
     expect(classifyQuickLogCategory('dormito male, nottata agitata')).toBe('SLEEP');
   });
 
-  it('resolves mixed valences to NEUTRAL', () => {
+  it('keeps NEUTRAL for a genuinely mixed signal, which is information', () => {
     expect(classifyQuickLogValence('gambe pesanti ma testa lucida')).toBe('NEUTRAL');
   });
 
   it('is accent- and case-insensitive with word boundaries', () => {
     expect(classifyQuickLogCategory('PALESTRA fatta')).toBe('WORKOUT');
-    // "ok" must not match inside other words
-    expect(classifyQuickLogValence('okinawa')).toBe('NEUTRAL');
+    // "ok" must not match inside other words - and no match means no valence
+    expect(classifyQuickLogValence('okinawa')).toBeNull();
   });
 });
 
@@ -117,6 +121,20 @@ describe('day-state helpers', () => {
     expect(scoreFromScale(0, 10, true)).toBe(-1);
     // Named steps use their own range (compulsioni: 0..3)
     expect(scoreFromScale(3, 3, false)).toBe(-1);
+  });
+
+  it('averages each instrument before averaging the day, so nothing votes twice', () => {
+    // Two votes on the same characteristic are one opinion said twice
+    const twice = new Map([['rating:benessere', [-0.11, -0.11]]]);
+    expect(groupMeans(twice)).toEqual([-0.11]);
+
+    // Sonno 8/10 once, Benessere 5/10 twice: the doubled vote must not
+    // outweigh the single one just by being repeated
+    const day = new Map([
+      ['rating:sonno', [0.56]],
+      ['rating:benessere', [-0.11, -0.11]],
+    ]);
+    expect(average(groupMeans(day))).toBe(0.23); // not 0.11, as a flat mean gave
   });
 
   it('shifts instants into the local day via tzOffset', () => {

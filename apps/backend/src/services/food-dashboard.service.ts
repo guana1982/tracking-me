@@ -17,28 +17,37 @@ import type {
 // Two INDEPENDENT tracks, never blended:
 //   dayState  = physical condition, moodState = psychological one
 // Everything the diary records with a direction feeds one of them, all
-// normalised to [-1, +1] before being averaged:
-//   - quick logs: valence (positive = +1, neutral = 0, negative = -1)
+// normalised to [-1, +1]:
+//   - quick logs: valence (positive = +1, neutral = 0, negative = -1).
+//     A note with NO recognised valence stays out entirely: only what the
+//     dictionaries actually read may score
 //   - ratings (voti 1..max): 1 -> -1, max -> +1
-//   - episodes: negative by nature; intensity says how much, no intensity
-//     counts as a full -1 ("it happened" is the fact)
+//   - episodes and side effects: negative by nature; intensity says how much
 //   - check-in scales: symptom intensity inverted (0 -> +1, max -> -1),
 //     positive scales read straight
+// The day value is a TWO-LEVEL mean: scores are grouped by instrument (one
+// rating characteristic, one check-in scale, one quick-log category), each
+// group is averaged first, and the day averages the group means. Voting the
+// same thing twice refines that vote instead of counting double - what you
+// say twice is one opinion said twice, not two opinions.
 // Which track each one feeds is the USER's choice (DayTrack), never guessed
 // from a name; DayTrack.NONE keeps something out of the state entirely.
 // Weight and adherence are deliberately absent: a kilogram has no valence,
 // and taking a pill is not a way of feeling. Both travel as markers instead.
-// No logs of a track = null, so each can be read on its own.
+// No entries on a track = null, so each can be read on its own.
 // SLEEP logs are attributed to the day they influence: morning logs
 // (before SLEEP_ATTRIBUTION_HOUR) describe last night -> same day;
 // evening logs -> next day.
+
+/** Scores of one track, keyed by the instrument that produced them */
+type TrackGroups = Map<string, number[]>;
 
 interface DayData {
   mealCount: number;
   dinnerAfter21: boolean;
   foods: Set<string>; // lowercased food names eaten that day
-  stateScores: number[]; // body track
-  moodScores: number[]; // mood track
+  stateGroups: TrackGroups; // body track
+  moodGroups: TrackGroups; // mood track
   workoutScores: number[];
   sleepScores: number[];
   feelingScores: number[];
@@ -56,8 +65,8 @@ function emptyDay(): DayData {
     mealCount: 0,
     dinnerAfter21: false,
     foods: new Set(),
-    stateScores: [],
-    moodScores: [],
+    stateGroups: new Map(),
+    moodGroups: new Map(),
     workoutScores: [],
     sleepScores: [],
     feelingScores: [],
@@ -67,6 +76,27 @@ function emptyDay(): DayData {
     doseChanges: [],
     weightKg: null,
   };
+}
+
+function pushScore(groups: TrackGroups, source: string, score: number): void {
+  const bucket = groups.get(source);
+  if (bucket) {
+    bucket.push(score);
+  } else {
+    groups.set(source, [score]);
+  }
+}
+
+/** One mean per instrument: the inner level of the two-level average */
+export function groupMeans(groups: TrackGroups): number[] {
+  return [...groups.values()]
+    .map((scores) => average(scores))
+    .filter((mean): mean is number => mean !== null);
+}
+
+/** Raw entries of a track, for the counters that tally moments, not opinions */
+function flatScores(groups: TrackGroups): number[] {
+  return [...groups.values()].flat();
 }
 
 /** A 1..max vote onto [-1, +1]; a single-step scale has no gradient to give */
@@ -141,9 +171,9 @@ class FoodDashboardService {
         date,
         mealCount: day.mealCount,
         hasMeals: day.mealCount > 0,
-        dayState: average(day.stateScores),
-        moodState: average(day.moodScores),
-        moodCount: day.moodScores.length,
+        dayState: average(groupMeans(day.stateGroups)),
+        moodState: average(groupMeans(day.moodGroups)),
+        moodCount: flatScores(day.moodGroups).length,
         workoutPresent: day.workoutScores.length > 0,
         workoutValence: valenceFromScores(day.workoutScores),
         sleepValence: valenceFromScores(day.sleepScores),
@@ -210,7 +240,7 @@ class FoodDashboardService {
     const withDays: DayData[] = [];
     const withoutDays: DayData[] = [];
     for (const [date, day] of dayMap) {
-      if (day.mealCount === 0 && day.stateScores.length === 0 && day.moodScores.length === 0) continue;
+      if (day.mealCount === 0 && day.stateGroups.size === 0 && day.moodGroups.size === 0) continue;
       (matches(date, day) ? withDays : withoutDays).push(day);
     }
 
@@ -324,11 +354,11 @@ class FoodDashboardService {
       if (sleep === 'NEGATIVE') sleepNegative += 1;
       feelingPositive += day.feelingScores.filter((s) => s > 0).length;
       feelingNegative += day.feelingScores.filter((s) => s < 0).length;
-      moodPositive += day.moodScores.filter((s) => s > 0).length;
-      moodNegative += day.moodScores.filter((s) => s < 0).length;
-      const state = average(day.stateScores);
+      moodPositive += flatScores(day.moodGroups).filter((s) => s > 0).length;
+      moodNegative += flatScores(day.moodGroups).filter((s) => s < 0).length;
+      const state = average(groupMeans(day.stateGroups));
       if (state !== null) dayStates.push(state);
-      const mood = average(day.moodScores);
+      const mood = average(groupMeans(day.moodGroups));
       if (mood !== null) moodStates.push(mood);
     }
 
@@ -434,11 +464,13 @@ class FoodDashboardService {
 
       const day = getDay(attributedDate);
       const score = FOOD_CONFIG.VALENCE_SCORES[log.derivedValence];
-      // Mood lives on its own track and never enters the physical day state
+      // Mood lives on its own track and never enters the physical day state.
+      // Grouped per category: three workout notes are one workout opinion
+      const source = `log:${log.derivedCategory ?? 'FEELING'}`;
       if (log.derivedCategory === 'MOOD') {
-        day.moodScores.push(score);
+        pushScore(day.moodGroups, source, score);
       } else {
-        day.stateScores.push(score);
+        pushScore(day.stateGroups, source, score);
       }
       if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(score);
       if (log.derivedCategory === 'SLEEP') day.sleepScores.push(score);
@@ -496,7 +528,12 @@ class FoodDashboardService {
           : scoreFromVote(entry.value, entry.maxValue);
       if (score === null) continue;
 
-      (track === 'MOOD' ? day.moodScores : day.stateScores).push(score);
+      // Grouped per characteristic: a second vote refines the first
+      pushScore(
+        track === 'MOOD' ? day.moodGroups : day.stateGroups,
+        `rating:${entry.ratingKey}`,
+        score
+      );
     }
   }
 
@@ -530,7 +567,9 @@ class FoodDashboardService {
         // what it meant even after the scale was rescaled
         const max = typeof value.maxValue === 'number' ? value.maxValue : 10;
         const score = scoreFromScale(value.value, max, value.isPositive === true);
-        (track === 'MOOD' ? day.moodScores : day.stateScores).push(score);
+        // One entry per scale per day already, but grouped anyway so a scale
+        // is an instrument like every other
+        pushScore(track === 'MOOD' ? day.moodGroups : day.stateGroups, `scale:${value.key}`, score);
       }
     }
   }
@@ -618,9 +657,9 @@ class FoodDashboardService {
     const sleepAvgs: number[] = [];
     const feelingAvgs: number[] = [];
     for (const day of days) {
-      const state = average(day.stateScores);
+      const state = average(groupMeans(day.stateGroups));
       if (state !== null) states.push(state);
-      const mood = average(day.moodScores);
+      const mood = average(groupMeans(day.moodGroups));
       if (mood !== null) moods.push(mood);
       const sleep = average(day.sleepScores);
       if (sleep !== null) sleepAvgs.push(sleep);

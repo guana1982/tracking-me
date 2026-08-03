@@ -1,14 +1,30 @@
 import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { useCreateQuickLog } from '../../hooks/useFoodQueries';
+import { quickLogCategoryLabel, quickLogValenceLabel } from '../../lib/foodUtils';
+import type { QuickLogDTO } from '@budget/shared';
 
 interface QuickLogBarProps {
   onSaved: (message: string) => void;
 }
 
 /**
+ * Says how the note was read, so a week of use teaches which wordings the
+ * dictionaries recognise - and makes it obvious when one was not read at all,
+ * which is now the case where the note stays out of the day score.
+ */
+function describeClassification(log: QuickLogDTO): string {
+  if (!log.derivedValence) {
+    return 'Nota salvata · senza valenza, fuori dal grafico';
+  }
+  const category = log.derivedCategory ? quickLogCategoryLabel(log.derivedCategory) : 'Nota';
+  return `${category} · ${quickLogValenceLabel(log.derivedValence).toLowerCase()}`;
+}
+
+/**
  * Always-visible free-text bar: one tap, type or dictate, send. No fields,
- * no dropdowns, no confirmation - classification happens silently.
+ * no dropdowns, no confirmation - classification happens silently and is
+ * reported back afterwards, never asked for.
  */
 export function QuickLogBar({ onSaved }: QuickLogBarProps) {
   const [text, setText] = useState('');
@@ -18,9 +34,9 @@ export function QuickLogBar({ onSaved }: QuickLogBarProps) {
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || createLog.isPending) return;
-    await createLog.mutateAsync({ text: trimmed });
+    const log = await createLog.mutateAsync({ text: trimmed });
     setText('');
-    onSaved('Nota salvata');
+    onSaved(describeClassification(log));
   };
 
   return (
