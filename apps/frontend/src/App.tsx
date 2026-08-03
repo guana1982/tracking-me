@@ -28,7 +28,7 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Mobile: mode chooser; desktop: straight to the dashboard */}
+        {/* Mobile: straight to the diary; desktop: the budget dashboard */}
         <Route index element={<HomeGate />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="expenses" element={<Expenses />} />
