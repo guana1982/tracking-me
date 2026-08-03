@@ -24,6 +24,16 @@ type TimelineEntry =
   | { kind: 'log'; timestamp: string; log: QuickLogDTO }
   | { kind: 'rating'; timestamp: string; rating: RatingEntryDTO; linkedLog?: QuickLogDTO };
 
+/**
+ * A side rail that stands still while the middle column scrolls.
+ *
+ * On desktop the scroll container is <main>, not the window, so the sticky
+ * offset is measured from there. The internal scroll is not optional: the
+ * ratings rail is taller than the viewport, and without it the bottom of the
+ * column would be unreachable once it sticks.
+ */
+const RAIL_CLASS = 'xl:sticky xl:top-0 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:pb-2';
+
 /** Monday of the week containing the date */
 function weekStart(date: string): string {
   const d = new Date(`${date}T12:00:00`);
@@ -130,7 +140,7 @@ export function FoodDiary() {
   const isToday = selectedDate === todayLocal();
 
   return (
-    <div className="max-w-6xl mx-auto pb-28 sm:pb-20">
+    <div className="max-w-6xl xl:max-w-7xl mx-auto pb-28 sm:pb-20">
       {/* Header: day nav + actions */}
       <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-1">
@@ -213,68 +223,82 @@ export function FoodDiary() {
         })}
       </div>
 
-      {/* Mobile is action-first: schedule and intakes precede the longer
-          ratings form. Desktop uses the same DOM order in a compact side rail. */}
-      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
-        <aside className="lg:col-start-2 lg:row-start-1">
-          <ScheduleLine />
-          <DailyIntakeCard date={selectedDate} />
-          <WeightLine />
+      {/*
+        Three columns from xl: what you write on the left, what you take on the
+        right, and the day itself in the middle. The two rails stand still and
+        the middle one scrolls, so the inputs never walk off screen while you
+        read back the day.
+
+        Below xl everything stacks in DOM order, and the order is action-first:
+        the quick taps come before the longer ratings form. At lg there is room
+        for two columns but not three, so the timeline goes full width.
+      */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_18rem]">
+        <aside className="lg:col-start-2 lg:row-start-1 xl:col-start-3">
+          <div className={RAIL_CLASS}>
+            <ScheduleLine />
+            <DailyIntakeCard date={selectedDate} />
+            <WeightLine />
+          </div>
         </aside>
 
-        <section className="lg:col-start-1 lg:row-start-1">
-          <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
+        <aside className="lg:col-start-1 lg:row-start-1 xl:col-start-1">
+          <div className={RAIL_CLASS}>
+            <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
+          </div>
+        </aside>
+
+        {/* The feed */}
+        <section className="lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : loadError ? (
+            <div className="card flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {loadError instanceof Error ? loadError.message : 'Errore nel caricamento del diario'}
+            </div>
+          ) : timeline.length === 0 ? (
+            <div className="card text-center py-10">
+              <p className="text-sm text-slate-500">Nessun pasto o nota per questo giorno.</p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <button onClick={openCreate} className="btn btn-primary text-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Aggiungi pasto
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {timeline.map((entry) =>
+                entry.kind === 'meal' ? (
+                  <MealCard
+                    key={`meal-${entry.meal.id}`}
+                    meal={entry.meal}
+                    onEdit={openEdit}
+                    onDuplicate={openDuplicate}
+                    onDelete={handleDelete}
+                  />
+                ) : entry.kind === 'rating' ? (
+                  <RatingNote
+                    key={`rating-${entry.rating.id}`}
+                    entry={entry.rating}
+                    linkedLog={entry.linkedLog}
+                    onDelete={handleDeleteRating}
+                  />
+                ) : (
+                  <QuickLogNote key={`log-${entry.log.id}`} log={entry.log} />
+                )
+              )}
+            </div>
+          )}
         </section>
       </div>
 
-      {/* Day timeline */}
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-        </div>
-      ) : loadError ? (
-        <div className="card flex items-center gap-2 text-sm text-red-600">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {loadError instanceof Error ? loadError.message : 'Errore nel caricamento del diario'}
-        </div>
-      ) : timeline.length === 0 ? (
-        <div className="card text-center py-10">
-          <p className="text-sm text-slate-500">Nessun pasto o nota per questo giorno.</p>
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <button onClick={openCreate} className="btn btn-primary text-sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Aggiungi pasto
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {timeline.map((entry) =>
-            entry.kind === 'meal' ? (
-              <MealCard
-                key={`meal-${entry.meal.id}`}
-                meal={entry.meal}
-                onEdit={openEdit}
-                onDuplicate={openDuplicate}
-                onDelete={handleDelete}
-              />
-            ) : entry.kind === 'rating' ? (
-              <RatingNote
-                key={`rating-${entry.rating.id}`}
-                entry={entry.rating}
-                linkedLog={entry.linkedLog}
-                onDelete={handleDeleteRating}
-              />
-            ) : (
-              <QuickLogNote key={`log-${entry.log.id}`} log={entry.log} />
-            )
-          )}
-        </div>
-      )}
-
       {/* Sticky quick log bar (dictation-friendly, always one tap away) */}
       <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-3 py-2 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl xl:max-w-7xl mx-auto">
           <QuickLogBar onSaved={showToast} />
         </div>
       </div>
