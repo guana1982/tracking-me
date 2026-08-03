@@ -7,6 +7,7 @@ import type {
   CreateTreatmentDefinitionDTO,
   DayIntakesDTO,
   SaveCheckInDTO,
+  SetCheckInValueDTO,
   SetIntakeDTO,
   SuggestedSideEffectDTO,
   TreatmentDefinitionDTO,
@@ -69,6 +70,12 @@ export const checkInApi = {
 
   save: (data: SaveCheckInDTO) =>
     fetchApi<CheckInEntryDTO>('/check-in/day', { method: 'POST', body: JSON.stringify(data) }),
+
+  setValue: (data: SetCheckInValueDTO) =>
+    fetchApi<CheckInEntryDTO | null>('/check-in/day/value', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   removeDay: (date: string) =>
     fetchApi<void>(`/check-in/day/${encodeURIComponent(date)}`, { method: 'DELETE' }),

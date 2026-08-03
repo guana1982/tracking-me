@@ -108,6 +108,12 @@ export const saveCheckInSchema = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 });
 
+export const setCheckInValueSchema = z.object({
+  date: therapyDateSchema,
+  key: z.string().trim().min(1).max(80),
+  value: z.number().int().min(0).max(10).nullable(),
+});
+
 export const checkInDayQuerySchema = z.object({
   date: therapyDateSchema,
 });
@@ -121,3 +127,4 @@ export type SetIntakesInput = z.infer<typeof setIntakesSchema>;
 export type CreateCheckInScaleInput = z.infer<typeof createCheckInScaleSchema>;
 export type UpdateCheckInScaleInput = z.infer<typeof updateCheckInScaleSchema>;
 export type SaveCheckInInput = z.infer<typeof saveCheckInSchema>;
+export type SetCheckInValueInput = z.infer<typeof setCheckInValueSchema>;

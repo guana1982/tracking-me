@@ -4,6 +4,7 @@ import {
   createCheckInScaleSchema,
   installSideEffectsSchema,
   saveCheckInSchema,
+  setCheckInValueSchema,
   updateCheckInScaleSchema,
 } from '@budget/shared';
 import { checkInService } from '../services/check-in.service.js';
@@ -92,6 +93,14 @@ export const checkInRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const data = saveCheckInSchema.parse(request.body);
       return { success: true, data: await checkInService.save(request.authUser!.id, data) };
+    },
+  });
+
+  fastify.patch('/day/value', {
+    schema: { tags: ['Check-in'], summary: 'Answer one scale, leaving the rest of the day alone' },
+    handler: async (request) => {
+      const data = setCheckInValueSchema.parse(request.body);
+      return { success: true, data: await checkInService.setValue(request.authUser!.id, data) };
     },
   });
 

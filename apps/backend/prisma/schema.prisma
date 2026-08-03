@@ -586,6 +586,9 @@ model CheckInScale {
   // A side effect is read differently from a symptom: what matters is when it
   // appeared and whether it faded, not the shape of its curve
   isSideEffect Boolean @default(false)
+  // Which treatments brought this one up: lets the diary group the side
+  // effects under the drug they belong to, instead of one flat list
+  sourceTreatmentKeys String[] @default([])
   track       DayTrack @default(MOOD)
   position    Int
   isActive    Boolean  @default(true)

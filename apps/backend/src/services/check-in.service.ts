@@ -11,6 +11,7 @@ import type {
   CheckInValueDTO,
   CreateCheckInScaleDTO,
   SaveCheckInDTO,
+  SetCheckInValueDTO,
   UpdateCheckInScaleDTO,
 } from '@budget/shared';
 import type { CheckInEntry, CheckInScale, Prisma } from '@prisma/client';
@@ -128,15 +129,16 @@ class CheckInService {
     const [treatments, scales] = await Promise.all([
       prisma.treatmentDefinition.findMany({
         where: { userId, isActive: true },
-        select: { name: true, detail: true, form: true },
+        select: { key: true, name: true, detail: true, form: true },
       }),
       prisma.checkInScale.findMany({ where: { userId }, select: { name: true } }),
     ]);
 
     const installed = new Set(scales.map((scale) => scale.name.toLowerCase()));
-    return [...suggestedSideEffects(treatments).entries()].map(([name, sources]) => ({
+    return [...suggestedSideEffects(treatments).entries()].map(([name, match]) => ({
       name,
-      sources,
+      sources: match.sources.map((source) => source.name),
+      sourceKeys: match.sources.map((source) => source.key),
       isInstalled: installed.has(name.toLowerCase()),
     }));
   }
@@ -146,13 +148,20 @@ class CheckInService {
    * steps: presence and how strong, never a number to count.
    */
   async installSideEffects(userId: string, names: string[]): Promise<CheckInScaleDTO[]> {
-    const existing = await prisma.checkInScale.findMany({
-      where: { userId },
-      select: { name: true, position: true },
-    });
+    const [existing, treatments] = await Promise.all([
+      prisma.checkInScale.findMany({ where: { userId }, select: { name: true, position: true } }),
+      prisma.treatmentDefinition.findMany({
+        where: { userId, isActive: true },
+        select: { key: true, name: true, detail: true, form: true },
+      }),
+    ]);
     const taken = new Set(existing.map((scale) => scale.name.toLowerCase()));
     const nextPosition = existing.reduce((max, scale) => Math.max(max, scale.position + 1), 0);
     const missing = names.filter((name) => !taken.has(name.trim().toLowerCase()));
+
+    // Re-derived here rather than trusted from the client: the source is what
+    // the config says today, not what a stale screen thought
+    const matches = suggestedSideEffects(treatments);
 
     if (missing.length > 0) {
       await prisma.checkInScale.createMany({
@@ -160,6 +169,8 @@ class CheckInService {
           userId,
           key: `s-${randomUUID()}`,
           name: name.trim(),
+          sourceTreatmentKeys:
+            matches.get(name.trim())?.sources.map((source) => source.key) ?? [],
           levelLabels: SIDE_EFFECT_LEVELS,
           maxValue: SIDE_EFFECT_LEVELS.length - 1,
           isPositive: false,
@@ -301,6 +312,47 @@ class CheckInService {
     return this.toEntryDTO(entry);
   }
 
+  /**
+   * Answers one scale and leaves the rest of the day untouched. The merge
+   * happens here, not on the client: a surface that answers a single scale
+   * does not hold the whole day in hand, and must never be able to wipe it.
+   */
+  async setValue(userId: string, data: SetCheckInValueDTO): Promise<CheckInEntryDTO | null> {
+    const day = dateOnly(data.date);
+    const scale = await prisma.checkInScale.findFirst({ where: { userId, key: data.key } });
+    if (!scale) throw new AppError('Scala non trovata', 404, 'NOT_FOUND');
+    if (data.value !== null && (data.value < 0 || data.value > scale.maxValue)) {
+      throw new AppError('Valore fuori scala', 400, 'VALUE_OUT_OF_RANGE');
+    }
+
+    const existing = await prisma.checkInEntry.findFirst({ where: { userId, date: day } });
+    const values = existing ? readValues(existing).filter((item) => item.key !== data.key) : [];
+
+    if (data.value !== null) {
+      values.push({
+        key: scale.key,
+        name: scale.name,
+        value: data.value,
+        maxValue: scale.maxValue,
+        isPositive: scale.isPositive,
+      });
+    }
+
+    // Nothing left and no note: the day was never really compiled
+    if (values.length === 0 && !existing?.note) {
+      if (existing) await prisma.checkInEntry.delete({ where: { id: existing.id } });
+      return null;
+    }
+
+    const valuesJson = values as unknown as Prisma.InputJsonValue;
+    const entry = await prisma.checkInEntry.upsert({
+      where: { userId_date: { userId, date: day } },
+      create: { userId, date: day, valuesJson },
+      update: { valuesJson, loggedAt: new Date() },
+    });
+    return this.toEntryDTO(entry);
+  }
+
   async deleteEntry(userId: string, date: string): Promise<void> {
     await prisma.checkInEntry.deleteMany({ where: { userId, date: dateOnly(date) } });
   }
@@ -324,6 +376,7 @@ class CheckInService {
       isPositive: scale.isPositive,
       isCore: scale.isCore,
       isSideEffect: scale.isSideEffect,
+      sourceTreatmentKeys: scale.sourceTreatmentKeys,
       track: scale.track,
       position: scale.position,
       isActive: scale.isActive,

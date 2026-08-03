@@ -109,6 +109,8 @@ export interface CheckInScaleDTO {
   isCore: boolean;
   /** Read as "when did it appear and did it fade", not as a curve */
   isSideEffect: boolean;
+  /** Treatment keys that brought it up; empty = not tied to one in particular */
+  sourceTreatmentKeys: string[];
   /** Which curve of "stato del giorno" the answers feed */
   track: DayTrackDTO;
   position: number;
@@ -166,6 +168,18 @@ export interface SaveCheckInDTO {
   date: string;
   values: { key: string; value: number }[];
   note?: string | null;
+}
+
+/**
+ * One answer at a time, merged server-side. The diary answers a single scale
+ * without holding the rest of the day in hand, so a partial write must never
+ * be able to wipe what the check-in already said.
+ */
+export interface SetCheckInValueDTO {
+  date: string;
+  key: string;
+  /** null removes the answer for that scale */
+  value: number | null;
 }
 
 /** Everything the check-in form needs, in one request */

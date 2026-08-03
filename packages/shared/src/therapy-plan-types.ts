@@ -117,8 +117,10 @@ export const SIDE_EFFECT_LEVELS = ['assente', 'lieve', 'moderato', 'forte'];
 
 export interface SuggestedSideEffectDTO {
   name: string;
-  /** Which active treatment brought it up, for the "why this one" question */
+  /** Names of the treatments that brought it up, for the "why this one" question */
   sources: string[];
+  /** The same treatments by key, so the diary can group by drug */
+  sourceKeys: string[];
   /** Already in the check-in catalogue */
   isInstalled: boolean;
 }

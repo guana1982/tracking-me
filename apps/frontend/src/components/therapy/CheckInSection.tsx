@@ -105,7 +105,9 @@ export function CheckInSection({
 
   if (isLoading) return null;
 
-  const scales = day?.scales ?? [];
+  // Side effects live in the diary now, under the drug that brought them up:
+  // asked here they were buried behind two taps and a collapsed section
+  const scales = (day?.scales ?? []).filter((scale) => !scale.isSideEffect);
 
   // No scales configured: one quiet line, nothing more
   if (scales.length === 0) {

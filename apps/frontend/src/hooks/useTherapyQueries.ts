@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { checkInApi, treatmentsApi } from '../lib/therapyApi';
 import type {
+  CheckInDayDTO,
   CreateCheckInScaleDTO,
   CreateTreatmentDefinitionDTO,
   SaveCheckInDTO,
+  SetCheckInValueDTO,
   SetIntakeDTO,
   UpdateCheckInScaleDTO,
   UpdateTreatmentDefinitionDTO,
@@ -145,6 +147,23 @@ export function useCheckInDay(date: string, enabled = true) {
     queryKey: therapyQueryKeys.checkInDay(date),
     queryFn: () => checkInApi.getDay(date),
     enabled,
+  });
+}
+
+/**
+ * One scale at a time, merged server-side. The returned day is written
+ * straight into the cache so a tap lights up without waiting for a refetch.
+ */
+export function useSetCheckInValue(date: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: SetCheckInValueDTO) => checkInApi.setValue(data),
+    onSuccess: (entry) => {
+      queryClient.setQueryData<CheckInDayDTO>(therapyQueryKeys.checkInDay(date), (previous) =>
+        previous ? { ...previous, entry } : previous
+      );
+      invalidateFoodData(queryClient);
+    },
   });
 }
 

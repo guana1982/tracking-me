@@ -6,6 +6,7 @@ import { RatingRow } from './RatingRow';
 import { EventChips } from './EventChips';
 import { RatingManager } from './RatingManager';
 import { MoodPickerModal } from './MoodPickerModal';
+import { SideEffectsBlock } from '../therapy/SideEffectsBlock';
 import type { QuickLogDTO } from '@budget/shared';
 
 interface DailyRatingsCardProps {
@@ -88,6 +89,10 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
           Dai un voto a come sta andando
         </button>
         {moodFallback}
+        {/* Independent of the votes: they show even with an empty catalogue */}
+        <div className="w-full">
+          <SideEffectsBlock date={date} />
+        </div>
         <RatingManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
         <MoodPickerModal
           isOpen={linkedFormFor !== null}
@@ -142,6 +147,10 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
           <EventChips definitions={events} onLog={handleLogEvent} />
         </div>
       )}
+
+      {/* Right below the episodes: both answer "what happened today", and a
+          side effect nobody is asked about is one noticed months late */}
+      <SideEffectsBlock date={date} />
 
       {moodFallback}
 
