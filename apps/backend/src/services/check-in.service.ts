@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
-import { DEFAULT_CHECK_IN_SCALES, SIDE_EFFECT_LEVELS } from '@budget/shared';
-import { suggestedSideEffects } from '../lib/therapy-config.js';
+import { DEFAULT_CHECK_IN_SCALES } from '@budget/shared';
 import type {
-  SuggestedSideEffectDTO,
   CheckInDayDTO,
   CheckInEntryDTO,
   CheckInScaleDTO,
@@ -118,72 +116,6 @@ class CheckInService {
       },
     });
     return this.toScaleDTO(scale, false);
-  }
-
-  /**
-   * The side effects worth asking about, derived from what the user is
-   * actually taking. The vocabulary comes from the config file, never from
-   * the code: it changes with the therapy (§7).
-   */
-  async suggestSideEffects(userId: string): Promise<SuggestedSideEffectDTO[]> {
-    const [treatments, scales] = await Promise.all([
-      prisma.treatmentDefinition.findMany({
-        where: { userId, isActive: true },
-        select: { key: true, name: true, detail: true, form: true },
-      }),
-      prisma.checkInScale.findMany({ where: { userId }, select: { name: true } }),
-    ]);
-
-    const installed = new Set(scales.map((scale) => scale.name.toLowerCase()));
-    return [...suggestedSideEffects(treatments).entries()].map(([name, match]) => ({
-      name,
-      sources: match.sources.map((source) => source.name),
-      sourceKeys: match.sources.map((source) => source.key),
-      isInstalled: installed.has(name.toLowerCase()),
-    }));
-  }
-
-  /**
-   * Installs the chosen side effects as optional check-in scales with named
-   * steps: presence and how strong, never a number to count.
-   */
-  async installSideEffects(userId: string, names: string[]): Promise<CheckInScaleDTO[]> {
-    const [existing, treatments] = await Promise.all([
-      prisma.checkInScale.findMany({ where: { userId }, select: { name: true, position: true } }),
-      prisma.treatmentDefinition.findMany({
-        where: { userId, isActive: true },
-        select: { key: true, name: true, detail: true, form: true },
-      }),
-    ]);
-    const taken = new Set(existing.map((scale) => scale.name.toLowerCase()));
-    const nextPosition = existing.reduce((max, scale) => Math.max(max, scale.position + 1), 0);
-    const missing = names.filter((name) => !taken.has(name.trim().toLowerCase()));
-
-    // Re-derived here rather than trusted from the client: the source is what
-    // the config says today, not what a stale screen thought
-    const matches = suggestedSideEffects(treatments);
-
-    if (missing.length > 0) {
-      await prisma.checkInScale.createMany({
-        data: missing.map((name, index) => ({
-          userId,
-          key: `s-${randomUUID()}`,
-          name: name.trim(),
-          sourceTreatmentKeys:
-            matches.get(name.trim())?.sources.map((source) => source.key) ?? [],
-          levelLabels: SIDE_EFFECT_LEVELS,
-          maxValue: SIDE_EFFECT_LEVELS.length - 1,
-          isPositive: false,
-          // Optional by design: the core five stay the five of the spec
-          isCore: false,
-          isSideEffect: true,
-          track: 'BODY' as const,
-          position: nextPosition + index,
-        })),
-        skipDuplicates: true,
-      });
-    }
-    return this.listScales(userId);
   }
 
   async updateScale(

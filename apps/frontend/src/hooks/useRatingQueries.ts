@@ -74,6 +74,23 @@ export function useTriggers(enabled = true) {
   });
 }
 
+/** What is worth watching, given what the user is actually taking */
+export function useSuggestedSideEffects(enabled = true) {
+  return useQuery({
+    queryKey: ['foodSideEffectSuggestions'],
+    queryFn: ratingsApi.getSuggestedSideEffects,
+    enabled,
+  });
+}
+
+export function useInstallSideEffects() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => ratingsApi.installSideEffects(names),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
 // ---------- Votes ----------
 
 export function useRatingEntries(from?: string, to?: string) {

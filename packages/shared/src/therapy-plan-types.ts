@@ -112,21 +112,14 @@ export interface WeightSummaryDTO {
 
 // ---------- Side effects (§3.5) ----------
 
-/** Named steps of a side-effect scale: presence and how strong, nothing else */
-export const SIDE_EFFECT_LEVELS = ['assente', 'lieve', 'moderato', 'forte'];
-
 export interface SuggestedSideEffectDTO {
   name: string;
   /** Names of the treatments that brought it up, for the "why this one" question */
   sources: string[];
   /** The same treatments by key, so the diary can group by drug */
   sourceKeys: string[];
-  /** Already in the check-in catalogue */
+  /** Already among the diary chips */
   isInstalled: boolean;
-}
-
-export interface InstallSideEffectsDTO {
-  names: string[];
 }
 
 // ---------- Weekly reading (§4.4) ----------
@@ -179,9 +172,11 @@ export interface AdherenceDTO {
 export interface SideEffectReportDTO {
   key: string;
   name: string;
-  /** First day it was reported above zero */
+  /** First day it was logged; null = never happened in the period */
   firstSeen: string | null;
+  /** Distinct days it was logged on */
   daysPresent: number;
+  /** Intensity of the last time it was logged */
   lastLabel: string | null;
 }
 

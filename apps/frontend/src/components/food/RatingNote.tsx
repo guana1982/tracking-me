@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Check, Crosshair, Gauge, Loader2, Smile, Trash2, X, Zap } from 'lucide-react';
+import { Check, Crosshair, Gauge, Loader2, Pill, Smile, Trash2, X, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { describeIntensity } from '@budget/shared';
 import { localTimeOf, quickLogValenceLabel, valenceColor } from '../../lib/foodUtils';
 import { useTriggers, useUpdateRatingEntry } from '../../hooks/useRatingQueries';
 import { useUpdateQuickLog } from '../../hooks/useFoodQueries';
@@ -26,7 +27,9 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
 
   const updateEntry = useUpdateRatingEntry();
   const updateLog = useUpdateQuickLog();
-  const isEvent = entry.kind === 'EVENT';
+  const isSideEffect = entry.kind === 'SIDE_EFFECT';
+  // Both are moments rather than periodic marks, and read the same way
+  const isEvent = entry.kind === 'EVENT' || isSideEffect;
   // Only fetched while the trigger is actually being edited
   const triggers = useTriggers(triggerDraft !== null);
 
@@ -65,12 +68,18 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
     <div
       className={cn(
         'rounded-xl border p-3',
-        isEvent ? 'border-amber-200 bg-amber-50/50' : 'border-indigo-100 bg-indigo-50/40'
+        isSideEffect
+          ? 'border-rose-200 bg-rose-50/50'
+          : isEvent
+            ? 'border-amber-200 bg-amber-50/50'
+            : 'border-indigo-100 bg-indigo-50/40'
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          {isEvent ? (
+          {isSideEffect ? (
+            <Pill className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+          ) : isEvent ? (
             <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           ) : (
             <Gauge className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -100,7 +109,9 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
               ? isEvent
                 ? 'intensità'
                 : 'voto'
-              : `${entry.value}/${entry.maxValue}`}
+              : isSideEffect
+                ? describeIntensity(entry.value, entry.maxValue)
+                : `${entry.value}/${entry.maxValue}`}
           </button>
           {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-300" />}
         </div>
@@ -115,8 +126,16 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
 
       {isEditingValue && (
         <div
-          className="mt-2 grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${entry.maxValue}, minmax(0, 1fr))` }}
+          className={cn(
+            'mt-2',
+            // Named steps read as words, so they need room to breathe
+            isSideEffect ? 'flex flex-wrap gap-1.5' : 'grid gap-1'
+          )}
+          style={
+            isSideEffect
+              ? undefined
+              : { gridTemplateColumns: `repeat(${entry.maxValue}, minmax(0, 1fr))` }
+          }
         >
           {boxes.map((box) => (
             <button
@@ -129,7 +148,10 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
                 setIsEditingValue(false);
               }}
               className={cn(
-                'aspect-square rounded-md border text-[11px] font-medium transition-colors',
+                'border text-[11px] font-medium transition-colors',
+                isSideEffect
+                  ? 'min-h-9 px-3 py-1 rounded-full'
+                  : 'aspect-square rounded-md',
                 entry.value !== null && box <= entry.value
                   ? isEvent
                     ? 'bg-amber-500 border-amber-500 text-white'
@@ -138,14 +160,16 @@ export function RatingNote({ entry, linkedLog, onDelete }: RatingNoteProps) {
               )}
               aria-label={`Correggi in ${box} su ${entry.maxValue}`}
             >
-              {box}
+              {isSideEffect ? describeIntensity(box, entry.maxValue) : box}
             </button>
           ))}
         </div>
       )}
 
-      {/* The trigger, on episodes only: the field the whole log is really for */}
+      {/* The trigger, on episodes only: a side effect is caused by the drug,
+          not by a moment, so asking what set it off would be misleading */}
       {isEvent &&
+        !isSideEffect &&
         (triggerDraft !== null ? (
           <div className="mt-2">
             <div className="flex items-center gap-1.5">

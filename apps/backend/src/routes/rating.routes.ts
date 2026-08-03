@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   createRatingDefinitionSchema,
   createRatingEntrySchema,
+  installSideEffectRatingsSchema,
   ratingRangeQuerySchema,
   updateRatingDefinitionSchema,
   updateRatingEntrySchema,
@@ -23,6 +24,24 @@ export const ratingRoutes: FastifyPluginAsync = async (fastify) => {
     schema: { tags: ['Ratings'], summary: 'Install the suggested episode types' },
     handler: async (request, reply) => {
       const definitions = await ratingService.installDefaultEvents(request.authUser!.id);
+      reply.status(201);
+      return { success: true, data: definitions };
+    },
+  });
+
+  fastify.get('/side-effects/suggested', {
+    schema: { tags: ['Ratings'], summary: 'Side effects suggested by the active treatments' },
+    handler: async (request) => ({
+      success: true,
+      data: await ratingService.suggestSideEffects(request.authUser!.id),
+    }),
+  });
+
+  fastify.post('/side-effects', {
+    schema: { tags: ['Ratings'], summary: 'Install side effects as diary chips' },
+    handler: async (request, reply) => {
+      const { names } = installSideEffectRatingsSchema.parse(request.body);
+      const definitions = await ratingService.installSideEffects(request.authUser!.id, names);
       reply.status(201);
       return { success: true, data: definitions };
     },

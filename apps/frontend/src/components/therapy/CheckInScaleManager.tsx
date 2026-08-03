@@ -8,7 +8,6 @@ import {
   useInstallDefaultScales,
   useUpdateCheckInScale,
 } from '../../hooks/useTherapyQueries';
-import { SideEffectPicker } from './SideEffectPicker';
 import { TrackPicker } from '../food/RatingManager';
 import { DAY_TRACK_LABELS } from '@budget/shared';
 import type { CheckInScaleDTO, DayTrackDTO } from '@budget/shared';
@@ -185,8 +184,6 @@ export function CheckInScaleManager({ isOpen, onClose }: CheckInScaleManagerProp
               Aggiungi una scala
             </button>
           )}
-
-          <SideEffectPicker />
 
 
           {isFormOpen && (

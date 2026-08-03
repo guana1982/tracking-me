@@ -24,7 +24,12 @@ export const createRatingDefinitionSchema = z.object({
   kind: ratingKindSchema.optional(),
   maxValue: maxValueSchema.optional(),
   track: dayTrackSchema.optional(),
+  sourceTreatmentKeys: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   linkedForm: ratingLinkedFormSchema.optional(),
+});
+
+export const installSideEffectRatingsSchema = z.object({
+  names: z.array(z.string().trim().min(1).max(60)).min(1).max(30),
 });
 
 export const updateRatingDefinitionSchema = z
@@ -33,6 +38,7 @@ export const updateRatingDefinitionSchema = z
     kind: ratingKindSchema.optional(),
     maxValue: maxValueSchema.optional(),
     track: dayTrackSchema.optional(),
+    sourceTreatmentKeys: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     linkedForm: ratingLinkedFormSchema.optional(),
     position: z.number().int().min(0).optional(),
     isActive: z.boolean().optional(),

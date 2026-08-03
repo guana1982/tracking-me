@@ -53,12 +53,6 @@ export const saveWeightSchema = z.object({
   note: z.string().trim().max(200).nullable().optional(),
 });
 
-// ---------- Side effects ----------
-
-export const installSideEffectsSchema = z.object({
-  names: z.array(z.string().trim().min(1).max(60)).min(1).max(30),
-});
-
 // ---------- Ranges ----------
 
 export const therapyRangeQuerySchema = z.object({
@@ -72,4 +66,3 @@ export type CreateTitrationStepInput = z.infer<typeof createTitrationStepSchema>
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
 export type SaveWeightInput = z.infer<typeof saveWeightSchema>;
-export type InstallSideEffectsInput = z.infer<typeof installSideEffectsSchema>;

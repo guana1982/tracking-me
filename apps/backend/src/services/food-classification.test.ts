@@ -365,7 +365,7 @@ describe('CSV export', () => {
           maxValue: 10,
           note: null,
           linkedText: null,
-          isEvent: true,
+          recordType: 'event' as const,
           trigger: 'rientro a casa',
         },
       ]

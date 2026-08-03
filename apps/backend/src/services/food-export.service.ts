@@ -52,6 +52,10 @@ import { buildFoodAiPackage } from './food-ai-export.js';
 //                 type, valence = the trigger that set it off, scale_value =
 //                 its intensity when given, text = the note). The trigger is
 //                 the field to count: its ranking is the point of the log
+//   side_effect - a side effect of the therapy, logged the moment it shows up
+//                 (category = its name, scale_value = its intensity out of
+//                 scale_max, text = the note). Absence is never recorded: a
+//                 row here means it happened
 //   weight      - a weekly weighing (quantity = kg)
 //   treatment   - what is being taken (category = name, text = active
 //                 ingredient and notes, quantity/unit = dose, meal_type =
@@ -123,8 +127,8 @@ export interface CsvRatingInput {
   note: string | null;
   /** Text of the entry picked in the row's popup, when the row has one */
   linkedText: string | null;
-  /** EVENT rows are episodes, SCALE rows are periodic marks */
-  isEvent?: boolean;
+  /** `rating` (periodic mark), `event` (episode) or `side_effect` */
+  recordType?: 'rating' | 'event' | 'side_effect';
   /** What set the episode off */
   trigger?: string | null;
 }
@@ -369,15 +373,15 @@ export function buildFoodCsv(
     // they are shown together in the diary
     const recap = [rating.note, rating.linkedText].filter((part) => Boolean(part)).join(' · ');
     const line = [
-      // An episode and a periodic mark answer different questions, so they
-      // must be separable without reading the name of the characteristic
-      rating.isEvent ? 'event' : 'rating',
+      // An episode, a side effect and a periodic mark answer different
+      // questions, so they must be separable without reading the name
+      rating.recordType ?? 'rating',
       rating.date,
       time,
       escapeCsvField(rating.ratingName),
       // The trigger rides in `valence` on event rows: it is the dimension
       // that qualifies the episode, and it stays one column to count
-      rating.isEvent ? escapeCsvField(rating.trigger ?? '') : '',
+      escapeCsvField(rating.trigger ?? ''),
       '',
       '',
       '',
@@ -659,7 +663,12 @@ class FoodExportService {
         maxValue: entry.maxValue,
         note: entry.note,
         linkedText: entry.quickLog?.text ?? null,
-        isEvent: entry.kind === 'EVENT',
+        recordType:
+          entry.kind === 'EVENT'
+            ? ('event' as const)
+            : entry.kind === 'SIDE_EFFECT'
+              ? ('side_effect' as const)
+              : ('rating' as const),
         trigger: entry.trigger,
       })),
       weights.map((entry) => ({

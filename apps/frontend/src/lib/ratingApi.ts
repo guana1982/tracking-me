@@ -4,6 +4,7 @@ import type {
   CreateRatingEntryDTO,
   RatingDefinitionDTO,
   RatingEntryDTO,
+  SuggestedSideEffectDTO,
   UpdateRatingDefinitionDTO,
   UpdateRatingEntryDTO,
 } from '@budget/shared';
@@ -40,6 +41,15 @@ export const ratingsApi = {
     fetchApi<RatingDefinitionDTO[]>('/ratings/events/defaults', { method: 'POST' }),
 
   getTriggers: () => fetchApi<string[]>('/ratings/triggers'),
+
+  getSuggestedSideEffects: () =>
+    fetchApi<SuggestedSideEffectDTO[]>('/ratings/side-effects/suggested'),
+
+  installSideEffects: (names: string[]) =>
+    fetchApi<RatingDefinitionDTO[]>('/ratings/side-effects', {
+      method: 'POST',
+      body: JSON.stringify({ names }),
+    }),
 
   getEntries: (from?: string, to?: string) =>
     fetchApi<RatingEntryDTO[]>(`/ratings/entries${buildQuery({ from, to })}`),

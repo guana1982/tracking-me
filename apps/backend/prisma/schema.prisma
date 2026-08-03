@@ -585,9 +585,10 @@ model CheckInScale {
   isCore      Boolean  @default(true)
   // A side effect is read differently from a symptom: what matters is when it
   // appeared and whether it faded, not the shape of its curve
+  // Legacy: side effects moved to RatingDefinition (kind SIDE_EFFECT) so they
+  // could be logged as moments with a comment instead of answered nightly.
+  // Kept so the scales archived by that move stay readable.
   isSideEffect Boolean @default(false)
-  // Which treatments brought this one up: lets the diary group the side
-  // effects under the drug they belong to, instead of one flat list
   sourceTreatmentKeys String[] @default([])
   track       DayTrack @default(MOOD)
   position    Int
@@ -635,10 +636,12 @@ enum RatingLinkedForm {
 }
 
 // SCALE = a periodic mark (a row of boxes); EVENT = an episode logged the
-// moment it happens (a chip to tap). One storage, two ways in.
+// moment it happens (a chip to tap); SIDE_EFFECT = the same, but tied to the
+// treatment that can cause it. One storage, three ways in.
 enum RatingKind {
   SCALE
   EVENT
+  SIDE_EFFECT
 }
 
 // Which of the two independent day curves an answer feeds. Never inferred
@@ -660,6 +663,9 @@ model RatingDefinition {
   kind       RatingKind       @default(SCALE)
   maxValue   Int              @default(10)
   track      DayTrack         @default(BODY)
+  // For a SIDE_EFFECT: which treatments brought it up, so the diary groups
+  // the chips under the drug they belong to
+  sourceTreatmentKeys String[] @default([])
   linkedForm RatingLinkedForm @default(NONE)
   position   Int
   isActive   Boolean          @default(true)

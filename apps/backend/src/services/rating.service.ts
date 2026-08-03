@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
-import { DEFAULT_EVENT_DEFINITIONS, DEFAULT_RATING_DEFINITIONS } from '@budget/shared';
+import {
+  DEFAULT_EVENT_DEFINITIONS,
+  DEFAULT_RATING_DEFINITIONS,
+  SIDE_EFFECT_MAX,
+} from '@budget/shared';
+import { suggestedSideEffects } from '../lib/therapy-config.js';
 import type {
   CreateRatingDefinitionDTO,
   CreateRatingEntryDTO,
   RatingDefinitionDTO,
   RatingEntryDTO,
+  SuggestedSideEffectDTO,
   UpdateRatingDefinitionDTO,
   UpdateRatingEntryDTO,
 } from '@budget/shared';
@@ -59,6 +65,7 @@ class RatingService {
         maxValue: data.maxValue ?? 10,
         // A row wired to the mood picker is a mood row unless told otherwise
         track: data.track ?? (data.linkedForm === 'MOOD' ? 'MOOD' : 'BODY'),
+        sourceTreatmentKeys: data.sourceTreatmentKeys ?? [],
         linkedForm: data.linkedForm ?? 'NONE',
         position: await this.nextPosition(userId),
       },
@@ -102,6 +109,69 @@ class RatingService {
   }
 
   /**
+   * The side effects worth watching, derived from what the user is actually
+   * taking. The vocabulary comes from the config file, never from the code
+   * (§7): it changes with the therapy.
+   */
+  async suggestSideEffects(userId: string): Promise<SuggestedSideEffectDTO[]> {
+    const [treatments, definitions] = await Promise.all([
+      prisma.treatmentDefinition.findMany({
+        where: { userId, isActive: true },
+        select: { key: true, name: true, detail: true, form: true },
+      }),
+      prisma.ratingDefinition.findMany({ where: { userId }, select: { name: true } }),
+    ]);
+
+    const installed = new Set(definitions.map((definition) => definition.name.toLowerCase()));
+    return [...suggestedSideEffects(treatments).entries()].map(([name, match]) => ({
+      name,
+      sources: match.sources.map((source) => source.name),
+      sourceKeys: match.sources.map((source) => source.key),
+      isInstalled: installed.has(name.toLowerCase()),
+    }));
+  }
+
+  /**
+   * Installs the chosen side effects as chips in the diary. Their intensity
+   * is the three named steps of the spec, never a number to count.
+   */
+  async installSideEffects(userId: string, names: string[]): Promise<RatingDefinitionDTO[]> {
+    const [existing, treatments] = await Promise.all([
+      prisma.ratingDefinition.findMany({ where: { userId }, select: { name: true } }),
+      prisma.treatmentDefinition.findMany({
+        where: { userId, isActive: true },
+        select: { key: true, name: true, detail: true, form: true },
+      }),
+    ]);
+    const taken = new Set(existing.map((definition) => definition.name.toLowerCase()));
+    const missing = names.filter((name) => !taken.has(name.trim().toLowerCase()));
+
+    // Re-derived here rather than trusted from the client: the source is what
+    // the config says today, not what a stale screen thought
+    const matches = suggestedSideEffects(treatments);
+
+    if (missing.length > 0) {
+      const start = await this.nextPosition(userId);
+      await prisma.ratingDefinition.createMany({
+        data: missing.map((name, index) => ({
+          userId,
+          key: `r-${randomUUID()}`,
+          name: name.trim(),
+          kind: 'SIDE_EFFECT' as const,
+          maxValue: SIDE_EFFECT_MAX,
+          track: 'BODY' as const,
+          sourceTreatmentKeys:
+            matches.get(name.trim())?.sources.map((source) => source.key) ?? [],
+          position: start + index,
+          isDefault: true,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    return this.list(userId);
+  }
+
+  /**
    * The triggers already used, most frequent first. This is the autocomplete
    * source, and over time the same list becomes the ranking the spec calls
    * the most valuable output of the module.
@@ -135,6 +205,7 @@ class RatingService {
         kind: data.kind,
         maxValue: data.maxValue,
         track: data.track,
+        sourceTreatmentKeys: data.sourceTreatmentKeys,
         linkedForm: data.linkedForm,
         position: data.position,
         isActive: data.isActive,
@@ -182,8 +253,8 @@ class RatingService {
       where: { userId, key: data.ratingKey },
     });
     if (!definition) throw new AppError('Caratteristica non trovata', 404, 'NOT_FOUND');
-    // An episode is worth recording even without an intensity: the tap that
-    // logs it has to stay one tap. A mark, on the other hand, is the mark
+    // An episode or a side effect is worth recording even without an
+    // intensity: the tap that logs it has to stay one tap. A mark is the mark
     if (definition.kind === 'SCALE' && data.value == null) {
       throw new AppError('Voto mancante', 400, 'VALUE_REQUIRED');
     }
@@ -297,6 +368,7 @@ class RatingService {
       kind: definition.kind,
       maxValue: definition.maxValue,
       track: definition.track,
+      sourceTreatmentKeys: definition.sourceTreatmentKeys,
       linkedForm: definition.linkedForm,
       position: definition.position,
       isActive: definition.isActive,

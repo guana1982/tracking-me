@@ -1,11 +1,8 @@
 import { useState } from 'react';
 import { Loader2, Pill } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import {
-  useInstallSideEffects,
-  useSuggestedSideEffects,
-} from '../../hooks/useTherapyQueries';
-import { SIDE_EFFECT_LEVELS } from '@budget/shared';
+import { useInstallSideEffects, useSuggestedSideEffects } from '../../hooks/useRatingQueries';
+import { SIDE_EFFECT_INTENSITY_LABELS } from '@budget/shared';
 
 /**
  * Side effects, proposed from what the user is actually taking (§3.5): the
@@ -40,8 +37,8 @@ export function SideEffectPicker() {
         <p className="text-sm font-medium text-slate-800">Effetti collaterali da tenere d'occhio</p>
       </div>
       <p className="text-[11px] text-slate-500 mb-2">
-        Proposti in base a quello che stai assumendo. Diventano voci facoltative del check-in, con
-        i passi {SIDE_EFFECT_LEVELS.join(' / ')}.
+        Proposti in base a quello che stai assumendo. Diventano chip nel diario: un tocco quando
+        succede, poi l'intensità ({SIDE_EFFECT_INTENSITY_LABELS.join(' / ')}) e il commento.
       </p>
 
       <div className="flex flex-wrap gap-1.5">

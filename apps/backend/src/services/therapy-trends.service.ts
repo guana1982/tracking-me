@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { describeScaleValue } from '@budget/shared';
+import { describeIntensity } from '@budget/shared';
 import type {
   AdherenceDTO,
   CheckInValueDTO,
@@ -219,27 +219,34 @@ class TherapyTrendsService {
 
     // ---------- Side effects ----------
 
-    const sideEffectScales = scales.filter((scale) => scale.isSideEffect);
-    const sideEffects: SideEffectReportDTO[] = sideEffectScales.map((scale) => {
-      let firstSeen: string | null = null;
-      let daysPresent = 0;
-      let lastValue: number | null = null;
-      for (const entry of entries) {
-        const value = readValues(entry.valuesJson).find((item) => item.key === scale.key);
-        if (!value || value.value <= 0) continue;
-        if (!firstSeen) firstSeen = toIsoDate(entry.date);
-        daysPresent += 1;
-        lastValue = value.value;
-      }
+    // Read from the chips in the diary: what matters is when one appeared and
+    // how often it came back, not the shape of a nightly curve
+    const [sideEffectDefinitions, sideEffectEntries] = await Promise.all([
+      prisma.ratingDefinition.findMany({
+        where: { userId, kind: 'SIDE_EFFECT' },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.ratingEntry.findMany({
+        where: {
+          userId,
+          kind: 'SIDE_EFFECT',
+          date: { gte: dateOnly(start), lte: dateOnly(to) },
+        },
+        orderBy: { loggedAt: 'asc' },
+      }),
+    ]);
+
+    const sideEffects: SideEffectReportDTO[] = sideEffectDefinitions.map((definition) => {
+      const own = sideEffectEntries.filter((entry) => entry.ratingKey === definition.key);
+      const days = new Set(own.map((entry) => toIsoDate(entry.date)));
+      const last = own[own.length - 1];
       return {
-        key: scale.key,
-        name: scale.name,
-        firstSeen,
-        daysPresent,
+        key: definition.key,
+        name: definition.name,
+        firstSeen: own.length > 0 ? toIsoDate(own[0].date) : null,
+        daysPresent: days.size,
         lastLabel:
-          lastValue === null
-            ? null
-            : describeScaleValue(lastValue, scale.maxValue, scale.isPositive, scale.levelLabels),
+          last && last.value !== null ? describeIntensity(last.value, last.maxValue) : null,
       };
     });
 
@@ -256,6 +263,7 @@ class TherapyTrendsService {
       name: scale.name,
       maxValue: scale.maxValue,
       isPositive: scale.isPositive,
+      // Legacy flag: side effects no longer live among the check-in scales
       isSideEffect: scale.isSideEffect,
     }));
 

@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
-  useCheckInScales,
-  useCreateCheckInScale,
-  useDeleteCheckInScale,
-  useTreatments,
-  useUpdateCheckInScale,
-} from '../../hooks/useTherapyQueries';
+  useCreateRating,
+  useDeleteRating,
+  useRatings,
+  useUpdateRating,
+} from '../../hooks/useRatingQueries';
+import { useTreatments } from '../../hooks/useTherapyQueries';
 import { SideEffectPicker } from './SideEffectPicker';
-import { SIDE_EFFECT_LEVELS } from '@budget/shared';
+import { SIDE_EFFECT_MAX } from '@budget/shared';
 
 interface SideEffectManagerProps {
   isOpen: boolean;
@@ -25,11 +25,11 @@ interface SideEffectManagerProps {
  * answerable before.
  */
 export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
-  const scales = useCheckInScales();
+  const ratings = useRatings();
   const treatments = useTreatments();
-  const createScale = useCreateCheckInScale();
-  const updateScale = useUpdateCheckInScale();
-  const deleteScale = useDeleteCheckInScale();
+  const createRating = useCreateRating();
+  const updateRating = useUpdateRating();
+  const deleteRating = useDeleteRating();
 
   const [newName, setNewName] = useState('');
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -45,9 +45,11 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
 
   if (!isOpen) return null;
 
-  const installed = (scales.data ?? []).filter((scale) => scale.isSideEffect);
-  const isPending = createScale.isPending || updateScale.isPending || deleteScale.isPending;
-  const error = createScale.error || updateScale.error || deleteScale.error || scales.error;
+  const installed = (ratings.data ?? []).filter(
+    (definition) => definition.kind === 'SIDE_EFFECT'
+  );
+  const isPending = createRating.isPending || updateRating.isPending || deleteRating.isPending;
+  const error = createRating.error || updateRating.error || deleteRating.error || ratings.error;
 
   const nameOf = (key: string) =>
     treatments.data?.find((treatment) => treatment.key === key)?.name ?? null;
@@ -55,13 +57,11 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newName.trim()) return;
-    await createScale.mutateAsync({
+    await createRating.mutateAsync({
       name: newName.trim(),
-      // Same shape as the suggested ones: named steps, optional, physical
-      levelLabels: SIDE_EFFECT_LEVELS,
-      isPositive: false,
-      isCore: false,
-      isSideEffect: true,
+      kind: 'SIDE_EFFECT',
+      // Same shape as the suggested ones: three named steps, physical track
+      maxValue: SIDE_EFFECT_MAX,
       track: 'BODY',
     });
     setNewName('');
@@ -69,7 +69,7 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
 
   const handleRename = async (key: string) => {
     if (!editingName.trim()) return;
-    await updateScale.mutateAsync({ key, data: { name: editingName.trim() } });
+    await updateRating.mutateAsync({ key, data: { name: editingName.trim() } });
     setEditingKey(null);
     setEditingName('');
   };
@@ -111,7 +111,7 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
               className="btn btn-primary shrink-0"
               disabled={!newName.trim() || isPending}
             >
-              {createScale.isPending ? (
+              {createRating.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Plus className="w-4 h-4" />
@@ -126,7 +126,7 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
             </p>
           )}
 
-          {scales.isLoading ? (
+          {ratings.isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             </div>
@@ -136,9 +136,9 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
             </p>
           ) : (
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl">
-              {installed.map((scale) => (
-                <div key={scale.key} className="p-3">
-                  {editingKey === scale.key ? (
+              {installed.map((definition) => (
+                <div key={definition.key} className="p-3">
+                  {editingKey === definition.key ? (
                     <div className="flex gap-2">
                       <input
                         autoFocus
@@ -147,7 +147,7 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') {
                             event.preventDefault();
-                            void handleRename(scale.key);
+                            void handleRename(definition.key);
                           }
                         }}
                         className="input flex-1"
@@ -155,7 +155,7 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => void handleRename(scale.key)}
+                        onClick={() => void handleRename(definition.key)}
                         disabled={!editingName.trim() || isPending}
                         className="p-2 rounded-lg bg-emerald-50 text-emerald-700"
                         aria-label="Salva nome"
@@ -169,63 +169,67 @@ export function SideEffectManager({ isOpen, onClose }: SideEffectManagerProps) {
                         <p
                           className={cn(
                             'text-sm font-medium truncate',
-                            scale.isActive ? 'text-slate-800' : 'text-slate-400 line-through'
+                            definition.isActive ? 'text-slate-800' : 'text-slate-400 line-through'
                           )}
                         >
-                          {scale.name}
+                          {definition.name}
                         </p>
                         <p className="text-[11px] text-slate-400 truncate">
-                          {scale.sourceTreatmentKeys
+                          {definition.sourceTreatmentKeys
                             .map(nameOf)
                             .filter((name): name is string => name !== null)
                             .join(', ') || 'terapia in corso'}
-                          {scale.isUsed ? ' · presente nello storico' : ''}
+                          {definition.isUsed ? ' · presente nello storico' : ''}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => {
-                          setEditingKey(scale.key);
-                          setEditingName(scale.name);
+                          setEditingKey(definition.key);
+                          setEditingName(definition.name);
                         }}
                         className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
-                        aria-label={`Modifica ${scale.name}`}
+                        aria-label={`Modifica ${definition.name}`}
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          const warning = scale.isUsed
-                            ? `"${scale.name}" è già stato segnalato in alcune giornate. Lo storico resta invariato. Toglierlo dall'elenco?`
-                            : `Togliere "${scale.name}" dagli effetti seguiti?`;
-                          if (window.confirm(warning)) deleteScale.mutate(scale.key);
+                          const warning = definition.isUsed
+                            ? `"${definition.name}" è già stato segnalato in alcune giornate. Lo storico resta invariato. Toglierlo dall'elenco?`
+                            : `Togliere "${definition.name}" dagli effetti seguiti?`;
+                          if (window.confirm(warning)) deleteRating.mutate(definition.key);
                         }}
                         disabled={isPending}
                         className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        aria-label={`Elimina ${scale.name}`}
+                        aria-label={`Elimina ${definition.name}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() =>
-                          updateScale.mutate({
-                            key: scale.key,
-                            data: { isActive: !scale.isActive },
+                          updateRating.mutate({
+                            key: definition.key,
+                            data: { isActive: !definition.isActive },
                           })
                         }
                         disabled={isPending}
                         className={cn(
                           'relative w-10 h-6 rounded-full transition-colors shrink-0',
-                          scale.isActive ? 'bg-emerald-500' : 'bg-slate-300'
+                          definition.isActive ? 'bg-emerald-500' : 'bg-slate-300'
                         )}
-                        aria-label={scale.isActive ? `Disattiva ${scale.name}` : `Attiva ${scale.name}`}
+                        aria-label={
+                          definition.isActive
+                            ? `Disattiva ${definition.name}`
+                            : `Attiva ${definition.name}`
+                        }
                       >
                         <span
                           className={cn(
                             'absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform',
-                            scale.isActive ? 'translate-x-4' : 'translate-x-0'
+                            definition.isActive ? 'translate-x-4' : 'translate-x-0'
                           )}
                         />
                       </button>

@@ -27,13 +27,29 @@ export const DAY_TRACK_LABELS: Record<DayTrackDTO, string> = {
   NONE: 'Fuori dal grafico',
 };
 
-export const RATING_KINDS = ['SCALE', 'EVENT'] as const;
+export const RATING_KINDS = ['SCALE', 'EVENT', 'SIDE_EFFECT'] as const;
 export type RatingKindDTO = (typeof RATING_KINDS)[number];
 
 export const RATING_KIND_LABELS: Record<RatingKindDTO, string> = {
   SCALE: 'Voto',
   EVENT: 'Episodio',
+  SIDE_EFFECT: 'Effetto collaterale',
 };
+
+/**
+ * Intensity of a side effect (§3.5): three named steps, never a number to
+ * count. Stored as the 1..3 value of the entry.
+ */
+export const SIDE_EFFECT_INTENSITY_LABELS = ['lieve', 'moderato', 'forte'];
+export const SIDE_EFFECT_MAX = SIDE_EFFECT_INTENSITY_LABELS.length;
+
+/** The wording of an intensity, or the bare number for any other scale */
+export function describeIntensity(value: number, maxValue: number): string {
+  if (maxValue === SIDE_EFFECT_MAX) {
+    return SIDE_EFFECT_INTENSITY_LABELS[Math.min(Math.max(value, 1), maxValue) - 1];
+  }
+  return `${value}/${maxValue}`;
+}
 
 /**
  * Suggested episode types. Installed on request, never automatically: the
@@ -91,6 +107,11 @@ export interface RatingDefinitionDTO {
   maxValue: number;
   /** Which curve of "stato del giorno" this feeds */
   track: DayTrackDTO;
+  /**
+   * For a SIDE_EFFECT: the treatments that brought it up, so the diary can
+   * group them under the drug they belong to. Empty = the therapy as a whole.
+   */
+  sourceTreatmentKeys: string[];
   linkedForm: RatingLinkedFormDTO;
   position: number;
   isActive: boolean;
@@ -104,6 +125,7 @@ export interface CreateRatingDefinitionDTO {
   kind?: RatingKindDTO;
   maxValue?: number;
   track?: DayTrackDTO;
+  sourceTreatmentKeys?: string[];
   linkedForm?: RatingLinkedFormDTO;
 }
 
@@ -112,6 +134,7 @@ export interface UpdateRatingDefinitionDTO {
   kind?: RatingKindDTO;
   maxValue?: number;
   track?: DayTrackDTO;
+  sourceTreatmentKeys?: string[];
   linkedForm?: RatingLinkedFormDTO;
   position?: number;
   isActive?: boolean;

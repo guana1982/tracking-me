@@ -91,7 +91,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
         {moodFallback}
         {/* Independent of the votes: they show even with an empty catalogue */}
         <div className="w-full">
-          <SideEffectsBlock date={date} />
+          <SideEffectsBlock onLog={handleLogEvent} />
         </div>
         <RatingManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
         <MoodPickerModal
@@ -150,7 +150,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
 
       {/* Right below the episodes: both answer "what happened today", and a
           side effect nobody is asked about is one noticed months late */}
-      <SideEffectsBlock date={date} />
+      <SideEffectsBlock onLog={handleLogEvent} />
 
       {moodFallback}
 
