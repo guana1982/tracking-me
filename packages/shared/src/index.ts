@@ -11,3 +11,5 @@ export * from './rating-types';
 export * from './rating-schemas';
 export * from './therapy-plan-types';
 export * from './therapy-plan-schemas';
+export * from './habit-types';
+export * from './habit-schemas';

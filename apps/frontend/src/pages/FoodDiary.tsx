@@ -15,6 +15,7 @@ import { RatingNote } from '../components/food/RatingNote';
 import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
 import { ScheduleLine } from '../components/therapy/ScheduleLine';
 import { WeightLine } from '../components/therapy/WeightLine';
+import { DailyHabitsCard } from '../components/habits/DailyHabitsCard';
 import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
 import { useDeleteQuickLog } from '../hooks/useFoodQueries';
 import type { MealDTO, QuickLogDTO, RatingEntryDTO } from '@budget/shared';
@@ -262,6 +263,7 @@ export function FoodDiary() {
         <aside className={cn(COLUMN_CLASS, 'lg:col-start-2 lg:row-start-1 xl:col-start-3')}>
           <ScheduleLine />
           <DailyIntakeCard date={selectedDate} />
+          <DailyHabitsCard date={selectedDate} />
           <WeightLine date={selectedDate} />
         </aside>
 

@@ -7,6 +7,7 @@ import {
   INTAKE_STATUS_LABELS,
   TREATMENT_KIND_LABELS,
   MILESTONE_KIND_LABELS,
+  HABIT_STATUS_LABELS,
   BEDTIME_SLOT,
   BEDTIME_SLOT_LABEL,
   describeScaleValue,
@@ -56,6 +57,9 @@ import { buildFoodAiPackage } from './food-ai-export.js';
 //                 (category = its name, scale_value = its intensity out of
 //                 scale_max, text = the note). Absence is never recorded: a
 //                 row here means it happened
+//   habit       - a habit answered for the day (category = its name,
+//                 intake_status = fatto/non fatto, quantity+unit = how much
+//                 when the habit is measured, text = the note)
 //   weight      - a weekly weighing (quantity = kg)
 //   treatment   - what is being taken (category = name, text = active
 //                 ingredient and notes, quantity/unit = dose, meal_type =
@@ -139,6 +143,17 @@ export interface CsvWeightInput {
   note: string | null;
 }
 
+export interface CsvHabitInput {
+  date: string; // YYYY-MM-DD
+  loggedAt: Date;
+  habitName: string;
+  statusLabel: string;
+  /** The count or the minutes, with its unit; null for a plain yes/no */
+  value: number | null;
+  unit: string;
+  note: string | null;
+}
+
 export interface CsvTreatmentInput {
   date: string; // start date, or the first exported day
   name: string;
@@ -199,7 +214,8 @@ export function buildFoodCsv(
   weights: CsvWeightInput[] = [],
   treatments: CsvTreatmentInput[] = [],
   doseChanges: CsvDoseChangeInput[] = [],
-  milestones: CsvMilestoneInput[] = []
+  milestones: CsvMilestoneInput[] = [],
+  habits: CsvHabitInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -421,6 +437,31 @@ export function buildFoodCsv(
     rows.push({ sortKey: `${weight.date} 00:00 0`, line });
   }
 
+  // Habits sit at the minute they were answered, like the intakes
+  for (const habit of habits) {
+    const local = toLocalParts(habit.loggedAt, tzOffset);
+    const time = hhmm(local.hour, local.minutes);
+    const line = [
+      'habit',
+      habit.date,
+      time,
+      escapeCsvField(habit.habitName),
+      '',
+      '',
+      '',
+      habit.value === null ? '' : String(habit.value),
+      escapeCsvField(habit.unit),
+      escapeCsvField(habit.note ?? ''),
+      '',
+      '',
+      '',
+      '',
+      '',
+      escapeCsvField(habit.statusLabel),
+    ].join(',');
+    rows.push({ sortKey: `${habit.date} ${time} 1`, line });
+  }
+
   // The therapy itself: without it the rest of the file has no subject
   for (const treatment of treatments) {
     const line = [
@@ -572,7 +613,7 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones] = await Promise.all([
+    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones, habits] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
@@ -602,6 +643,10 @@ class FoodExportService {
         orderBy: { date: 'asc' },
       }),
       prisma.milestone.findMany({
+        where: { userId, ...dayFilter },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.habitEntry.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
       }),
@@ -710,6 +755,15 @@ class FoodExportService {
         advisories: milestone.advisories,
         notes: milestone.notes,
         isDone: milestone.isDone,
+      })),
+      habits.map((entry) => ({
+        date: entry.date.toISOString().slice(0, 10),
+        loggedAt: entry.loggedAt,
+        habitName: entry.habitName,
+        statusLabel: HABIT_STATUS_LABELS[entry.status],
+        value: entry.value,
+        unit: entry.unit,
+        note: entry.note,
       }))
     );
   }

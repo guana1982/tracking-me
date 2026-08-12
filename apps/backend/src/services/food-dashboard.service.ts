@@ -491,6 +491,7 @@ class FoodDashboardService {
 
     await this.foldRatings(userId, from, to, getDay);
     await this.foldCheckIns(userId, from, to, getDay);
+    await this.foldHabits(userId, from, to, getDay);
     await this.foldMarkers(userId, from, to, getDay);
 
     return dayMap;
@@ -583,6 +584,39 @@ class FoodDashboardService {
         // is an instrument like every other
         pushScore(track === 'MOOD' ? day.moodGroups : day.stateGroups, `scale:${value.key}`, score);
       }
+    }
+  }
+
+  /**
+   * Habits, but only the ones the user put on a track. Doing or not doing
+   * something is not automatically a statement about how you feel, so a habit
+   * stays out of the day state unless it is explicitly opted in.
+   *
+   * Half weight, like a free note: done/not done carries a direction and no
+   * intensity, and the same reasoning applies.
+   */
+  private async foldHabits(
+    userId: string,
+    from: string,
+    to: string,
+    getDay: (date: string) => DayData
+  ): Promise<void> {
+    const entries = await prisma.habitEntry.findMany({
+      where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
+      include: { habit: { select: { track: true } } },
+    });
+
+    for (const entry of entries) {
+      const track = entry.habit?.track;
+      if (track !== 'BODY' && track !== 'MOOD') continue;
+      const day = getDay(entry.date.toISOString().slice(0, 10));
+      const score =
+        (entry.status === 'DONE' ? 1 : -1) * FOOD_CONFIG.QUICK_LOG_DAY_WEIGHT;
+      pushScore(
+        track === 'MOOD' ? day.moodGroups : day.stateGroups,
+        `habit:${entry.habitKey}`,
+        score
+      );
     }
   }
 

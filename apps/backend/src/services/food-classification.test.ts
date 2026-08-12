@@ -410,6 +410,22 @@ describe('CSV export', () => {
     );
   });
 
+  it('records a habit with its amount and whether it was done', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [], [], [], [], [
+      {
+        date: '2026-08-12',
+        loggedAt: new Date('2026-08-12T07:30:00Z'),
+        habitName: 'Meditazione',
+        statusLabel: 'fatto',
+        value: 20,
+        unit: 'min',
+        note: null,
+      },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('habit,2026-08-12,07:30,Meditazione,,,,20,min,,,,,,,fatto');
+  });
+
   it('opens the day with the weekly weight, which belongs to the day not to an hour', () => {
     const csv = buildFoodCsv([], [], 0, [], [], [], [], [
       { date: '2026-07-16', weightKg: 78.4, note: null },

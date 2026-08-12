@@ -45,6 +45,8 @@ model User {
   titrationSteps         TitrationStep[]
   milestones             Milestone[]
   weightEntries          WeightEntry[]
+  habitDefinitions       HabitDefinition[]
+  habitEntries           HabitEntry[]
 
   @@index([googleId])
   @@index([email])
@@ -765,6 +767,78 @@ model Milestone {
 
   @@index([userId, date])
   @@map("milestones")
+}
+
+// ============================================================
+// Habits - same shape as the intakes, but nothing here is a dose. What the
+// user tracks and how it is measured is entirely their choice.
+// ============================================================
+
+enum HabitMeasure {
+  DONE
+  COUNT
+  DURATION
+}
+
+enum HabitStatus {
+  DONE
+  SKIPPED
+}
+
+model HabitDefinition {
+  id       String       @id @default(cuid())
+  userId   String
+  key      String
+  name     String
+  measure  HabitMeasure @default(DONE)
+  // Free text, like a dose: "min", "km", "pagine"
+  unit     String       @default("")
+  target   Int?
+  // Optional grouping label for the daily card
+  moment   String?
+  // ISO weekdays it is expected on; empty = every day. A rest day is not a
+  // skipped day, so outside these the habit is not asked about at all
+  daysOfWeek Int[]      @default([])
+  // NONE by default: a habit joins the day curves only if the user says so
+  track    DayTrack     @default(NONE)
+  position Int
+  isActive Boolean      @default(true)
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries HabitEntry[]
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("habit_definitions")
+}
+
+// One answer per habit per day: answering again edits it. Name, measure and
+// unit are snapshots, so editing the catalogue never rewrites the past.
+model HabitEntry {
+  id        String       @id @default(cuid())
+  userId    String
+  habitId   String?
+  habitKey  String
+  habitName String
+  measure   HabitMeasure @default(DONE)
+  unit      String       @default("")
+  date      DateTime     @db.Date
+  status    HabitStatus
+  value     Int?
+  note      String?
+  loggedAt  DateTime     @default(now())
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit HabitDefinition? @relation(fields: [habitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, date, habitKey])
+  @@index([userId, date])
+  @@map("habit_entries")
 }
 
 // Weight, weekly by design (§3.6): one entry per day at most, and the diary
