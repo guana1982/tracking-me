@@ -16,6 +16,8 @@ import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
 import { ScheduleLine } from '../components/therapy/ScheduleLine';
 import { WeightLine } from '../components/therapy/WeightLine';
 import { DailyHabitsCard } from '../components/habits/DailyHabitsCard';
+import { SortableRail } from '../components/food/SortableRail';
+import { useSectionOrder } from '../hooks/useSectionOrder';
 import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
 import { useDeleteQuickLog } from '../hooks/useFoodQueries';
 import type { MealDTO, QuickLogDTO, RatingEntryDTO } from '@budget/shared';
@@ -37,6 +39,9 @@ type TimelineEntry =
  */
 const COLUMN_CLASS = 'xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1';
 
+/** Order the right rail ships with; the user can rearrange it from there on */
+const RAIL_SECTIONS = ['schedule', 'intakes', 'habits', 'weight'] as const;
+
 /** Monday of the week containing the date */
 function weekStart(date: string): string {
   const d = new Date(`${date}T12:00:00`);
@@ -53,6 +58,7 @@ export function FoodDiary() {
 
   const from = weekStart(selectedDate);
   const to = addDaysLocal(from, 6);
+  const rail = useSectionOrder('rail', RAIL_SECTIONS);
 
   const meals = useMeals(from, to);
   const quickLogs = useQuickLogs(from, to);
@@ -261,10 +267,19 @@ export function FoodDiary() {
         )}
       >
         <aside className={cn(COLUMN_CLASS, 'lg:col-start-2 lg:row-start-1 xl:col-start-3')}>
-          <ScheduleLine />
-          <DailyIntakeCard date={selectedDate} />
-          <DailyHabitsCard date={selectedDate} />
-          <WeightLine date={selectedDate} />
+          <SortableRail
+            sections={[
+              { id: 'schedule', label: 'In arrivo', node: <ScheduleLine /> },
+              { id: 'intakes', label: 'Assunzioni', node: <DailyIntakeCard date={selectedDate} /> },
+              { id: 'habits', label: 'Abitudini', node: <DailyHabitsCard date={selectedDate} /> },
+              { id: 'weight', label: 'Peso', node: <WeightLine date={selectedDate} /> },
+            ]}
+            order={rail.order}
+            onMove={rail.move}
+            onMoveTo={rail.moveTo}
+            onReset={rail.reset}
+            isCustom={rail.isCustom}
+          />
         </aside>
 
         <aside className={cn(COLUMN_CLASS, 'lg:col-start-1 lg:row-start-1 xl:col-start-1')}>
