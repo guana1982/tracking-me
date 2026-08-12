@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Smile, Settings2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { todayLocal } from '../../lib/foodUtils';
+import { loggedAtFor } from '../../lib/foodUtils';
 import { useCreateQuickLog, useMoods } from '../../hooks/useFoodQueries';
 import { useCheckInDay, useSaveCheckIn } from '../../hooks/useTherapyQueries';
 import { MoodManager } from './MoodManager';
@@ -164,9 +164,7 @@ export function MoodPickerModal({
         text,
         derivedCategory: 'MOOD',
         derivedValence: resolveValence(valences),
-        // A past day gets logged at local noon of that day, not "now"
-        loggedAt:
-          date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString(),
+        loggedAt: loggedAtFor(date),
       });
       onMoodLogged?.(log);
     }

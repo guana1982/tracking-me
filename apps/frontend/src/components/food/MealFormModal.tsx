@@ -5,7 +5,6 @@ import { mealsApi } from '../../lib/foodApi';
 import {
   mealTypeLabel,
   smartDefaultMealType,
-  todayLocal,
   resizePhotoToDataUrl,
 } from '../../lib/foodUtils';
 import {
@@ -41,6 +40,8 @@ interface MealFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
+  /** The diary day on screen: a new meal belongs to it, not to today */
+  defaultDate: string;
   /** Set for editing an existing meal */
   editingMeal?: MealDTO | null;
   /** Set to prefill from another meal (azione "duplica") */
@@ -62,10 +63,11 @@ export function MealFormModal({
   isOpen,
   onClose,
   onSaved,
+  defaultDate,
   editingMeal,
   duplicateFrom,
 }: MealFormModalProps) {
-  const [date, setDate] = useState(todayLocal());
+  const [date, setDate] = useState(defaultDate);
   const [mealType, setMealType] = useState<MealTypeDTO>('LUNCH');
   const [notes, setNotes] = useState('');
   const [rows, setRows] = useState<ItemRow[]>([newRow()]);
@@ -105,7 +107,8 @@ export function MealFormModal({
     if (!isOpen) return;
     const source = editingMeal ?? duplicateFrom;
     if (source) {
-      setDate(editingMeal ? source.date : todayLocal());
+      // Editing keeps the meal's own day; duplicating lands on the day on screen
+      setDate(editingMeal ? source.date : defaultDate);
       setMealType(source.mealType);
       setNotes(source.notes ?? '');
       setRows(
@@ -116,7 +119,7 @@ export function MealFormModal({
           : [newRow()]
       );
     } else {
-      setDate(todayLocal());
+      setDate(defaultDate);
       setMealType(smartDefaultMealType());
       setNotes('');
       setRows([newRow()]);
@@ -132,7 +135,7 @@ export function MealFormModal({
     setIsMealUnitManagerOpen(false);
     setRepeatMessage(null);
     setTimeout(() => firstFoodRef.current?.focus(), 100);
-  }, [isOpen, editingMeal, duplicateFrom]);
+  }, [isOpen, editingMeal, duplicateFrom, defaultDate]);
 
   useEffect(() => {
     if (!isOpen || !mealTypes.data?.length || editingMeal || duplicateFrom) return;

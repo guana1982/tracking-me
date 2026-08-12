@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { Check, Loader2, Scale, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { todayLocal } from '../../lib/foodUtils';
 import { useSaveWeight, useWeight } from '../../hooks/useTherapyPlanQueries';
 import { WEIGHT_INTERVAL_DAYS } from '@budget/shared';
+
+interface WeightLineProps {
+  /** The diary day on screen: a weight typed here belongs to it */
+  date: string;
+}
 
 /**
  * Weight, weekly (§3.6). The line only asks when the week has come round
  * again; the rest of the time it just states the last value, quietly. Never
  * daily, and never with a comment on the direction it moved.
  */
-export function WeightLine() {
+export function WeightLine({ date }: WeightLineProps) {
   const summary = useWeight();
   const saveWeight = useSaveWeight();
   const [draft, setDraft] = useState<string | null>(null);
@@ -28,7 +32,7 @@ export function WeightLine() {
       setDraft(null);
       return;
     }
-    await saveWeight.mutateAsync({ date: todayLocal(), weightKg: Math.round(value * 10) / 10 });
+    await saveWeight.mutateAsync({ date, weightKg: Math.round(value * 10) / 10 });
     setDraft(null);
   };
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Gauge, Loader2, Settings2, Smile } from 'lucide-react';
-import { todayLocal } from '../../lib/foodUtils';
+import { loggedAtFor } from '../../lib/foodUtils';
 import { useCreateRatingEntry, useRatings } from '../../hooks/useRatingQueries';
 import { RatingRow } from './RatingRow';
 import { EventChips } from './EventChips';
@@ -39,9 +39,7 @@ export function DailyRatingsCard({ date, from, to, onToast }: DailyRatingsCardPr
   const definitions = active.filter((definition) => definition.kind === 'SCALE');
   const events = active.filter((definition) => definition.kind === 'EVENT');
 
-  // A vote on a past day belongs to that day at local noon, not to "now"
-  const loggedAt =
-    date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString();
+  const loggedAt = loggedAtFor(date);
 
   const handleVote = (ratingKey: string, value: number, note: string | null) => {
     createEntry.mutate({

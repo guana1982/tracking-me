@@ -119,6 +119,18 @@ export function localDateOf(isoTimestamp: string): string {
   ).padStart(2, '0')}`;
 }
 
+/**
+ * The instant to stamp on something written for a given diary day.
+ *
+ * Today keeps the real clock (undefined = server "now"). A day filled in
+ * afterwards lands at local noon of the day it belongs to: writing on the 12th
+ * about the 11th must be recorded on the 11th, and noon keeps it clear of both
+ * midnights whatever the timezone does.
+ */
+export function loggedAtFor(date: string): string | undefined {
+  return date === todayLocal() ? undefined : new Date(`${date}T12:00:00`).toISOString();
+}
+
 export function localTimeOf(isoTimestamp: string): string {
   const d = new Date(isoTimestamp);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

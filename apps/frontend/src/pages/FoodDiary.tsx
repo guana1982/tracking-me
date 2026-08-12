@@ -262,7 +262,7 @@ export function FoodDiary() {
         <aside className={cn(COLUMN_CLASS, 'lg:col-start-2 lg:row-start-1 xl:col-start-3')}>
           <ScheduleLine />
           <DailyIntakeCard date={selectedDate} />
-          <WeightLine />
+          <WeightLine date={selectedDate} />
         </aside>
 
         <aside className={cn(COLUMN_CLASS, 'lg:col-start-1 lg:row-start-1 xl:col-start-1')}>
@@ -325,7 +325,7 @@ export function FoodDiary() {
       {/* Sticky quick log bar (dictation-friendly, always one tap away) */}
       <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-3 py-2 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
         <div className="max-w-6xl xl:max-w-none mx-auto">
-          <QuickLogBar onSaved={showToast} />
+          <QuickLogBar onSaved={showToast} date={selectedDate} />
         </div>
       </div>
 
@@ -351,6 +351,7 @@ export function FoodDiary() {
         isOpen={isMealModalOpen}
         onClose={() => setIsMealModalOpen(false)}
         onSaved={showToast}
+        defaultDate={selectedDate}
         editingMeal={editingMeal}
         duplicateFrom={duplicateFrom}
       />

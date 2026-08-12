@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { useCreateQuickLog } from '../../hooks/useFoodQueries';
-import { quickLogCategoryLabel, quickLogValenceLabel } from '../../lib/foodUtils';
+import { loggedAtFor, quickLogCategoryLabel, quickLogValenceLabel } from '../../lib/foodUtils';
 import type { QuickLogDTO } from '@budget/shared';
 
 interface QuickLogBarProps {
   onSaved: (message: string) => void;
+  /** The diary day on screen: a note written here belongs to it, not to now */
+  date: string;
 }
 
 /**
@@ -26,7 +28,7 @@ function describeClassification(log: QuickLogDTO): string {
  * no dropdowns, no confirmation - classification happens silently and is
  * reported back afterwards, never asked for.
  */
-export function QuickLogBar({ onSaved }: QuickLogBarProps) {
+export function QuickLogBar({ onSaved, date }: QuickLogBarProps) {
   const [text, setText] = useState('');
   const createLog = useCreateQuickLog();
 
@@ -34,7 +36,7 @@ export function QuickLogBar({ onSaved }: QuickLogBarProps) {
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || createLog.isPending) return;
-    const log = await createLog.mutateAsync({ text: trimmed });
+    const log = await createLog.mutateAsync({ text: trimmed, loggedAt: loggedAtFor(date) });
     setText('');
     onSaved(describeClassification(log));
   };
