@@ -11,6 +11,7 @@ import {
   LogOut,
   User,
   UtensilsCrossed,
+  ListTodo,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
@@ -31,13 +32,16 @@ export function Layout() {
   const isCashFlowPage = location.pathname.startsWith('/cash-flow');
   const isPortfolioPage = location.pathname.startsWith('/portfolio');
   const isFoodPage = location.pathname.startsWith('/food');
-  const showBudgetContext = !isCashFlowPage && !isPortfolioPage && !isFoodPage;
+  const isActivitiesPage = location.pathname.startsWith('/activities');
+  const showBudgetContext = !isCashFlowPage && !isPortfolioPage && !isFoodPage && !isActivitiesPage;
   const appTitle = isCashFlowPage
     ? 'Net Worth'
     : isPortfolioPage
       ? 'Portafoglio'
       : isFoodPage
         ? 'Diario Alimentare'
+        : isActivitiesPage
+          ? 'Attività'
         : 'Budget';
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
@@ -46,9 +50,10 @@ export function Layout() {
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/expenses', icon: Receipt, label: 'Spese' },
+    { to: '/activities', icon: ListTodo, label: 'Attività' },
+    { to: '/food', icon: UtensilsCrossed, label: 'Diario' },
     { to: '/cash-flow', icon: LineChart, label: 'Cash Flow' },
     { to: '/portfolio', icon: Briefcase, label: 'Portafoglio' },
-    { to: '/food', icon: UtensilsCrossed, label: 'Diario' },
     { to: '/settings', icon: Settings, label: 'Impostazioni' },
   ];
 
@@ -207,20 +212,20 @@ export function Layout() {
 
       {/* Bottom Navigation (Mobile) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 sm:hidden">
-        <div className="flex items-center justify-around h-16">
+        <div className="flex items-center justify-start h-16 overflow-x-auto">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex flex-col items-center justify-center flex-1 h-full text-xs font-medium transition-colors',
+                  'flex flex-col items-center justify-center flex-1 min-w-[54px] h-full px-1 text-[10px] font-medium transition-colors',
                   isActive ? 'text-slate-900' : 'text-slate-500'
                 )
               }
             >
               <item.icon className="w-5 h-5 mb-1" />
-              <span>{item.label}</span>
+              <span className="max-w-full truncate">{item.label}</span>
             </NavLink>
           ))}
         </div>

@@ -13,3 +13,5 @@ export * from './therapy-plan-types';
 export * from './therapy-plan-schemas';
 export * from './habit-types';
 export * from './habit-schemas';
+export * from './activity-types';
+export * from './activity-schemas';

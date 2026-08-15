@@ -47,6 +47,8 @@ model User {
   weightEntries          WeightEntry[]
   habitDefinitions       HabitDefinition[]
   habitEntries           HabitEntry[]
+  activityTypes          ActivityType[]
+  activities             Activity[]
 
   @@index([googleId])
   @@index([email])
@@ -857,6 +859,81 @@ model WeightEntry {
   @@unique([userId, date])
   @@index([userId, date])
   @@map("weight_entries")
+}
+
+// ============================================================
+// Activities - daily tasks, weekly planning and deadlines
+// ============================================================
+
+enum ActivityKind {
+  TASK
+  DEADLINE
+}
+
+enum ActivityScope {
+  DAY
+  WEEK
+}
+
+enum ActivityPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model ActivityType {
+  id        String       @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  color     String
+  kind      ActivityKind
+  position  Int
+  isActive  Boolean      @default(true)
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([userId, key])
+  @@index([userId, kind, position])
+  @@map("activity_types")
+}
+
+model Activity {
+  id           String           @id @default(cuid())
+  userId       String
+  typeId       String?
+  title        String
+  notes        String?
+  kind         ActivityKind     @default(TASK)
+  scope        ActivityScope    @default(DAY)
+  scheduledFor DateTime         @db.Date
+  dueDate      DateTime?        @db.Date
+  dueTime      String?
+  priority     ActivityPriority @default(MEDIUM)
+  status       ActivityStatus   @default(TODO)
+  position     Int              @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type ActivityType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledFor, status])
+  @@index([userId, dueDate, status])
+  @@index([typeId])
+  @@map("activities")
 }
 
 // CashFlow Settings - per-user commission/ETF configuration

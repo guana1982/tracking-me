@@ -8,6 +8,7 @@ import { Portfolio } from './pages/Portfolio';
 import { Settings } from './pages/Settings';
 import { FoodDiary } from './pages/FoodDiary';
 import { FoodTrends } from './pages/FoodTrends';
+import { Activities } from './pages/Activities';
 import { HomeGate } from './pages/MobileHome';
 import { Login } from './pages/Login';
 import { AuthCallback } from './pages/AuthCallback';
@@ -36,6 +37,7 @@ function App() {
         <Route path="portfolio" element={<Portfolio />} />
         <Route path="food" element={<FoodDiary />} />
         <Route path="food/trends" element={<FoodTrends />} />
+        <Route path="activities" element={<Activities />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
