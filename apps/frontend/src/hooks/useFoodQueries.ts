@@ -245,10 +245,11 @@ export function useRecalculateQuickLogs() {
 
 // ---------- Dashboard ----------
 
-export function useFoodOverview(from: string, to: string) {
+export function useFoodOverview(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: foodQueryKeys.overview(from, to),
     queryFn: () => foodDashboardApi.getOverview(from, to),
+    enabled,
   });
 }
 

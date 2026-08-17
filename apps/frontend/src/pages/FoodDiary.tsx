@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
-import { it } from 'date-fns/locale';
+import { Plus, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { todayLocal, addDaysLocal, localDateOf } from '../lib/foodUtils';
 import { useMeals, useQuickLogs, useDeleteMeal } from '../hooks/useFoodQueries';
@@ -17,6 +15,7 @@ import { ScheduleLine } from '../components/therapy/ScheduleLine';
 import { WeightLine } from '../components/therapy/WeightLine';
 import { DailyHabitsCard } from '../components/habits/DailyHabitsCard';
 import { SortableRail } from '../components/food/SortableRail';
+import { FoodDiaryCalendar } from '../components/food/FoodDiaryCalendar';
 import { useSectionOrder } from '../hooks/useSectionOrder';
 import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
 import { useDeleteQuickLog } from '../hooks/useFoodQueries';
@@ -146,7 +145,7 @@ export function FoodDiary() {
 
   const isLoading = meals.isLoading || quickLogs.isLoading;
   const loadError = meals.error || quickLogs.error;
-  const isToday = selectedDate === todayLocal();
+  const today = todayLocal();
 
   return (
     <div
@@ -161,88 +160,29 @@ export function FoodDiary() {
         'xl:max-w-none xl:h-full xl:pb-14 xl:flex xl:flex-col xl:overflow-hidden'
       )}
     >
-      {/* Header: day nav + actions */}
-      {/* w-full matters: inside the xl flex column, mx-auto without a width
-          would shrink these two bars to their content */}
-      <div className="w-full max-w-2xl mx-auto flex items-center justify-between gap-2 mb-3 xl:shrink-0">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setSelectedDate(addDaysLocal(selectedDate, -1))}
-            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className="text-center min-w-32">
-            <p className="text-sm font-semibold text-slate-900 capitalize">
-              {format(new Date(`${selectedDate}T12:00:00`), 'EEEE d MMMM', { locale: it })}
-            </p>
-            {!isToday && (
+      <div className="mb-4 xl:shrink-0">
+        <FoodDiaryCalendar
+          selectedDate={selectedDate}
+          today={today}
+          daysWithData={daysWithData}
+          onSelectDate={setSelectedDate}
+          actions={(
+            <>
+              <Link to="/food/trends" className="btn btn-secondary min-h-9 px-2 sm:px-3 text-xs flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Andamento</span>
+              </Link>
               <button
-                onClick={() => setSelectedDate(todayLocal())}
-                className="text-xs text-blue-600 hover:underline"
+                type="button"
+                onClick={openCreate}
+                className="hidden sm:flex btn btn-primary min-h-9 text-xs items-center gap-1.5"
               >
-                Torna a oggi
+                <Plus className="w-3.5 h-3.5" />
+                Pasto
               </button>
-            )}
-          </div>
-          <button
-            onClick={() => setSelectedDate(addDaysLocal(selectedDate, 1))}
-            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link to="/food/trends" className="btn btn-secondary text-xs flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Andamento</span>
-          </Link>
-          {/* No mood button here: the same modal is one tap away inside the
-              rating row it belongs to, and two doors to one room is one too many */}
-          <button
-            onClick={openCreate}
-            className="hidden sm:flex btn btn-primary text-xs items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Pasto
-          </button>
-        </div>
-      </div>
-
-      {/* Week strip */}
-      <div className="w-full max-w-2xl mx-auto grid grid-cols-7 gap-1 mb-4 xl:shrink-0">
-        {Array.from({ length: 7 }, (_, i) => addDaysLocal(from, i)).map((date) => {
-          const d = new Date(`${date}T12:00:00`);
-          const isSelected = date === selectedDate;
-          return (
-            <button
-              key={date}
-              onClick={() => setSelectedDate(date)}
-              className={cn(
-                'min-h-11 flex flex-col items-center justify-center py-1.5 rounded-xl text-xs transition-colors',
-                isSelected
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              )}
-            >
-              <span className="uppercase text-[10px]">
-                {format(d, 'EEE', { locale: it })}
-              </span>
-              <span className="font-semibold">{d.getDate()}</span>
-              <span
-                className={cn(
-                  'w-1 h-1 rounded-full mt-0.5',
-                  daysWithData.has(date)
-                    ? isSelected
-                      ? 'bg-emerald-300'
-                      : 'bg-emerald-500'
-                    : 'bg-transparent'
-                )}
-              />
-            </button>
-          );
-        })}
+            </>
+          )}
+        />
       </div>
 
       {/*
