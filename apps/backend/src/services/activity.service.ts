@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
 import { DEFAULT_ACTIVITY_TYPES } from '@budget/shared';
 import type {
+  ActivityDayCountDTO,
   ActivityDTO,
   ActivityKindDTO,
   ActivityOverviewDTO,
@@ -76,7 +77,48 @@ function sortDeadlines(left: ActivityDTO, right: ActivityDTO): number {
   return PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
 }
 
+/**
+ * Splits what was loaded into the four lists the page shows. Pure, because the
+ * rule that decides where a task lands is the substance of the page and has to
+ * be checkable without a database.
+ */
+export function splitActivities(activities: ActivityDTO[], date: string, weekStart: string) {
+  const today = activities
+    .filter(
+      (activity) =>
+        activity.kind === 'TASK' && activity.scope === 'DAY' && activity.scheduledFor === date
+    )
+    .sort(sortActivities);
+  const week = activities
+    .filter(
+      (activity) =>
+        activity.kind === 'TASK' && activity.scope === 'WEEK' && activity.scheduledFor === weekStart
+    )
+    .sort(sortActivities);
+  const deadlines = activities
+    .filter((activity) => activity.kind === 'DEADLINE')
+    .sort(sortDeadlines);
+  const backlog = activities
+    .filter(
+      (activity) =>
+        activity.kind === 'TASK' &&
+        activity.status !== 'DONE' &&
+        (activity.scope === 'WEEK'
+          ? activity.scheduledFor < weekStart
+          : activity.scheduledFor < date)
+    )
+    .sort(sortActivities);
+
+  return { today, week, deadlines, backlog };
+}
+
 class ActivityService {
+  /**
+   * Everything the selected date is answerable for. A task planned for a later
+   * day is deliberately absent: it belongs to its own day, and showing it here
+   * would make the calendar decorative. Nothing gets lost, because what was
+   * left open earlier comes back as backlog.
+   */
   async getOverview(userId: string, date: string): Promise<ActivityOverviewDTO> {
     const weekStart = weekStartForDate(date);
     const weekEnd = addDays(weekStart, 6);
@@ -89,9 +131,21 @@ class ActivityService {
       where: {
         userId,
         OR: [
-          { status: { not: 'DONE' } },
-          { kind: 'TASK', scope: 'DAY', scheduledFor: selectedDay, status: 'DONE' },
-          { kind: 'TASK', scope: 'WEEK', scheduledFor: weekStartDay, status: 'DONE' },
+          // The day and the week themselves, completed items included: they are
+          // the record of what that day was, and hiding them would erase it
+          { kind: 'TASK', scope: 'DAY', scheduledFor: selectedDay },
+          { kind: 'TASK', scope: 'WEEK', scheduledFor: weekStartDay },
+          // Still open from before: a task does not stop existing at midnight
+          { kind: 'TASK', scope: 'DAY', scheduledFor: { lt: selectedDay }, status: { not: 'DONE' } },
+          {
+            kind: 'TASK',
+            scope: 'WEEK',
+            scheduledFor: { lt: weekStartDay },
+            status: { not: 'DONE' },
+          },
+          // A deadline is forward-looking by nature: while it is open it is
+          // relevant from whatever day you are standing on
+          { kind: 'DEADLINE', status: { not: 'DONE' } },
           {
             kind: 'DEADLINE',
             status: 'DONE',
@@ -106,25 +160,7 @@ class ActivityService {
     });
 
     const mapped = records.map((activity) => this.toDTO(activity));
-    const today = mapped
-      .filter(
-        (activity) =>
-          activity.kind === 'TASK' &&
-          activity.scope === 'DAY' &&
-          activity.scheduledFor === date
-      )
-      .sort(sortActivities);
-    const week = mapped
-      .filter(
-        (activity) =>
-          activity.kind === 'TASK' &&
-          activity.scope === 'WEEK' &&
-          activity.scheduledFor === weekStart
-      )
-      .sort(sortActivities);
-    const deadlines = mapped
-      .filter((activity) => activity.kind === 'DEADLINE')
-      .sort(sortDeadlines);
+    const { today, week, deadlines, backlog } = splitActivities(mapped, date, weekStart);
 
     return {
       date,
@@ -134,17 +170,51 @@ class ActivityService {
       today,
       week,
       deadlines,
+      backlog,
       summary: {
         todayCompleted: today.filter((activity) => activity.status === 'DONE').length,
         todayTotal: today.length,
         weekCompleted: week.filter((activity) => activity.status === 'DONE').length,
         weekTotal: week.length,
-        overdue: deadlines.filter(
+        // A task with a date on it can run late exactly like a deadline can
+        overdue: mapped.filter(
           (activity) =>
             activity.status !== 'DONE' && activity.dueDate !== null && activity.dueDate < date
         ).length,
+        backlog: backlog.length,
       },
     };
+  }
+
+  /**
+   * Per-day load for the month grid. Deadlines are counted on the day they are
+   * due; week tasks are left out, since they belong to a week and not to any
+   * one of its days.
+   */
+  async countsByDay(userId: string, from: string, to: string): Promise<ActivityDayCountDTO[]> {
+    const fromDay = dateOnly(from);
+    const toDay = dateOnly(to);
+    const records = await prisma.activity.findMany({
+      where: {
+        userId,
+        OR: [
+          { kind: 'TASK', scope: 'DAY', scheduledFor: { gte: fromDay, lte: toDay } },
+          { kind: 'DEADLINE', dueDate: { gte: fromDay, lte: toDay } },
+        ],
+      },
+      select: { kind: true, scheduledFor: true, dueDate: true, status: true },
+    });
+
+    const byDate = new Map<string, ActivityDayCountDTO>();
+    for (const record of records) {
+      const day = toIsoDate(record.kind === 'DEADLINE' ? record.dueDate ?? record.scheduledFor : record.scheduledFor);
+      const entry = byDate.get(day) ?? { date: day, open: 0, done: 0, deadlines: 0 };
+      if (record.status === 'DONE') entry.done += 1;
+      else entry.open += 1;
+      if (record.kind === 'DEADLINE') entry.deadlines += 1;
+      byDate.set(day, entry);
+    }
+    return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date));
   }
 
   async create(userId: string, data: CreateActivityDTO): Promise<ActivityDTO> {
@@ -160,6 +230,8 @@ class ActivityService {
       data: {
         userId,
         typeId: type?.id ?? null,
+        typeName: type?.name ?? null,
+        typeColor: type?.color ?? null,
         title: data.title.trim(),
         notes: data.notes?.trim() || null,
         kind: schedule.kind,
@@ -194,11 +266,13 @@ class ActivityService {
     const dueTime = data.dueTime !== undefined ? data.dueTime : existing.dueTime;
     const schedule = this.normalizeSchedule(kind, scope, scheduledFor, dueDate, dueTime);
 
-    let typeId = existing.typeId;
+    let type = existing.type;
     if (data.typeKey !== undefined) {
-      typeId = (await this.resolveType(userId, data.typeKey, schedule.kind))?.id ?? null;
+      type = await this.resolveType(userId, data.typeKey, schedule.kind);
     } else if (existing.type && existing.type.kind !== schedule.kind) {
-      typeId = null;
+      // Switching task <-> deadline invalidates a category that belonged to the
+      // other family; keeping it would label the activity with a lie
+      type = null;
     }
 
     const nextStatus = data.status ?? existing.status;
@@ -212,7 +286,9 @@ class ActivityService {
     const activity = await prisma.activity.update({
       where: { id: existing.id },
       data: {
-        typeId,
+        typeId: type?.id ?? null,
+        typeName: type?.name ?? null,
+        typeColor: type?.color ?? null,
         title: data.title?.trim(),
         notes: data.notes === undefined ? undefined : data.notes?.trim() || null,
         kind: schedule.kind,
@@ -248,6 +324,21 @@ class ActivityService {
         })
       )
     );
+  }
+
+  /**
+   * Hands the list back to priority and due dates. Without this a single drag
+   * would switch the whole list to manual for good, while the interface keeps
+   * promising an automatic order.
+   */
+  async resetOrder(userId: string, activityIds?: string[]): Promise<void> {
+    await prisma.activity.updateMany({
+      where: {
+        userId,
+        ...(activityIds && activityIds.length > 0 ? { id: { in: activityIds } } : {}),
+      },
+      data: { isManuallyPositioned: false },
+    });
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -332,6 +423,14 @@ class ActivityService {
         isActive: data.isActive,
       },
     });
+    // Keep the copy on the activities aligned while the type is alive, so the
+    // label that survives a future deletion is the current one, not a stale one
+    if (data.name !== undefined || data.color !== undefined) {
+      await prisma.activity.updateMany({
+        where: { userId, typeId: type.id },
+        data: { typeName: type.name, typeColor: type.color },
+      });
+    }
     return this.toTypeDTO(type);
   }
 
@@ -427,8 +526,9 @@ class ActivityService {
       priority: activity.priority,
       status: activity.status,
       typeKey: activity.type?.key ?? null,
-      typeName: activity.type?.name ?? null,
-      typeColor: activity.type?.color ?? null,
+      // The live type wins while it exists; the copy takes over once it is gone
+      typeName: activity.type?.name ?? activity.typeName,
+      typeColor: activity.type?.color ?? activity.typeColor,
       position: activity.position,
       isManuallyPositioned: activity.isManuallyPositioned,
       completedAt: activity.completedAt?.toISOString() ?? null,

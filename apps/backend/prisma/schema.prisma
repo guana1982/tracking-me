@@ -913,6 +913,10 @@ model Activity {
   id           String           @id @default(cuid())
   userId       String
   typeId       String?
+  /// Label copied when the type was attached, so deleting the type does not
+  /// strip the category from everything it ever tagged
+  typeName     String?
+  typeColor    String?
   title        String
   notes        String?
   kind         ActivityKind     @default(TASK)

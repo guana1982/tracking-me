@@ -21,6 +21,16 @@ export const activityOverviewQuerySchema = z.object({
   date: activityDateSchema,
 });
 
+export const activityRangeQuerySchema = z
+  .object({
+    from: activityDateSchema,
+    to: activityDateSchema,
+  })
+  .refine((data) => data.from <= data.to, {
+    path: ['to'],
+    message: 'La data finale non può precedere quella iniziale',
+  });
+
 export const reorderActivitiesSchema = z.object({
   activityIds: z
     .array(activityIdSchema)
@@ -29,6 +39,11 @@ export const reorderActivitiesSchema = z.object({
     .refine((ids) => new Set(ids).size === ids.length, {
       message: 'Activity IDs must be unique',
     }),
+});
+
+/** Empty list = drop the manual order everywhere, not just on what is on screen. */
+export const resetActivityOrderSchema = z.object({
+  activityIds: z.array(activityIdSchema).max(500).optional(),
 });
 
 export const createActivitySchema = z
@@ -98,5 +113,7 @@ export const updateActivityTypeSchema = z
 export type CreateActivityInput = z.infer<typeof createActivitySchema>;
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;
 export type ReorderActivitiesInput = z.infer<typeof reorderActivitiesSchema>;
+export type ResetActivityOrderInput = z.infer<typeof resetActivityOrderSchema>;
+export type ActivityRangeQueryInput = z.infer<typeof activityRangeQuerySchema>;
 export type CreateActivityTypeInput = z.infer<typeof createActivityTypeSchema>;
 export type UpdateActivityTypeInput = z.infer<typeof updateActivityTypeSchema>;

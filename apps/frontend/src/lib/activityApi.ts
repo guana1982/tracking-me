@@ -1,4 +1,5 @@
 import type {
+  ActivityDayCountDTO,
   ActivityDTO,
   ActivityOverviewDTO,
   ActivityTypeDTO,
@@ -13,6 +14,11 @@ import { fetchApi } from './api';
 export const activitiesApi = {
   getOverview: (date: string) =>
     fetchApi<ActivityOverviewDTO>(`/activities/overview?date=${encodeURIComponent(date)}`),
+
+  getCounts: (from: string, to: string) =>
+    fetchApi<ActivityDayCountDTO[]>(
+      `/activities/counts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    ),
 
   create: (data: CreateActivityDTO) =>
     fetchApi<ActivityDTO>('/activities', {
@@ -30,6 +36,12 @@ export const activitiesApi = {
     fetchApi<void>('/activities/reorder', {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+
+  resetOrder: (activityIds?: string[]) =>
+    fetchApi<void>('/activities/reorder/reset', {
+      method: 'POST',
+      body: JSON.stringify(activityIds ? { activityIds } : {}),
     }),
 
   remove: (id: string) =>

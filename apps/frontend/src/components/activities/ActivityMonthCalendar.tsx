@@ -12,12 +12,57 @@ import {
 } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
+import type { ActivityDayCountDTO } from '@budget/shared';
+import { useActivityCounts } from '../../hooks/useActivityQueries';
 import { cn } from '../../lib/utils';
 
 interface ActivityMonthCalendarProps {
   selectedDate: string;
   today: string;
   onSelectDate: (date: string) => void;
+}
+
+/**
+ * What a day carries, at a glance: something still open, a deadline due, or
+ * everything already closed. Without this the month view is only a way to
+ * navigate, and you have to open a day to find out whether it holds anything.
+ */
+function DayLoad({
+  counts,
+  date,
+  today,
+  isSelected,
+}: {
+  counts: ActivityDayCountDTO | undefined;
+  date: string;
+  today: string;
+  isSelected: boolean;
+}) {
+  const open = counts?.open ?? 0;
+  const done = counts?.done ?? 0;
+  const deadlines = counts?.deadlines ?? 0;
+  const dots: string[] = [];
+
+  if (open > 0) dots.push(date < today ? 'bg-red-500' : isSelected ? 'bg-sky-300' : 'bg-sky-500');
+  if (deadlines > 0) dots.push(isSelected ? 'bg-amber-300' : 'bg-amber-500');
+  if (open === 0 && done > 0) dots.push(isSelected ? 'bg-emerald-300' : 'bg-emerald-500');
+
+  return (
+    <span className="mt-0.5 flex h-1 items-center justify-center gap-0.5" aria-hidden="true">
+      {dots.map((color) => (
+        <span key={color} className={cn('w-1 h-1 rounded-full', color)} />
+      ))}
+    </span>
+  );
+}
+
+function loadLabel(counts: ActivityDayCountDTO | undefined): string | undefined {
+  if (!counts) return undefined;
+  const parts: string[] = [];
+  if (counts.open > 0) parts.push(`${counts.open} da fare`);
+  if (counts.done > 0) parts.push(`${counts.done} completate`);
+  if (counts.deadlines > 0) parts.push(`${counts.deadlines} scadenze`);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: ActivityMonthCalendarProps) {
@@ -44,6 +89,18 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
   const moveSelectedDay = (amount: number) => {
     onSelectDate(format(addDays(parseISO(selectedDate), amount), 'yyyy-MM-dd'));
   };
+
+  // Only what is on screen is asked for, so collapsing back to a week stops
+  // paying for a month of counts
+  const shownDays = isExpanded ? monthDays : weekDays;
+  const counts = useActivityCounts(
+    format(shownDays[0], 'yyyy-MM-dd'),
+    format(shownDays[shownDays.length - 1], 'yyyy-MM-dd')
+  );
+  const countsByDate = useMemo(
+    () => new Map((counts.data ?? []).map((entry) => [entry.date, entry])),
+    [counts.data]
+  );
 
   if (!isExpanded) {
     return (
@@ -89,29 +146,29 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
             const value = format(day, 'yyyy-MM-dd');
             const isSelected = value === selectedDate;
             const isToday = value === today;
+            const dayCounts = countsByDate.get(value);
             return (
               <button
                 key={value}
                 type="button"
                 onClick={() => onSelectDate(value)}
+                title={loadLabel(dayCounts)}
                 className={cn(
                   'relative min-h-11 flex flex-col items-center justify-center py-1.5 rounded-xl text-xs transition-colors',
                   isSelected
                     ? 'bg-slate-900 text-white shadow-sm'
                     : isToday
                       ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100',
+                  // The dot below now carries the day's load, so today needs a
+                  // mark of its own that survives being selected
+                  isToday && 'ring-1 ring-emerald-400'
                 )}
                 aria-current={isSelected ? 'date' : undefined}
               >
                 <span className="uppercase text-[9px] sm:text-[10px]">{format(day, 'EEE', { locale: it })}</span>
                 <span className="font-semibold">{format(day, 'd')}</span>
-                <span
-                  className={cn(
-                    'w-1 h-1 rounded-full mt-0.5',
-                    isToday ? (isSelected ? 'bg-emerald-300' : 'bg-emerald-500') : 'bg-transparent'
-                  )}
-                />
+                <DayLoad counts={dayCounts} date={value} today={today} isSelected={isSelected} />
               </button>
             );
           })}
@@ -170,28 +227,39 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
           const isSelected = value === selectedDate;
           const isToday = value === today;
           const inMonth = isSameMonth(day, visibleMonth);
+          const dayCounts = countsByDate.get(value);
           return (
             <button
               key={value}
               type="button"
               onClick={() => onSelectDate(value)}
+              title={loadLabel(dayCounts)}
               className={cn(
-                'relative min-h-10 sm:min-h-12 rounded-xl text-xs sm:text-sm font-medium transition-colors',
+                'relative min-h-10 sm:min-h-12 flex flex-col items-center justify-center rounded-xl text-xs sm:text-sm font-medium transition-colors',
                 isSelected
                   ? 'bg-slate-900 text-white shadow-sm'
                   : isToday
                     ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
                     : inMonth
                       ? 'text-slate-700 hover:bg-slate-100'
-                      : 'text-slate-300 hover:bg-slate-50'
+                      : 'text-slate-300 hover:bg-slate-50',
+                isToday && isSelected && 'ring-1 ring-emerald-400'
               )}
               aria-current={isSelected ? 'date' : undefined}
             >
               {format(day, 'd')}
-              {isToday && !isSelected && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />}
+              <DayLoad counts={dayCounts} date={value} today={today} isSelected={isSelected} />
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500" />da fare</span>
+        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />rimasto aperto</span>
+        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />scadenza</span>
+        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />tutto chiuso</span>
+        <span className="w-full sm:w-auto">I task settimanali non hanno un giorno, quindi non compaiono qui.</span>
       </div>
     </section>
   );

@@ -2,10 +2,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   activityIdSchema,
   activityOverviewQuerySchema,
+  activityRangeQuerySchema,
   activityTypeKeySchema,
   createActivitySchema,
   createActivityTypeSchema,
   reorderActivitiesSchema,
+  resetActivityOrderSchema,
   updateActivitySchema,
   updateActivityTypeSchema,
 } from '@budget/shared';
@@ -20,11 +22,28 @@ export const activityRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  fastify.get('/counts', {
+    schema: { tags: ['Activities'], summary: 'Per-day activity counts for a date range' },
+    handler: async (request) => {
+      const { from, to } = activityRangeQuerySchema.parse(request.query);
+      return { success: true, data: await activityService.countsByDay(request.authUser!.id, from, to) };
+    },
+  });
+
   fastify.put('/reorder', {
     schema: { tags: ['Activities'], summary: 'Persist the manual activity order' },
     handler: async (request) => {
       const { activityIds } = reorderActivitiesSchema.parse(request.body);
       await activityService.reorder(request.authUser!.id, activityIds);
+      return { success: true };
+    },
+  });
+
+  fastify.post('/reorder/reset', {
+    schema: { tags: ['Activities'], summary: 'Drop the manual order and sort automatically again' },
+    handler: async (request) => {
+      const { activityIds } = resetActivityOrderSchema.parse(request.body ?? {});
+      await activityService.resetOrder(request.authUser!.id, activityIds);
       return { success: true };
     },
   });

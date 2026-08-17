@@ -8,6 +8,8 @@ import {
   TREATMENT_KIND_LABELS,
   MILESTONE_KIND_LABELS,
   HABIT_STATUS_LABELS,
+  ACTIVITY_PRIORITY_LABELS,
+  ACTIVITY_STATUS_LABELS,
   BEDTIME_SLOT,
   BEDTIME_SLOT_LABEL,
   describeScaleValue,
@@ -69,6 +71,13 @@ import { buildFoodAiPackage } from './food-ai-export.js';
 //                 dose, intake_status = "applicata"/"programmata")
 //   milestone   - an exam, an appointment or another date (category = kind,
 //                 text = title, values and conditions to respect)
+//   activity    - something planned for that day: a task or a deadline
+//                 (category = its type, valence = priority, meal_type =
+//                 giornata/settimana/scadenza, text = title and note,
+//                 intake_status = da fare/in corso/completata). Dated on the
+//                 day it was planned or due, so an open row on a past date is
+//                 something that slipped. What was intended, next to what was
+//                 eaten and felt, is half of why a day went the way it did
 //   day_summary - one per tracked day (time 00:00), carrying the two day scores
 // body_state / mood_state are averages in [-1, +1] (positive/neutral/negative
 // = +1/0/-1) and are INDEPENDENT: an empty one means "not tracked that day".
@@ -183,6 +192,17 @@ export interface CsvMilestoneInput {
   isDone: boolean;
 }
 
+export interface CsvActivityInput {
+  date: string; // the day it is planned for, or the day it is due
+  time: string; // HH:MM, "00:00" when no hour was set
+  title: string;
+  notes: string | null;
+  typeName: string | null;
+  scopeLabel: string; // Giornata / Settimana / Scadenza
+  priorityLabel: string;
+  statusLabel: string;
+}
+
 function escapeCsvField(value: string): string {
   if (/[",\n\r]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -215,7 +235,8 @@ export function buildFoodCsv(
   treatments: CsvTreatmentInput[] = [],
   doseChanges: CsvDoseChangeInput[] = [],
   milestones: CsvMilestoneInput[] = [],
-  habits: CsvHabitInput[] = []
+  habits: CsvHabitInput[] = [],
+  activities: CsvActivityInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -540,6 +561,31 @@ export function buildFoodCsv(
     rows.push({ sortKey: `${milestone.date} 00:00 0`, line });
   }
 
+  // What the day was supposed to contain. An open row on a past date is a
+  // slipped task, and it reads as such without any extra column
+  for (const activity of activities) {
+    const detail = [activity.title, activity.notes].filter(Boolean).join(' · ');
+    const line = [
+      'activity',
+      activity.date,
+      activity.time,
+      escapeCsvField(activity.typeName ?? ''),
+      escapeCsvField(activity.priorityLabel),
+      escapeCsvField(activity.scopeLabel),
+      '',
+      '',
+      '',
+      escapeCsvField(detail),
+      '',
+      '',
+      '',
+      '',
+      '',
+      escapeCsvField(activity.statusLabel),
+    ].join(',');
+    rows.push({ sortKey: `${activity.date} ${activity.time} 1`, line });
+  }
+
   rows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
 
   // BOM so Excel detects UTF-8
@@ -613,7 +659,19 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones, habits] = await Promise.all([
+    // Activities live on `scheduledFor`, not on `date`, so they need their own
+    // window - the deadline ones are already normalised onto their due day
+    const activityFilter =
+      from || to
+        ? {
+            scheduledFor: {
+              ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+              ...(to ? { lte: new Date(`${to}T00:00:00.000Z`) } : {}),
+            },
+          }
+        : {};
+
+    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones, habits, activities] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
@@ -649,6 +707,11 @@ class FoodExportService {
       prisma.habitEntry.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
+      }),
+      prisma.activity.findMany({
+        where: { userId, ...activityFilter },
+        include: { type: { select: { name: true } } },
+        orderBy: { scheduledFor: 'asc' },
       }),
     ]);
 
@@ -764,6 +827,23 @@ class FoodExportService {
         value: entry.value,
         unit: entry.unit,
         note: entry.note,
+      })),
+      activities.map((activity) => ({
+        date: (activity.kind === 'DEADLINE' ? activity.dueDate ?? activity.scheduledFor : activity.scheduledFor)
+          .toISOString()
+          .slice(0, 10),
+        time: activity.dueTime ?? '00:00',
+        title: activity.title,
+        notes: activity.notes,
+        typeName: activity.type?.name ?? activity.typeName,
+        scopeLabel:
+          activity.kind === 'DEADLINE'
+            ? 'Scadenza'
+            : activity.scope === 'WEEK'
+              ? 'Settimana'
+              : 'Giornata',
+        priorityLabel: ACTIVITY_PRIORITY_LABELS[activity.priority],
+        statusLabel: ACTIVITY_STATUS_LABELS[activity.status],
       }))
     );
   }

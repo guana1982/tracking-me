@@ -243,6 +243,58 @@ describe('CSV export', () => {
     expect(buildFoodCsv([], [], 0).startsWith(BOM)).toBe(true);
   });
 
+  it('exports what was planned for the day, status included', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          time: '09:30',
+          title: 'Chiamare il centro prelievi',
+          notes: 'chiedere il digiuno',
+          typeName: 'Salute',
+          scopeLabel: 'Scadenza',
+          priorityLabel: 'Urgente',
+          statusLabel: 'Da fare',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'activity,2026-07-16,09:30,Salute,Urgente,Scadenza,,,,Chiamare il centro prelievi · chiedere il digiuno,,,,,,Da fare'
+    );
+  });
+
+  it('dates an undated task at midnight so it still belongs to its day', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [], [], [], [], [], [
+      {
+        date: '2026-07-16',
+        time: '00:00',
+        title: 'Sistemare la lavatrice',
+        notes: null,
+        typeName: null,
+        scopeLabel: 'Giornata',
+        priorityLabel: 'Media',
+        statusLabel: 'Completata',
+      },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'activity,2026-07-16,00:00,,Media,Giornata,,,,Sistemare la lavatrice,,,,,,Completata'
+    );
+  });
+
   it('leaves quantity and unit empty when missing (criterio 4)', () => {
     const csv = buildFoodCsv(
       [

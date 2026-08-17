@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Pencil, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import type {
   ActivityKindDTO,
   ActivityOverviewDTO,
@@ -12,6 +12,9 @@ interface ActivityToolsPanelProps {
   summary: ActivityOverviewDTO['summary'];
   types: ActivityTypeDTO[];
   isBusy: boolean;
+  isManualOrder: boolean;
+  isResettingOrder: boolean;
+  onResetOrder: () => Promise<void>;
   onInstallDefaults: () => Promise<void>;
   onCreate: (data: CreateActivityTypeDTO) => Promise<void>;
   onUpdate: (key: string, data: UpdateActivityTypeDTO) => Promise<void>;
@@ -22,6 +25,9 @@ export function ActivityToolsPanel({
   summary,
   types,
   isBusy,
+  isManualOrder,
+  isResettingOrder,
+  onResetOrder,
   onInstallDefaults,
   onCreate,
   onUpdate,
@@ -63,7 +69,13 @@ export function ActivityToolsPanel({
   };
 
   const remove = async (type: ActivityTypeDTO) => {
-    if (!window.confirm(`Eliminare la tipologia “${type.name}”? Le attività rimarranno salvate.`)) return;
+    if (
+      !window.confirm(
+        `Eliminare la tipologia “${type.name}”? Le attività restano, e conservano l’etichetta “${type.name}”.`
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       await onDelete(type.key);
@@ -101,8 +113,13 @@ export function ActivityToolsPanel({
         <div className="divide-y divide-slate-100">
           <div className="flex items-center justify-between px-4 py-3 text-sm"><span className="text-slate-500">Giornata</span><strong>{summary.todayCompleted}/{summary.todayTotal}</strong></div>
           <div className="flex items-center justify-between px-4 py-3 text-sm"><span className="text-slate-500">Settimana</span><strong>{summary.weekCompleted}/{summary.weekTotal}</strong></div>
+          <div className="flex items-center justify-between px-4 py-3 text-sm"><span className="text-slate-500">Arretrate</span><strong className={summary.backlog > 0 ? 'text-amber-600' : 'text-emerald-600'}>{summary.backlog}</strong></div>
           <div className="flex items-center justify-between px-4 py-3 text-sm"><span className="text-slate-500">Scadute</span><strong className={summary.overdue > 0 ? 'text-red-600' : 'text-emerald-600'}>{summary.overdue}</strong></div>
         </div>
+        <p className="px-4 pb-3 text-[11px] text-slate-400">
+          «Arretrate» sono aperte da giorni precedenti, «scadute» hanno superato la data entro cui
+          dovevano chiudersi: un’attività può essere l’una, l’altra o entrambe.
+        </p>
       </section>
 
       <section className="card p-0 overflow-hidden">
@@ -168,7 +185,25 @@ export function ActivityToolsPanel({
 
       <section className="card p-3 text-[11px] text-slate-500">
         <p className="font-semibold text-slate-700 mb-1.5">Ordine della lista</p>
-        <p>Urgente → Alta → Media → Bassa. A parità, prima le scadenze più vicine.</p>
+        {isManualOrder ? (
+          <>
+            <p>
+              Stai usando un ordine tuo: hai trascinato almeno una scheda, quindi priorità e
+              scadenze non decidono più la posizione.
+            </p>
+            <button
+              type="button"
+              onClick={() => void onResetOrder()}
+              disabled={isResettingOrder}
+              className="btn btn-secondary mt-2 min-h-9 w-full text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isResettingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Torna all’ordine automatico
+            </button>
+          </>
+        ) : (
+          <p>Urgente → Alta → Media → Bassa. A parità, prima le scadenze più vicine.</p>
+        )}
       </section>
     </div>
   );

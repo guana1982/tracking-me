@@ -130,16 +130,37 @@ export interface ActivityOverviewDTO {
   date: string;
   weekStart: string;
   weekEnd: string;
-  /** Every open item, plus completed items belonging to the selected day/week. */
+  /**
+   * What the selected date is answerable for: its day tasks, its week tasks,
+   * the open deadlines, and whatever was left open before it. Tasks planned
+   * for a later day are not here - they belong to the day they were planned
+   * for, and the calendar is how you reach them.
+   */
   all: ActivityDTO[];
   today: ActivityDTO[];
   week: ActivityDTO[];
   deadlines: ActivityDTO[];
+  /** Still open and planned before the selected date. */
+  backlog: ActivityDTO[];
   summary: {
     todayCompleted: number;
     todayTotal: number;
     weekCompleted: number;
     weekTotal: number;
+    /** Anything still open whose due date has passed, task or deadline alike. */
     overdue: number;
+    backlog: number;
   };
+}
+
+/**
+ * How busy one calendar day is, for the dots in the month view. Week tasks are
+ * not counted: they belong to a week, not to any day of it, and spreading them
+ * over seven cells would invent a load that is not there.
+ */
+export interface ActivityDayCountDTO {
+  date: string;
+  open: number;
+  done: number;
+  deadlines: number;
 }

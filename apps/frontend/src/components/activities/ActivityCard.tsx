@@ -16,6 +16,8 @@ const PRIORITY_STYLES: Record<ActivityPriorityDTO, string> = {
 interface ActivityCardProps {
   activity: ActivityDTO;
   today: string;
+  /** Left open on an earlier day, and shown here so it is not forgotten */
+  isBacklog?: boolean;
   isBusy: boolean;
   dragHandleProps: ButtonHTMLAttributes<HTMLButtonElement>;
   onToggle: (activity: ActivityDTO) => void;
@@ -27,6 +29,7 @@ interface ActivityCardProps {
 export function ActivityCard({
   activity,
   today,
+  isBacklog = false,
   isBusy,
   dragHandleProps,
   onToggle,
@@ -132,6 +135,14 @@ export function ActivityCard({
           {activity.status === 'IN_PROGRESS' && (
             <span className="shrink-0 rounded-full border border-blue-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
               {ACTIVITY_STATUS_LABELS.IN_PROGRESS}
+            </span>
+          )}
+          {isBacklog && (
+            <span
+              title="Pianificata per un giorno precedente e ancora aperta"
+              className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+            >
+              Arretrato
             </span>
           )}
         </div>
