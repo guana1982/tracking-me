@@ -68,7 +68,11 @@ export function Activities() {
 
   const allActivities = useMemo(() => {
     if (!overview.data) return [];
-    return [...overview.data.all].sort(sortByImportance);
+    const source = Array.isArray(overview.data.all)
+      ? overview.data.all
+      : [...overview.data.today, ...overview.data.week, ...overview.data.deadlines];
+    const unique = new Map(source.map((activity) => [activity.id, activity]));
+    return [...unique.values()].sort(sortByImportance);
   }, [overview.data]);
 
   const visibleActivities = useMemo(
