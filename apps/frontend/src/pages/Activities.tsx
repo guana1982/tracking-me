@@ -204,17 +204,19 @@ export function Activities() {
                   <p className="mt-1 text-xs text-slate-400">Usa il pannello a sinistra per aggiungerne uno.</p>
                 </div>
               ) : (
-                visibleActivities.map((activity) => (
-                  <ActivityCard
-                    key={activity.id}
-                    activity={activity}
-                    today={today}
-                    isBusy={busyId === activity.id}
-                    onToggle={handleToggle}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                ))
+                <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
+                  {visibleActivities.map((activity) => (
+                    <ActivityCard
+                      key={activity.id}
+                      activity={activity}
+                      today={today}
+                      isBusy={busyId === activity.id}
+                      onToggle={handleToggle}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </div>
               )}
             </section>
           </main>
