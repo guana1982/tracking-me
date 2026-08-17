@@ -125,6 +125,8 @@ export interface ActivityOverviewDTO {
   date: string;
   weekStart: string;
   weekEnd: string;
+  /** Every open item, plus completed items belonging to the selected day/week. */
+  all: ActivityDTO[];
   today: ActivityDTO[];
   week: ActivityDTO[];
   deadlines: ActivityDTO[];

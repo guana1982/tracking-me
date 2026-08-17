@@ -14,7 +14,10 @@ ma usa la stessa autenticazione, lo stesso database user-scoped e gli stessi pat
 - tipologie personalizzabili e disattivabili, separate tra attività e scadenze;
 - set di tipologie suggerite installabile su richiesta;
 - riepilogo giornaliero, settimanale e delle scadenze arretrate;
-- interfaccia responsive con selettore settimanale e modali mobile bottom-sheet.
+- calendario mensile responsive;
+- layout workspace con editor sempre visibile, lista centrale ordinata per priorità e strumenti laterali;
+- modifica inline: la matita carica il task direttamente nell’editor, senza modali;
+- lista centrale con tutte le attività aperte e filtri per giornaliere, settimanali e scadenze.
 
 ## Semantica dei dati
 
@@ -44,7 +47,8 @@ Tutte le query Prisma filtrano per `userId`. Le date di calendario sono memorizz
 
 - ricorrenze e generazione delle occorrenze;
 - notifiche e promemoria;
-- vista mensile completa e drag-and-drop;
+- indicatori di carico e attività direttamente nelle celle del calendario;
+- drag-and-drop tra giorni e riordinamento manuale;
 - backlog e ricerca/filtri;
 - ordinamento manuale persistente;
 - allegati e collegamenti tra attività;

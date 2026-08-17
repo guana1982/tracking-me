@@ -77,19 +77,15 @@ class ActivityService {
       where: {
         userId,
         OR: [
-          { kind: 'TASK', scope: 'DAY', scheduledFor: selectedDay },
-          { kind: 'TASK', scope: 'WEEK', scheduledFor: weekStartDay },
+          { status: { not: 'DONE' } },
+          { kind: 'TASK', scope: 'DAY', scheduledFor: selectedDay, status: 'DONE' },
+          { kind: 'TASK', scope: 'WEEK', scheduledFor: weekStartDay, status: 'DONE' },
           {
             kind: 'DEADLINE',
+            status: 'DONE',
             OR: [
-              { status: { not: 'DONE' } },
-              {
-                status: 'DONE',
-                OR: [
-                  { dueDate: { gte: weekStartDay, lte: weekEndDay } },
-                  { completedAt: { gte: weekStartDay, lt: dayAfterWeekEnd } },
-                ],
-              },
+              { dueDate: { gte: weekStartDay, lte: weekEndDay } },
+              { completedAt: { gte: weekStartDay, lt: dayAfterWeekEnd } },
             ],
           },
         ],
@@ -99,10 +95,20 @@ class ActivityService {
 
     const mapped = records.map((activity) => this.toDTO(activity));
     const today = mapped
-      .filter((activity) => activity.kind === 'TASK' && activity.scope === 'DAY')
+      .filter(
+        (activity) =>
+          activity.kind === 'TASK' &&
+          activity.scope === 'DAY' &&
+          activity.scheduledFor === date
+      )
       .sort(sortActivities);
     const week = mapped
-      .filter((activity) => activity.kind === 'TASK' && activity.scope === 'WEEK')
+      .filter(
+        (activity) =>
+          activity.kind === 'TASK' &&
+          activity.scope === 'WEEK' &&
+          activity.scheduledFor === weekStart
+      )
       .sort(sortActivities);
     const deadlines = mapped
       .filter((activity) => activity.kind === 'DEADLINE')
@@ -112,6 +118,7 @@ class ActivityService {
       date,
       weekStart,
       weekEnd,
+      all: mapped,
       today,
       week,
       deadlines,

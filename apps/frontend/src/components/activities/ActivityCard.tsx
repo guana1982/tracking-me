@@ -27,6 +27,12 @@ export function ActivityCard({ activity, today, isBusy, onToggle, onEdit, onDele
   const dueLabel = activity.dueDate
     ? format(parseISO(activity.dueDate), 'EEE d MMM', { locale: it })
     : null;
+  const contextLabel =
+    activity.kind === 'DEADLINE'
+      ? 'Scadenza'
+      : activity.scope === 'WEEK'
+        ? `Settimana ${format(parseISO(activity.scheduledFor), 'd MMM', { locale: it })}`
+        : format(parseISO(activity.scheduledFor), 'EEE d MMM', { locale: it });
 
   return (
     <article className={cn('group flex gap-3 px-3 sm:px-4 py-3 border-t border-slate-100 first:border-t-0', isDone && 'bg-slate-50/70')}>
@@ -54,6 +60,7 @@ export function ActivityCard({ activity, today, isBusy, onToggle, onEdit, onDele
         </div>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[11px] text-slate-500">
+          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{contextLabel}</span>
           {activity.typeName && (
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activity.typeColor ?? '#94a3b8' }} />
