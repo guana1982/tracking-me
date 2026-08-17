@@ -19,6 +19,13 @@ import { cn } from '../../lib/utils';
 interface ActivityMonthCalendarProps {
   selectedDate: string;
   today: string;
+  /**
+   * Owned by the page: collapsed the strip spans the top, expanded the month
+   * moves into the left column, so the task list can start at the top of the
+   * page instead of being pushed down by a grid it does not need
+   */
+  isExpanded: boolean;
+  onExpandedChange: (isExpanded: boolean) => void;
   onSelectDate: (date: string) => void;
 }
 
@@ -65,8 +72,13 @@ function loadLabel(counts: ActivityDayCountDTO | undefined): string | undefined 
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: ActivityMonthCalendarProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function ActivityMonthCalendar({
+  selectedDate,
+  today,
+  isExpanded,
+  onExpandedChange,
+  onSelectDate,
+}: ActivityMonthCalendarProps) {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(parseISO(selectedDate)));
 
   useEffect(() => {
@@ -130,7 +142,7 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
 
           <button
             type="button"
-            onClick={() => setIsExpanded(true)}
+            onClick={() => onExpandedChange(true)}
             className="btn btn-secondary min-h-9 shrink-0 px-2.5 text-xs flex items-center gap-1.5"
             aria-expanded="false"
             aria-label="Espandi il calendario mensile"
@@ -177,50 +189,37 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
     );
   }
 
+  // Sized for the left column, not for the full page width
   return (
-    <section className="card w-full max-w-4xl mx-auto p-3 sm:p-4 xl:shrink-0" aria-label="Calendario mensile">
-      <div className="flex justify-end mb-1">
-        <button
-          type="button"
-          onClick={() => setIsExpanded(false)}
-          className="btn btn-secondary min-h-9 px-2.5 text-xs flex items-center gap-1.5"
-          aria-expanded="true"
-          aria-label="Riduci il calendario alla settimana"
-        >
-          <CalendarDays className="w-3.5 h-3.5" />
-          <span>Riduci</span>
-          <ChevronUp className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 mb-3">
+    <section className="card w-full p-3" aria-label="Calendario mensile">
+      <div className="flex items-center justify-between gap-2 mb-2">
         <button
           type="button"
           onClick={() => setVisibleMonth((month) => addMonths(month, -1))}
-          className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 shrink-0"
           aria-label="Mese precedente"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="w-4 h-4" />
         </button>
-        <div className="text-center">
-          <h2 className="text-sm sm:text-base font-semibold text-slate-900 capitalize">{format(visibleMonth, 'MMMM yyyy', { locale: it })}</h2>
-          <button type="button" onClick={() => onSelectDate(today)} className="mt-0.5 text-[11px] font-medium text-blue-600 hover:underline">
+        <div className="min-w-0 text-center">
+          <h2 className="text-sm font-semibold text-slate-900 capitalize truncate">{format(visibleMonth, 'MMMM yyyy', { locale: it })}</h2>
+          <button type="button" onClick={() => onSelectDate(today)} className="text-[11px] font-medium text-blue-600 hover:underline">
             {selectedDate === today ? 'Oggi selezionato' : 'Torna a oggi'}
           </button>
         </div>
         <button
           type="button"
           onClick={() => setVisibleMonth((month) => addMonths(month, 1))}
-          className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 shrink-0"
           aria-label="Mese successivo"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map((label) => (
-          <div key={label} className="pb-1 text-center text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+          <div key={label} className="pb-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
         ))}
         {monthDays.map((day) => {
           const value = format(day, 'yyyy-MM-dd');
@@ -235,7 +234,7 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
               onClick={() => onSelectDate(value)}
               title={loadLabel(dayCounts)}
               className={cn(
-                'relative min-h-10 sm:min-h-12 flex flex-col items-center justify-center rounded-xl text-xs sm:text-sm font-medium transition-colors',
+                'relative min-h-9 flex flex-col items-center justify-center rounded-lg text-xs font-medium transition-colors',
                 isSelected
                   ? 'bg-slate-900 text-white shadow-sm'
                   : isToday
@@ -254,13 +253,27 @@ export function ActivityMonthCalendar({ selectedDate, today, onSelectDate }: Act
         })}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
         <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500" />da fare</span>
         <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />rimasto aperto</span>
         <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />scadenza</span>
         <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />tutto chiuso</span>
-        <span className="w-full sm:w-auto">I task settimanali non hanno un giorno, quindi non compaiono qui.</span>
+        <span className="w-full">I task settimanali non hanno un giorno, quindi non compaiono qui.</span>
       </div>
+
+      {/* Closing sits at the bottom: it is the last thing you reach after
+          scanning the month, not the first thing you meet */}
+      <button
+        type="button"
+        onClick={() => onExpandedChange(false)}
+        className="btn btn-secondary mt-2.5 min-h-9 w-full text-xs flex items-center justify-center gap-1.5"
+        aria-expanded="true"
+        aria-label="Riduci il calendario alla settimana"
+      >
+        <CalendarDays className="w-3.5 h-3.5" />
+        <span>Riduci alla settimana</span>
+        <ChevronUp className="w-3.5 h-3.5" />
+      </button>
     </section>
   );
 }

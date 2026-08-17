@@ -83,6 +83,7 @@ export function Activities() {
   const [editing, setEditing] = useState<ActivityDTO | null>(null);
   const [editorVersion, setEditorVersion] = useState(0);
   const [filter, setFilter] = useState<ListFilter>('ALL');
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -348,11 +349,25 @@ export function Activities() {
     { key: 'DONE', label: 'Completate', count: countFor('DONE') },
   ];
 
+  const calendar = (
+    <ActivityMonthCalendar
+      selectedDate={selectedDate}
+      today={today}
+      isExpanded={isCalendarExpanded}
+      onExpandedChange={setIsCalendarExpanded}
+      onSelectDate={(date) => {
+        setSelectedDate(date);
+        setEditing(null);
+        setEditorVersion((version) => version + 1);
+      }}
+    />
+  );
+
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-7xl pb-6 xl:max-w-none xl:h-full xl:flex xl:flex-col xl:overflow-hidden">
-      <div className="mb-4 xl:shrink-0">
-        <ActivityMonthCalendar selectedDate={selectedDate} today={today} onSelectDate={(date) => { setSelectedDate(date); setEditing(null); setEditorVersion((version) => version + 1); }} />
-      </div>
+      {/* Collapsed, the week strip spans the top; expanded, the month moves
+          into the left column and the list gets the whole height back */}
+      {!isCalendarExpanded && <div className="mb-4 xl:shrink-0">{calendar}</div>}
 
       {overview.isLoading ? (
         <div className="card min-h-48 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
@@ -360,16 +375,21 @@ export function Activities() {
         <div className="card text-sm text-red-600">Impossibile caricare le attività. Riprova tra poco.</div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[21rem_minmax(0,1fr)_21rem] 2xl:grid-cols-[24rem_minmax(0,1fr)_24rem] xl:flex-1 xl:min-h-0">
-          <aside ref={editorRef} className={`${PANE_CLASS} lg:col-start-1 lg:row-start-1`}>
-            <ActivityEditorPanel
-              key={editing ? `edit-${editing.id}` : `new-${selectedDate}-${editorVersion}`}
-              activity={editing}
-              selectedDate={selectedDate}
-              types={types.data ?? []}
-              isSaving={createActivity.isPending || updateActivity.isPending}
-              onSave={handleSave}
-              onCancelEdit={() => { setEditing(null); setEditorVersion((version) => version + 1); }}
-            />
+          <aside className={`${PANE_CLASS} lg:col-start-1 lg:row-start-1`}>
+            {isCalendarExpanded && calendar}
+            {/* The anchor is the editor, not the column: pressing "modifica"
+                has to land on the form, not on the calendar above it */}
+            <div ref={editorRef}>
+              <ActivityEditorPanel
+                key={editing ? `edit-${editing.id}` : `new-${selectedDate}-${editorVersion}`}
+                activity={editing}
+                selectedDate={selectedDate}
+                types={types.data ?? []}
+                isSaving={createActivity.isPending || updateActivity.isPending}
+                onSave={handleSave}
+                onCancelEdit={() => { setEditing(null); setEditorVersion((version) => version + 1); }}
+              />
+            </div>
           </aside>
 
           <main className={`${PANE_CLASS} lg:col-start-2 lg:row-start-1`}>
