@@ -90,9 +90,14 @@ export interface ActivityDTO {
   typeName: string | null;
   typeColor: string | null;
   position: number;
+  isManuallyPositioned: boolean;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReorderActivitiesDTO {
+  activityIds: string[];
 }
 
 export interface CreateActivityDTO {

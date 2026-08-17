@@ -923,6 +923,7 @@ model Activity {
   priority     ActivityPriority @default(MEDIUM)
   status       ActivityStatus   @default(TODO)
   position     Int              @default(0)
+  isManuallyPositioned Boolean  @default(false)
   completedAt  DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

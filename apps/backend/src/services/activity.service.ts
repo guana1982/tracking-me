@@ -47,6 +47,12 @@ export function weekStartForDate(date: string): string {
 }
 
 function sortActivities(left: ActivityDTO, right: ActivityDTO): number {
+  if (left.isManuallyPositioned && right.isManuallyPositioned) {
+    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
+  }
+  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
+    return left.isManuallyPositioned ? -1 : 1;
+  }
   if (left.status === 'DONE' && right.status !== 'DONE') return 1;
   if (left.status !== 'DONE' && right.status === 'DONE') return -1;
   const priority = PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
@@ -55,6 +61,12 @@ function sortActivities(left: ActivityDTO, right: ActivityDTO): number {
 }
 
 function sortDeadlines(left: ActivityDTO, right: ActivityDTO): number {
+  if (left.isManuallyPositioned && right.isManuallyPositioned) {
+    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
+  }
+  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
+    return left.isManuallyPositioned ? -1 : 1;
+  }
   if (left.status === 'DONE' && right.status !== 'DONE') return 1;
   if (left.status !== 'DONE' && right.status === 'DONE') return -1;
   const byDate = (left.dueDate ?? '9999-12-31').localeCompare(right.dueDate ?? '9999-12-31');
@@ -211,11 +223,31 @@ class ActivityService {
         priority: data.priority,
         status: nextStatus,
         position: data.position,
+        isManuallyPositioned: data.position === undefined ? undefined : true,
         completedAt,
       },
       include: { type: true },
     });
     return this.toDTO(activity);
+  }
+
+  async reorder(userId: string, activityIds: string[]): Promise<void> {
+    const activities = await prisma.activity.findMany({
+      where: { userId, id: { in: activityIds } },
+      select: { id: true },
+    });
+    if (activities.length !== activityIds.length) {
+      throw new AppError('Una o più attività non sono state trovate', 404, 'NOT_FOUND');
+    }
+
+    await prisma.$transaction(
+      activityIds.map((id, position) =>
+        prisma.activity.update({
+          where: { id },
+          data: { position, isManuallyPositioned: true },
+        })
+      )
+    );
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -398,6 +430,7 @@ class ActivityService {
       typeName: activity.type?.name ?? null,
       typeColor: activity.type?.color ?? null,
       position: activity.position,
+      isManuallyPositioned: activity.isManuallyPositioned,
       completedAt: activity.completedAt?.toISOString() ?? null,
       createdAt: activity.createdAt.toISOString(),
       updatedAt: activity.updatedAt.toISOString(),

@@ -21,6 +21,16 @@ export const activityOverviewQuerySchema = z.object({
   date: activityDateSchema,
 });
 
+export const reorderActivitiesSchema = z.object({
+  activityIds: z
+    .array(activityIdSchema)
+    .min(1)
+    .max(500)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Activity IDs must be unique',
+    }),
+});
+
 export const createActivitySchema = z
   .object({
     title: z.string().trim().min(1).max(160),
@@ -87,5 +97,6 @@ export const updateActivityTypeSchema = z
 
 export type CreateActivityInput = z.infer<typeof createActivitySchema>;
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;
+export type ReorderActivitiesInput = z.infer<typeof reorderActivitiesSchema>;
 export type CreateActivityTypeInput = z.infer<typeof createActivityTypeSchema>;
 export type UpdateActivityTypeInput = z.infer<typeof updateActivityTypeSchema>;

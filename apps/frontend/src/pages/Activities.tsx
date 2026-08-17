@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import {
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { CheckSquare2, Loader2 } from 'lucide-react';
@@ -15,9 +22,11 @@ import {
   useDeleteActivity,
   useDeleteActivityType,
   useInstallActivityTypes,
+  useReorderActivities,
   useUpdateActivity,
   useUpdateActivityType,
 } from '../hooks/useActivityQueries';
+import { cn } from '../lib/utils';
 
 type ListFilter = 'ALL' | 'DAY' | 'WEEK' | 'DEADLINE';
 
@@ -35,6 +44,12 @@ function localIsoDate(date = new Date()): string {
 }
 
 function sortByImportance(left: ActivityDTO, right: ActivityDTO): number {
+  if (left.isManuallyPositioned && right.isManuallyPositioned) {
+    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
+  }
+  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
+    return left.isManuallyPositioned ? -1 : 1;
+  }
   if (left.status === 'DONE' && right.status !== 'DONE') return 1;
   if (left.status !== 'DONE' && right.status === 'DONE') return -1;
   const priority = PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
@@ -54,12 +69,16 @@ export function Activities() {
   const [filter, setFilter] = useState<ListFilter>('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const pointerDragId = useRef<string | null>(null);
 
   const overview = useActivityOverview(selectedDate);
   const types = useActivityTypes();
   const createActivity = useCreateActivity();
   const updateActivity = useUpdateActivity();
+  const reorderActivities = useReorderActivities();
   const deleteActivity = useDeleteActivity();
   const installTypes = useInstallActivityTypes();
   const createType = useCreateActivityType();
@@ -116,6 +135,72 @@ export function Activities() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const handleSaveNote = async (activity: ActivityDTO, notes: string | null) => {
+    await updateActivity.mutateAsync({ id: activity.id, data: { notes } });
+  };
+
+  const clearDragState = () => {
+    pointerDragId.current = null;
+    setDraggedId(null);
+    setOverId(null);
+  };
+
+  const reorder = async (activeId: string, targetId: string) => {
+    if (activeId === targetId || reorderActivities.isPending) return;
+    const activityIds = allActivities.map((activity) => activity.id);
+    const sourceIndex = activityIds.indexOf(activeId);
+    const targetIndex = activityIds.indexOf(targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const [movedId] = activityIds.splice(sourceIndex, 1);
+    activityIds.splice(targetIndex, 0, movedId);
+    setPageError(null);
+    try {
+      await reorderActivities.mutateAsync(activityIds);
+    } catch (cause) {
+      setPageError(cause instanceof Error ? cause.message : 'Impossibile salvare il nuovo ordine.');
+    }
+  };
+
+  const activityAtPoint = (clientX: number, clientY: number) =>
+    document
+      .elementFromPoint(clientX, clientY)
+      ?.closest<HTMLElement>('[data-activity-id]')
+      ?.dataset.activityId ?? null;
+
+  const handlePointerDown = (activityId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' || reorderActivities.isPending) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerDragId.current = activityId;
+    setDraggedId(activityId);
+    setOverId(activityId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!pointerDragId.current) return;
+    event.preventDefault();
+    const targetId = activityAtPoint(event.clientX, event.clientY);
+    if (targetId) setOverId(targetId);
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const activeId = pointerDragId.current;
+    if (!activeId) return;
+    const targetId = activityAtPoint(event.clientX, event.clientY);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    clearDragState();
+    if (targetId) void reorder(activeId, targetId);
+  };
+
+  const moveWithKeyboard = (activityId: string, direction: -1 | 1) => {
+    const currentIndex = visibleActivities.findIndex((activity) => activity.id === activityId);
+    const target = visibleActivities[currentIndex + direction];
+    if (currentIndex >= 0 && target) void reorder(activityId, target.id);
   };
 
   const handleDelete = async (activity: ActivityDTO) => {
@@ -206,15 +291,60 @@ export function Activities() {
               ) : (
                 <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
                   {visibleActivities.map((activity) => (
-                    <ActivityCard
+                    <div
                       key={activity.id}
-                      activity={activity}
-                      today={today}
-                      isBusy={busyId === activity.id}
-                      onToggle={handleToggle}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
+                      data-activity-id={activity.id}
+                      onDragOver={(event) => {
+                        if (!draggedId) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        setOverId(activity.id);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const activeId = event.dataTransfer.getData('text/plain') || draggedId;
+                        clearDragState();
+                        if (activeId) void reorder(activeId, activity.id);
+                      }}
+                      className={cn(
+                        'rounded-xl transition-all',
+                        draggedId === activity.id && 'opacity-40',
+                        overId === activity.id && draggedId !== activity.id && 'ring-2 ring-sky-400 ring-offset-2'
+                      )}
+                    >
+                      <ActivityCard
+                        activity={activity}
+                        today={today}
+                        isBusy={busyId === activity.id}
+                        dragHandleProps={{
+                          draggable: !reorderActivities.isPending,
+                          disabled: reorderActivities.isPending,
+                          title: 'Trascina per riordinare',
+                          'aria-label': `Riordina ${activity.title}`,
+                          onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => {
+                            setDraggedId(activity.id);
+                            setOverId(activity.id);
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', activity.id);
+                          },
+                          onDragEnd: clearDragState,
+                          onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => handlePointerDown(activity.id, event),
+                          onPointerMove: handlePointerMove,
+                          onPointerUp: handlePointerUp,
+                          onPointerCancel: clearDragState,
+                          onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              moveWithKeyboard(activity.id, event.key === 'ArrowUp' ? -1 : 1);
+                            }
+                          },
+                        }}
+                        onToggle={handleToggle}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onSaveNote={handleSaveNote}
+                      />
+                    </div>
                   ))}
                 </div>
               )}

@@ -1,6 +1,7 @@
+import { useEffect, useState, type ButtonHTMLAttributes, type FormEvent } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { CalendarClock, Check, CheckSquare2, Circle, Clock3, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, CheckSquare2, Circle, Clock3, GripVertical, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import type { ActivityDTO, ActivityPriorityDTO } from '@budget/shared';
 import { ACTIVITY_PRIORITY_LABELS, ACTIVITY_STATUS_LABELS } from '@budget/shared';
 import { cn } from '../../lib/utils';
@@ -16,12 +17,28 @@ interface ActivityCardProps {
   activity: ActivityDTO;
   today: string;
   isBusy: boolean;
+  dragHandleProps: ButtonHTMLAttributes<HTMLButtonElement>;
   onToggle: (activity: ActivityDTO) => void;
   onEdit: (activity: ActivityDTO) => void;
   onDelete: (activity: ActivityDTO) => void;
+  onSaveNote: (activity: ActivityDTO, notes: string | null) => Promise<void>;
 }
 
-export function ActivityCard({ activity, today, isBusy, onToggle, onEdit, onDelete }: ActivityCardProps) {
+export function ActivityCard({
+  activity,
+  today,
+  isBusy,
+  dragHandleProps,
+  onToggle,
+  onEdit,
+  onDelete,
+  onSaveNote,
+}: ActivityCardProps) {
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [noteValue, setNoteValue] = useState(activity.notes ?? '');
+  const [displayNote, setDisplayNote] = useState(activity.notes ?? '');
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
   const isDone = activity.status === 'DONE';
   const isOverdue = !isDone && activity.dueDate !== null && activity.dueDate < today;
   const dueLabel = activity.dueDate
@@ -33,9 +50,51 @@ export function ActivityCard({ activity, today, isBusy, onToggle, onEdit, onDele
       : activity.scope === 'WEEK'
         ? `Settimana ${format(parseISO(activity.scheduledFor), 'd MMM', { locale: it })}`
         : format(parseISO(activity.scheduledFor), 'EEE d MMM', { locale: it });
+  const { className: dragHandleClassName, ...restDragHandleProps } = dragHandleProps;
+
+  useEffect(() => {
+    setNoteValue(activity.notes ?? '');
+    setDisplayNote(activity.notes ?? '');
+  }, [activity.notes]);
+
+  const cancelNote = () => {
+    setNoteValue(displayNote);
+    setNoteError(null);
+    setIsEditingNote(false);
+  };
+
+  const saveNote = async (event: FormEvent) => {
+    event.preventDefault();
+    const notes = noteValue.trim() || null;
+    if (notes === (displayNote || null)) {
+      setIsEditingNote(false);
+      return;
+    }
+    setIsSavingNote(true);
+    setNoteError(null);
+    try {
+      await onSaveNote(activity, notes);
+      setDisplayNote(notes ?? '');
+      setIsEditingNote(false);
+    } catch (cause) {
+      setNoteError(cause instanceof Error ? cause.message : 'Impossibile salvare la nota.');
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
 
   return (
     <article className="group flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm transition-colors hover:border-slate-300">
+      <button
+        type="button"
+        {...restDragHandleProps}
+        className={cn(
+          'w-8 h-10 sm:w-6 sm:h-7 -ml-1 rounded-lg flex items-center justify-center shrink-0 touch-none cursor-grab active:cursor-grabbing text-slate-300 hover:bg-slate-50 hover:text-slate-500',
+          dragHandleClassName
+        )}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
       <button
         type="button"
         onClick={() => onToggle(activity)}
@@ -93,16 +152,62 @@ export function ActivityCard({ activity, today, isBusy, onToggle, onEdit, onDele
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => onEdit(activity)}
-          className={cn(
-            'mt-1 block w-full text-left text-xs italic whitespace-pre-wrap break-words transition-colors',
-            activity.notes ? (isDone ? 'text-slate-400' : 'text-slate-500 hover:text-slate-700') : 'text-slate-400 hover:text-blue-600'
-          )}
-        >
-          {activity.notes || 'Aggiungi una nota'}
-        </button>
+        {isEditingNote ? (
+          <form onSubmit={saveNote} className="mt-1.5">
+            <div className="flex items-start gap-1.5">
+              <textarea
+                autoFocus
+                value={noteValue}
+                onChange={(event) => setNoteValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelNote();
+                  } else if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                maxLength={2000}
+                rows={1}
+                placeholder="Nota..."
+                disabled={isSavingNote}
+                className="input min-h-9 flex-1 resize-y py-2 text-xs"
+              />
+              <button
+                type="submit"
+                disabled={isSavingNote}
+                aria-label="Salva nota"
+                title="Salva nota"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+              >
+                {isSavingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={cancelNote}
+                disabled={isSavingNote}
+                aria-label="Annulla nota"
+                title="Annulla"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {noteError && <p className="mt-1 text-[11px] text-red-600">{noteError}</p>}
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsEditingNote(true)}
+            className={cn(
+              'mt-1 block w-full text-left text-xs italic whitespace-pre-wrap break-words transition-colors',
+              displayNote ? (isDone ? 'text-slate-400' : 'text-slate-500 hover:text-slate-700') : 'text-slate-400 hover:text-blue-600'
+            )}
+          >
+            {displayNote || 'Aggiungi una nota'}
+          </button>
+        )}
       </div>
 
       <div className="flex shrink-0 self-start">

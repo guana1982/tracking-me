@@ -4,6 +4,7 @@ import type {
   ActivityTypeDTO,
   CreateActivityDTO,
   CreateActivityTypeDTO,
+  ReorderActivitiesDTO,
   UpdateActivityDTO,
   UpdateActivityTypeDTO,
 } from '@budget/shared';
@@ -21,6 +22,12 @@ export const activitiesApi = {
 
   update: (id: string, data: UpdateActivityDTO) =>
     fetchApi<ActivityDTO>(`/activities/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  reorder: (data: ReorderActivitiesDTO) =>
+    fetchApi<void>('/activities/reorder', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

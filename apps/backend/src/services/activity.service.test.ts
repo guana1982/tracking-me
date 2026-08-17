@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createActivitySchema } from '@budget/shared';
+import { createActivitySchema, reorderActivitiesSchema } from '@budget/shared';
 import { weekStartForDate } from './activity.service.js';
 
 describe('activities', () => {
@@ -24,6 +24,16 @@ describe('activities', () => {
         scheduledFor: '2026-08-15',
         dueTime: '25:00',
       })
+    ).toThrow();
+  });
+
+  it('accepts only a non-empty list of unique activity IDs for reordering', () => {
+    expect(reorderActivitiesSchema.parse({ activityIds: ['activity-1', 'activity-2'] })).toEqual({
+      activityIds: ['activity-1', 'activity-2'],
+    });
+    expect(() => reorderActivitiesSchema.parse({ activityIds: [] })).toThrow();
+    expect(() =>
+      reorderActivitiesSchema.parse({ activityIds: ['activity-1', 'activity-1'] })
     ).toThrow();
   });
 });

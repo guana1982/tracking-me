@@ -5,6 +5,7 @@ import {
   activityTypeKeySchema,
   createActivitySchema,
   createActivityTypeSchema,
+  reorderActivitiesSchema,
   updateActivitySchema,
   updateActivityTypeSchema,
 } from '@budget/shared';
@@ -16,6 +17,15 @@ export const activityRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const { date } = activityOverviewQuerySchema.parse(request.query);
       return { success: true, data: await activityService.getOverview(request.authUser!.id, date) };
+    },
+  });
+
+  fastify.put('/reorder', {
+    schema: { tags: ['Activities'], summary: 'Persist the manual activity order' },
+    handler: async (request) => {
+      const { activityIds } = reorderActivitiesSchema.parse(request.body);
+      await activityService.reorder(request.authUser!.id, activityIds);
+      return { success: true };
     },
   });
 

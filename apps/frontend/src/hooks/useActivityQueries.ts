@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ActivityOverviewDTO,
   CreateActivityDTO,
   CreateActivityTypeDTO,
   UpdateActivityDTO,
@@ -41,6 +42,42 @@ export function useUpdateActivity() {
     mutationFn: ({ id, data }: { id: string; data: UpdateActivityDTO }) =>
       activitiesApi.update(id, data),
     onSuccess: refresh,
+  });
+}
+
+export function useReorderActivities() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (activityIds: string[]) => activitiesApi.reorder({ activityIds }),
+    onMutate: async (activityIds) => {
+      await queryClient.cancelQueries({ queryKey: activityKeys.all });
+      const previous = queryClient.getQueriesData<ActivityOverviewDTO>({ queryKey: activityKeys.all });
+      const positions = new Map(activityIds.map((id, position) => [id, position]));
+      const updateItems = (items: ActivityOverviewDTO['all']) =>
+        items.map((activity) => {
+          const position = positions.get(activity.id);
+          return position === undefined
+            ? activity
+            : { ...activity, position, isManuallyPositioned: true };
+        });
+
+      queryClient.setQueriesData<ActivityOverviewDTO>({ queryKey: activityKeys.all }, (current) =>
+        current
+          ? {
+              ...current,
+              all: updateItems(Array.isArray(current.all) ? current.all : []),
+              today: updateItems(current.today),
+              week: updateItems(current.week),
+              deadlines: updateItems(current.deadlines),
+            }
+          : current
+      );
+      return { previous };
+    },
+    onError: (_error, _activityIds, context) => {
+      context?.previous.forEach(([queryKey, data]) => queryClient.setQueryData(queryKey, data));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
