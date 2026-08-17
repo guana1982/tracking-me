@@ -148,11 +148,6 @@ export function Activities() {
 
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-7xl pb-6 xl:max-w-none xl:h-full xl:flex xl:flex-col xl:overflow-hidden">
-      <div className="mb-3 xl:shrink-0">
-        <h1 className="text-lg sm:text-xl font-bold text-slate-900">Calendario e attività</h1>
-        <p className="mt-0.5 text-xs sm:text-sm text-slate-500">Seleziona un giorno, inserisci e gestisci tutto dalla stessa schermata.</p>
-      </div>
-
       <div className="mb-4 xl:shrink-0">
         <ActivityMonthCalendar selectedDate={selectedDate} today={today} onSelectDate={(date) => { setSelectedDate(date); setEditing(null); setEditorVersion((version) => version + 1); }} />
       </div>
