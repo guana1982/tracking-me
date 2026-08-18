@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { todayLocal, addDaysLocal, localDateOf } from '../lib/foodUtils';
@@ -48,8 +48,25 @@ function weekStart(date: string): string {
   return addDaysLocal(date, -day);
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function FoodDiary() {
-  const [selectedDate, setSelectedDate] = useState(todayLocal());
+  // The day lives in the URL so the trends page can point at one, and so a
+  // day can be linked to at all. State stays the source of truth for the
+  // page; the query string only mirrors it
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const requested = searchParams.get('date');
+    return requested && ISO_DATE.test(requested) ? requested : todayLocal();
+  });
+
+  useEffect(() => {
+    if (searchParams.get('date') === selectedDate) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('date', selectedDate);
+    // Replace, not push: moving a day at a time must not fill the back button
+    setSearchParams(next, { replace: true });
+  }, [searchParams, selectedDate, setSearchParams]);
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealDTO | null>(null);
   const [duplicateFrom, setDuplicateFrom] = useState<MealDTO | null>(null);

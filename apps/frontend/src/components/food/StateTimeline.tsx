@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
   ComposedChart,
@@ -47,6 +48,7 @@ interface StateTimelineProps {
  * orizzontali per i periodi integratore.
  */
 export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
+  const navigate = useNavigate();
   const [days, setDays] = useState<30 | 90>(30);
   const to = todayLocal();
   const from = addDaysLocal(to, -(days - 1));
@@ -116,7 +118,22 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
       ) : (
         <>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -28 }}>
+            <ComposedChart
+              data={data}
+              margin={{ top: 8, right: 8, bottom: 0, left: -28 }}
+              style={{ cursor: 'pointer' }}
+              /**
+               * The whole column, not the dot alone: a 2.5px target is not one
+               * anybody can hit, and the day is what is being asked for either
+               * way. `activeTooltipIndex` is the column the tooltip is on, so
+               * what gets opened is exactly what was being read.
+               */
+              onClick={(state) => {
+                const index = state?.activeTooltipIndex;
+                const day = typeof index === 'number' ? data[index] : undefined;
+                if (day) navigate(`/food?date=${day.date}`);
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis
                 dataKey="shortDate"
@@ -186,6 +203,7 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                   stroke={BODY_LINE_COLOR}
                   strokeWidth={2}
                   dot={{ r: 2.5 }}
+                  activeDot={{ r: 5 }}
                   connectNulls
                 />
               )}
@@ -197,6 +215,7 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                   strokeWidth={2}
                   strokeDasharray="5 3"
                   dot={{ r: 2.5 }}
+                  activeDot={{ r: 5 }}
                   connectNulls
                 />
               )}
@@ -209,6 +228,10 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
               <Scatter dataKey="sideEffects" fill="#f43f5e" shape="circle" />
             </ComposedChart>
           </ResponsiveContainer>
+
+          <p className="mt-2 text-[11px] text-slate-400">
+            Clicca un punto del grafico per aprire quel giorno nel diario.
+          </p>
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
             {showBody && (

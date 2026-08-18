@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -26,6 +27,7 @@ interface MonthCalendarProps {
 
 /** Calendario mensile a semaforo: costanza e andamento a colpo d'occhio */
 export function MonthCalendar({ track, onTrackChange }: MonthCalendarProps) {
+  const navigate = useNavigate();
   const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const { from, to } = monthRange(month);
   const overview = useFoodOverview(from, to);
@@ -81,10 +83,14 @@ export function MonthCalendar({ track, onTrackChange }: MonthCalendarProps) {
               const hasColor =
                 (showBody && day.dayState !== null) || (showMood && day.moodState !== null);
               return (
-                <div
+                <button
                   key={day.date}
+                  type="button"
+                  onClick={() => navigate(`/food?date=${day.date}`)}
+                  aria-label={`Apri il diario del ${day.date}`}
                   className={cn(
                     'relative overflow-hidden rounded-lg p-1 flex flex-col items-center gap-0.5 min-h-12',
+                    'transition-shadow hover:ring-2 hover:ring-sky-400 hover:ring-offset-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500',
                     !hasColor && 'bg-slate-100 border border-slate-200'
                   )}
                   title={[
@@ -96,6 +102,7 @@ export function MonthCalendar({ track, onTrackChange }: MonthCalendarProps) {
                     showMood
                       ? `umore ${day.moodState !== null ? day.moodState : 'n.d.'}`
                       : null,
+                    'apri il giorno',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -151,10 +158,11 @@ export function MonthCalendar({ track, onTrackChange }: MonthCalendarProps) {
                       <span className="w-1.5 h-1.5 rotate-45 bg-white ring-1 ring-fuchsia-400" />
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
+          <p className="mt-2 text-[11px] text-slate-400">Clicca un giorno per aprirlo nel diario.</p>
           {track === 'BOTH' && (
             <p className="mt-3 text-[11px] text-slate-400">
               Ogni giorno è diviso in due: <strong className="font-medium text-slate-500">sopra</strong> la
