@@ -9,12 +9,14 @@ import {
 } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { CheckSquare2, Loader2, RotateCcw, Search, X } from 'lucide-react';
+import { CheckSquare2, Loader2, Plus, RotateCcw, Search, Tags, X } from 'lucide-react';
 import type { ActivityDTO, ActivityPriorityDTO, UpdateActivityDTO } from '@budget/shared';
 import { ActivityCard } from '../components/activities/ActivityCard';
-import { ActivityEditorPanel, type ActivityEditorData } from '../components/activities/ActivityEditorPanel';
-import { ActivityMonthCalendar } from '../components/activities/ActivityMonthCalendar';
-import { ActivityToolsPanel } from '../components/activities/ActivityToolsPanel';
+import { ActivityEditorModal } from '../components/activities/ActivityEditorModal';
+import type { ActivityEditorData } from '../components/activities/ActivityEditorPanel';
+import { ActivityMonthPanel, ActivityWeekStrip } from '../components/activities/ActivityCalendar';
+import { ActivitySummaryDock } from '../components/activities/ActivitySummaryDock';
+import { ActivityTypesModal } from '../components/activities/ActivityTypesModal';
 import {
   useActivityOverview,
   useActivityTypes,
@@ -38,8 +40,6 @@ const PRIORITY_WEIGHT: Record<ActivityPriorityDTO, number> = {
   MEDIUM: 2,
   LOW: 1,
 };
-
-const PANE_CLASS = 'min-w-0 space-y-3 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:pr-1';
 
 /** How close to the edge of the screen a finger has to be to start scrolling */
 const AUTOSCROLL_EDGE = 80;
@@ -66,7 +66,7 @@ function sortByImportance(left: ActivityDTO, right: ActivityDTO): number {
   return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
 }
 
-/** The element that actually scrolls: the centre pane on desktop, the page on a phone */
+/** The element that actually scrolls: the page shell on desktop, the window on a phone */
 function scrollableAncestor(node: HTMLElement | null): HTMLElement | null {
   for (let element = node; element; element = element.parentElement) {
     const overflowY = window.getComputedStyle(element).overflowY;
@@ -82,14 +82,19 @@ export function Activities() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [editing, setEditing] = useState<ActivityDTO | null>(null);
   const [editorVersion, setEditorVersion] = useState(0);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isTypesOpen, setIsTypesOpen] = useState(false);
+  const [isMonthOpen, setIsMonthOpen] = useState(false);
+  // Lifted out of the dock because the page has to reserve room for it: a
+  // fixed panel over the last cards would put the handle and the checkbox
+  // out of reach
+  const [isSummaryOpen, setIsSummaryOpen] = useState(() => window.innerWidth >= 640);
   const [filter, setFilter] = useState<ListFilter>('ALL');
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
   const pointerDragId = useRef<string | null>(null);
   const autoScroll = useRef<{ frame: number | null; speed: number; container: HTMLElement | null }>({
     frame: null,
@@ -161,21 +166,32 @@ export function Activities() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allActivities, backlogIds, filter, search, selectedDate, weekStart]);
 
+  const openNewActivity = () => {
+    setEditing(null);
+    setEditorVersion((version) => version + 1);
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditing(null);
+    setEditorVersion((version) => version + 1);
+  };
+
   const handleSave = async (data: ActivityEditorData) => {
     if (editing) {
       const update: UpdateActivityDTO = { ...data, status: data.status };
       await updateActivity.mutateAsync({ id: editing.id, data: update });
-      setEditing(null);
     } else {
       const { status: _status, ...create } = data;
       await createActivity.mutateAsync(create);
     }
-    setEditorVersion((version) => version + 1);
+    closeEditor();
   };
 
   const handleEdit = (activity: ActivityDTO) => {
     setEditing(activity);
-    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setIsEditorOpen(true);
   };
 
   const handleToggle = async (activity: ActivityDTO) => {
@@ -323,10 +339,7 @@ export function Activities() {
     setPageError(null);
     try {
       await deleteActivity.mutateAsync(activity.id);
-      if (editing?.id === activity.id) {
-        setEditing(null);
-        setEditorVersion((version) => version + 1);
-      }
+      if (editing?.id === activity.id) closeEditor();
     } catch (cause) {
       setPageError(cause instanceof Error ? cause.message : 'Impossibile eliminare l’attività.');
     } finally {
@@ -349,74 +362,85 @@ export function Activities() {
     { key: 'DONE', label: 'Completate', count: countFor('DONE') },
   ];
 
-  const calendar = (
-    <ActivityMonthCalendar
-      selectedDate={selectedDate}
-      today={today}
-      isExpanded={isCalendarExpanded}
-      onExpandedChange={setIsCalendarExpanded}
-      onSelectDate={(date) => {
-        setSelectedDate(date);
-        setEditing(null);
-        setEditorVersion((version) => version + 1);
-      }}
-    />
-  );
+  const selectDate = (date: string) => {
+    setSelectedDate(date);
+    setEditing(null);
+    setEditorVersion((version) => version + 1);
+  };
 
   return (
-    <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-7xl pb-6 xl:max-w-none xl:h-full xl:flex xl:flex-col xl:overflow-hidden">
-      {/* Collapsed, the week strip spans the top; expanded, the month moves
-          into the left column and the list gets the whole height back */}
-      {!isCalendarExpanded && <div className="mb-4 xl:shrink-0">{calendar}</div>}
+    <div
+      className={cn(
+        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56',
+        // Room for the docked summary, so the last cards stay clickable
+        isSummaryOpen ? 'pb-[22rem] sm:pb-[17rem]' : 'pb-32 sm:pb-20'
+      )}
+    >
+      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <ActivityWeekStrip
+            selectedDate={selectedDate}
+            today={today}
+            isMonthOpen={isMonthOpen}
+            onToggleMonth={() => setIsMonthOpen((open) => !open)}
+            onSelectDate={selectDate}
+          />
+        </div>
+
+        {/* The two setup panels are now errands, not scenery: they get a button
+            each and give their width back to the list */}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={openNewActivity}
+            className="btn btn-primary min-h-10 px-3 text-xs flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuova<span className="hidden sm:inline"> attività</span></span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsTypesOpen(true)}
+            className="btn btn-secondary min-h-10 px-3 text-xs flex items-center gap-1.5"
+            aria-label="Gestisci le tipologie"
+          >
+            <Tags className="w-4 h-4" />
+            <span className="hidden sm:inline">Tipologie</span>
+          </button>
+        </div>
+      </header>
 
       {overview.isLoading ? (
         <div className="card min-h-48 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
       ) : overview.isError || !data ? (
         <div className="card text-sm text-red-600">Impossibile caricare le attività. Riprova tra poco.</div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[21rem_minmax(0,1fr)_21rem] 2xl:grid-cols-[24rem_minmax(0,1fr)_24rem] xl:flex-1 xl:min-h-0">
-          <aside className={`${PANE_CLASS} lg:col-start-1 lg:row-start-1`}>
-            {isCalendarExpanded && calendar}
-            {/* The anchor is the editor, not the column: pressing "modifica"
-                has to land on the form, not on the calendar above it */}
-            <div ref={editorRef}>
-              <ActivityEditorPanel
-                key={editing ? `edit-${editing.id}` : `new-${selectedDate}-${editorVersion}`}
-                activity={editing}
-                selectedDate={selectedDate}
-                types={types.data ?? []}
-                isSaving={createActivity.isPending || updateActivity.isPending}
-                onSave={handleSave}
-                onCancelEdit={() => { setEditing(null); setEditorVersion((version) => version + 1); }}
-              />
-            </div>
-          </aside>
-
-          <main className={`${PANE_CLASS} lg:col-start-2 lg:row-start-1`}>
-            <section className="card p-0 overflow-hidden min-h-64">
-              <div className="sticky top-0 z-10 bg-white px-3 sm:px-4 py-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0"><CheckSquare2 className="w-4 h-4" /></div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-sm font-semibold text-slate-900">Da fare</h2>
-                    <p className="text-[11px] text-slate-500 truncate capitalize">{selectedLabel}</p>
-                  </div>
-                  {isManualOrder && (
-                    <button
-                      type="button"
-                      onClick={() => void handleResetOrder()}
-                      disabled={resetOrder.isPending}
-                      title="Torna all’ordine per priorità e scadenza"
-                      className="shrink-0 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      {resetOrder.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                      Ordine manuale
-                    </button>
-                  )}
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{visibleActivities.length}</span>
+        <>
+          <section className="card p-0 overflow-hidden min-h-64">
+            <div className="sticky top-0 z-10 bg-white px-3 sm:px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0"><CheckSquare2 className="w-4 h-4" /></div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold text-slate-900">Da fare</h2>
+                  <p className="text-[11px] text-slate-500 truncate capitalize">{selectedLabel}</p>
                 </div>
+                {isManualOrder && (
+                  <button
+                    type="button"
+                    onClick={() => void handleResetOrder()}
+                    disabled={resetOrder.isPending}
+                    title="Torna all’ordine per priorità e scadenza"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    {resetOrder.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                    Ordine manuale
+                  </button>
+                )}
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{visibleActivities.length}</span>
+              </div>
 
-                <div className="relative mt-3">
+              <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
+                <div className="relative lg:w-80 lg:shrink-0">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     value={search}
@@ -437,7 +461,7 @@ export function Activities() {
                   )}
                 </div>
 
-                <div className="flex gap-1.5 mt-2 overflow-x-auto pb-0.5">
+                <div className="flex gap-1.5 overflow-x-auto pb-0.5">
                   {filters.map((entry) => (
                     <button
                       key={entry.key}
@@ -457,98 +481,129 @@ export function Activities() {
                   ))}
                 </div>
               </div>
+            </div>
 
-              {pageError && <div className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{pageError}</div>}
-              {visibleActivities.length === 0 ? (
-                <div className="px-4 py-12 text-center">
-                  <p className="text-sm text-slate-500">
-                    {search.trim() ? 'Nessun risultato per questa ricerca.' : 'Niente in questa vista.'}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {search.trim()
-                      ? 'Prova con un’altra parola o cambia filtro.'
-                      : 'Aggiungi un task dal riquadro “Nuova attività”, o scegli un altro giorno dal calendario.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
-                  {visibleActivities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      data-activity-id={activity.id}
-                      onDragOver={(event) => {
-                        if (!draggedId) return;
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'move';
-                        setOverId(activity.id);
+            {pageError && <div className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{pageError}</div>}
+            {visibleActivities.length === 0 ? (
+              <div className="px-4 py-12 text-center">
+                <p className="text-sm text-slate-500">
+                  {search.trim() ? 'Nessun risultato per questa ricerca.' : 'Niente in questa vista.'}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {search.trim()
+                    ? 'Prova con un’altra parola o cambia filtro.'
+                    : 'Aggiungi un task con il pulsante «Nuova attività», o scegli un altro giorno dal calendario.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
+                {visibleActivities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    data-activity-id={activity.id}
+                    onDragOver={(event) => {
+                      if (!draggedId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      setOverId(activity.id);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const activeId = event.dataTransfer.getData('text/plain') || draggedId;
+                      clearDragState();
+                      if (activeId) void reorder(activeId, activity.id);
+                    }}
+                    className={cn(
+                      'rounded-xl transition-all',
+                      draggedId === activity.id && 'opacity-40',
+                      overId === activity.id && draggedId !== activity.id && 'ring-2 ring-sky-400 ring-offset-2'
+                    )}
+                  >
+                    <ActivityCard
+                      activity={activity}
+                      today={today}
+                      isBacklog={backlogIds.has(activity.id)}
+                      isBusy={busyId === activity.id}
+                      dragHandleProps={{
+                        draggable: true,
+                        title: 'Trascina per riordinare',
+                        'aria-label': `Riordina ${activity.title}`,
+                        onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => {
+                          setDraggedId(activity.id);
+                          setOverId(activity.id);
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', activity.id);
+                        },
+                        onDragEnd: clearDragState,
+                        onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => handlePointerDown(activity.id, event),
+                        onPointerMove: handlePointerMove,
+                        onPointerUp: handlePointerUp,
+                        onPointerCancel: clearDragState,
+                        onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            moveWithKeyboard(activity.id, event.key === 'ArrowUp' ? -1 : 1);
+                          }
+                        },
                       }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        const activeId = event.dataTransfer.getData('text/plain') || draggedId;
-                        clearDragState();
-                        if (activeId) void reorder(activeId, activity.id);
-                      }}
-                      className={cn(
-                        'rounded-xl transition-all',
-                        draggedId === activity.id && 'opacity-40',
-                        overId === activity.id && draggedId !== activity.id && 'ring-2 ring-sky-400 ring-offset-2'
-                      )}
-                    >
-                      <ActivityCard
-                        activity={activity}
-                        today={today}
-                        isBacklog={backlogIds.has(activity.id)}
-                        isBusy={busyId === activity.id}
-                        dragHandleProps={{
-                          draggable: true,
-                          title: 'Trascina per riordinare',
-                          'aria-label': `Riordina ${activity.title}`,
-                          onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => {
-                            setDraggedId(activity.id);
-                            setOverId(activity.id);
-                            event.dataTransfer.effectAllowed = 'move';
-                            event.dataTransfer.setData('text/plain', activity.id);
-                          },
-                          onDragEnd: clearDragState,
-                          onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => handlePointerDown(activity.id, event),
-                          onPointerMove: handlePointerMove,
-                          onPointerUp: handlePointerUp,
-                          onPointerCancel: clearDragState,
-                          onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-                            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                              event.preventDefault();
-                              moveWithKeyboard(activity.id, event.key === 'ArrowUp' ? -1 : 1);
-                            }
-                          },
-                        }}
-                        onToggle={handleToggle}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        onSaveNote={handleSaveNote}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </main>
+                      onToggle={handleToggle}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onSaveNote={handleSaveNote}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
-          <aside className={`${PANE_CLASS} lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-3 xl:row-start-1`}>
-            <ActivityToolsPanel
+          {/* On a phone the two docks would sit on top of each other, and the
+              month is the one that was just asked for */}
+          <div className={isMonthOpen ? 'hidden sm:block' : undefined}>
+            <ActivitySummaryDock
               summary={data.summary}
-              types={types.data ?? []}
-              isBusy={typeBusy}
+              isOpen={isSummaryOpen}
+              onOpenChange={setIsSummaryOpen}
               isManualOrder={isManualOrder}
               isResettingOrder={resetOrder.isPending}
               onResetOrder={handleResetOrder}
-              onInstallDefaults={async () => { await installTypes.mutateAsync(); }}
-              onCreate={async (value) => { await createType.mutateAsync(value); }}
-              onUpdate={async (key, value) => { await updateType.mutateAsync({ key, data: value }); }}
-              onDelete={async (key) => { await deleteType.mutateAsync(key); }}
             />
-          </aside>
+          </div>
+        </>
+      )}
+
+      {isMonthOpen && (
+        <div className="fixed z-30 bottom-20 right-3 sm:bottom-4 sm:right-4 w-80 max-w-[calc(100vw-1.5rem)]">
+          <ActivityMonthPanel
+            selectedDate={selectedDate}
+            today={today}
+            onClose={() => setIsMonthOpen(false)}
+            onSelectDate={selectDate}
+          />
         </div>
       )}
+
+      <ActivityEditorModal
+        key={editing ? `edit-${editing.id}` : `new-${selectedDate}-${editorVersion}`}
+        isOpen={isEditorOpen}
+        onClose={closeEditor}
+        activity={editing}
+        selectedDate={selectedDate}
+        types={types.data ?? []}
+        isSaving={createActivity.isPending || updateActivity.isPending}
+        onSave={handleSave}
+      />
+
+      <ActivityTypesModal
+        isOpen={isTypesOpen}
+        onClose={() => setIsTypesOpen(false)}
+        types={types.data ?? []}
+        isBusy={typeBusy}
+        onInstallDefaults={async () => { await installTypes.mutateAsync(); }}
+        onCreate={async (value) => { await createType.mutateAsync(value); }}
+        onUpdate={async (key, value) => { await updateType.mutateAsync({ key, data: value }); }}
+        onDelete={async (key) => { await deleteType.mutateAsync(key); }}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { CalendarClock, CheckSquare2, Loader2, RotateCcw, Save } from 'lucide-react';
+import { CalendarClock, CheckSquare2, Loader2, RotateCcw, Save, X } from 'lucide-react';
 import type {
   ActivityDTO,
   ActivityKindDTO,
@@ -23,6 +23,11 @@ interface ActivityEditorPanelProps {
   isSaving: boolean;
   onSave: (data: ActivityEditorData) => Promise<void>;
   onCancelEdit: () => void;
+  /**
+   * Set when the panel is the body of a modal: its own header then doubles as
+   * the modal header, so there is one way out and not two headers stacked
+   */
+  onClose?: () => void;
 }
 
 const PRIORITIES: ActivityPriorityDTO[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
@@ -34,6 +39,7 @@ export function ActivityEditorPanel({
   isSaving,
   onSave,
   onCancelEdit,
+  onClose,
 }: ActivityEditorPanelProps) {
   const [title, setTitle] = useState(activity?.title ?? '');
   const [notes, setNotes] = useState(activity?.notes ?? '');
@@ -100,10 +106,16 @@ export function ActivityEditorPanel({
           <h2 className="text-sm font-semibold text-slate-900">{activity ? 'Modifica attività' : 'Nuova attività'}</h2>
           <p className="text-[11px] text-slate-500">{activity ? 'Le modifiche agiscono sul task selezionato.' : 'Inserisci un task senza lasciare la pagina.'}</p>
         </div>
-        {activity && (
-          <button type="button" onClick={onCancelEdit} title="Annulla modifica" className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100">
-            <RotateCcw className="w-4 h-4" />
+        {onClose ? (
+          <button type="button" onClick={onClose} title="Chiudi" aria-label="Chiudi" className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="w-4 h-4" />
           </button>
+        ) : (
+          activity && (
+            <button type="button" onClick={onCancelEdit} title="Annulla modifica" className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100">
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )
         )}
       </div>
 
@@ -186,7 +198,7 @@ export function ActivityEditorPanel({
           {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {activity ? 'Salva modifiche' : 'Aggiungi attività'}
         </button>
-        {activity && <button type="button" onClick={onCancelEdit} className="btn btn-secondary w-full min-h-10 text-xs">Torna al nuovo inserimento</button>}
+        {activity && !onClose && <button type="button" onClick={onCancelEdit} className="btn btn-secondary w-full min-h-10 text-xs">Torna al nuovo inserimento</button>}
       </form>
     </section>
   );
