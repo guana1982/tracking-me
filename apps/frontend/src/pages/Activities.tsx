@@ -105,6 +105,10 @@ export function Activities() {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const pointerDragId = useRef<string | null>(null);
+  // Read synchronously by dragover: state has not necessarily been committed
+  // by the time the first one arrives, and a dragover that does not
+  // preventDefault is a dragover the browser refuses
+  const dragSourceId = useRef<string | null>(null);
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   // A long press that turned into a drag must not also fire the click of
@@ -291,9 +295,21 @@ export function Activities() {
   const clearDragState = () => {
     cancelPressTimer();
     pointerDragId.current = null;
+    dragSourceId.current = null;
     stopAutoScroll();
     setDraggedId(null);
     setDropTarget(null);
+  };
+
+  /**
+   * Starting a native drag makes the browser take the pointer away, and it
+   * says so with a pointercancel. Tearing the drag down there would end it
+   * before the first dragover, which is why the mouse only ever got the
+   * no-drop cursor. Only a touch drag, which owns its pointer, ends here.
+   */
+  const handlePointerCancel = () => {
+    cancelPressTimer();
+    if (pointerDragId.current) clearDragState();
   };
 
   /**
@@ -440,6 +456,7 @@ export function Activities() {
     isReorderable
       ? {
           onDragStart: (event: ReactDragEvent<HTMLElement>) => {
+            dragSourceId.current = activity.id;
             setDraggedId(activity.id);
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', activity.id);
@@ -449,7 +466,7 @@ export function Activities() {
             handlePointerDown(activity.id, event),
           onPointerMove: handlePointerMove,
           onPointerUp: handlePointerUp,
-          onPointerCancel: clearDragState,
+          onPointerCancel: handlePointerCancel,
           onClickCapture: (event: ReactMouseEvent<HTMLElement>) => {
             if (!swallowClick.current) return;
             swallowClick.current = false;
@@ -591,7 +608,16 @@ export function Activities() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
+              <div
+                // The gaps between the cards belong to the list too: without
+                // this the cursor flicks to "no drop" every time it crosses one
+                onDragOver={(event) => {
+                  if (!isReorderable || !(dragSourceId.current ?? draggedId)) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                }}
+                className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3"
+              >
                 {visibleActivities.map((activity) => {
                   const isTarget =
                     dropTarget?.id === activity.id && draggedId !== null && draggedId !== activity.id;
@@ -600,7 +626,7 @@ export function Activities() {
                       key={activity.id}
                       data-activity-id={activity.id}
                       onDragOver={(event) => {
-                        if (!draggedId || !isReorderable) return;
+                        if (!isReorderable || !(dragSourceId.current ?? draggedId)) return;
                         event.preventDefault();
                         event.dataTransfer.dropEffect = 'move';
                         setDropTarget({
@@ -610,7 +636,10 @@ export function Activities() {
                       }}
                       onDrop={(event) => {
                         event.preventDefault();
-                        const activeId = event.dataTransfer.getData('text/plain') || draggedId;
+                        const activeId =
+                          event.dataTransfer.getData('text/plain') ||
+                          dragSourceId.current ||
+                          draggedId;
                         // Read off the event, never off the state: the last
                         // dragover may not have been rendered yet
                         const edge = edgeFor(event.clientY, event.currentTarget);
