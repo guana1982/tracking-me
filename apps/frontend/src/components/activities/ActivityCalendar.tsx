@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   addDays,
   addMonths,
@@ -65,6 +65,12 @@ interface ActivityWeekStripProps {
   /** Only to label the toggle: the month itself is a panel the page places */
   isMonthOpen: boolean;
   onToggleMonth: () => void;
+  /**
+   * Page buttons that ride in the strip's own top row, as on the food diary:
+   * they have to sit inside the centred block, or centring the days would push
+   * them off on their own
+   */
+  actions?: ReactNode;
   onSelectDate: (date: string) => void;
 }
 
@@ -78,6 +84,7 @@ export function ActivityWeekStrip({
   today,
   isMonthOpen,
   onToggleMonth,
+  actions,
   onSelectDate,
 }: ActivityWeekStripProps) {
   const weekDays = useMemo(() => {
@@ -99,7 +106,7 @@ export function ActivityWeekStrip({
   };
 
   return (
-    <section className="w-full max-w-2xl" aria-label="Calendario settimanale">
+    <section className="w-full max-w-2xl mx-auto" aria-label="Calendario settimanale">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-0.5 min-w-0">
           <button
@@ -123,23 +130,26 @@ export function ActivityWeekStrip({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onToggleMonth}
-          className={cn(
-            'btn min-h-9 shrink-0 px-2.5 text-xs flex items-center gap-1.5',
-            isMonthOpen ? 'btn-primary' : 'btn-secondary'
-          )}
-          aria-expanded={isMonthOpen}
-          aria-label={isMonthOpen ? 'Chiudi il calendario mensile' : 'Apri il calendario mensile'}
-        >
-          <CalendarDays className="w-3.5 h-3.5" />
-          <span>
-            {isMonthOpen ? 'Chiudi' : 'Espandi'}
-            <span className="hidden sm:inline"> mese</span>
-          </span>
-          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', isMonthOpen && 'rotate-180')} />
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {actions}
+          <button
+            type="button"
+            onClick={onToggleMonth}
+            className={cn(
+              'btn min-h-9 px-2 sm:px-2.5 text-xs flex items-center gap-1.5',
+              isMonthOpen ? 'btn-primary' : 'btn-secondary'
+            )}
+            aria-expanded={isMonthOpen}
+            aria-label={isMonthOpen ? 'Chiudi il calendario mensile' : 'Apri il calendario mensile'}
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>
+              {isMonthOpen ? 'Chiudi' : 'Espandi'}
+              <span className="hidden sm:inline"> mese</span>
+            </span>
+            <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', isMonthOpen && 'rotate-180')} />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-7 gap-1">
@@ -181,6 +191,10 @@ export function ActivityWeekStrip({
 interface ActivityMonthPanelProps {
   selectedDate: string;
   today: string;
+  /** Says whose date is being picked, when the panel is answering for one card */
+  caption?: ReactNode;
+  /** An extra way out under the legend, e.g. dropping a due date entirely */
+  footer?: ReactNode;
   onClose: () => void;
   onSelectDate: (date: string) => void;
 }
@@ -190,7 +204,14 @@ interface ActivityMonthPanelProps {
  * jumping to another date is an occasional errand, and it should not push the
  * list down or take width away from it for the rest of the session.
  */
-export function ActivityMonthPanel({ selectedDate, today, onClose, onSelectDate }: ActivityMonthPanelProps) {
+export function ActivityMonthPanel({
+  selectedDate,
+  today,
+  caption,
+  footer,
+  onClose,
+  onSelectDate,
+}: ActivityMonthPanelProps) {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(parseISO(selectedDate)));
 
   useEffect(() => {
@@ -229,6 +250,12 @@ export function ActivityMonthPanel({ selectedDate, today, onClose, onSelectDate 
       className="card w-full p-3 shadow-xl max-h-[70vh] overflow-y-auto overscroll-contain"
       aria-label="Calendario mensile"
     >
+      {caption && (
+        <div className="mb-2 border-b border-slate-100 pb-2 text-[11px] leading-snug text-slate-500">
+          {caption}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-1 mb-2">
         <button
           type="button"
@@ -309,6 +336,8 @@ export function ActivityMonthPanel({ selectedDate, today, onClose, onSelectDate 
         <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />tutto chiuso</span>
         <span className="w-full">I task settimanali non hanno un giorno, quindi non compaiono qui.</span>
       </div>
+
+      {footer && <div className="mt-2 border-t border-slate-100 pt-2">{footer}</div>}
     </section>
   );
 }

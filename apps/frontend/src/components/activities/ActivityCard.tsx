@@ -4,6 +4,7 @@ import {
   type ButtonHTMLAttributes,
   type FormEvent,
   type HTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -40,7 +41,20 @@ interface ActivityCardProps {
   onEdit: (activity: ActivityDTO) => void;
   onDelete: (activity: ActivityDTO) => void;
   onSaveNote: (activity: ActivityDTO, notes: string | null) => Promise<void>;
+  /**
+   * Opens the month next to the date that was clicked. Moving a task by a day
+   * is the commonest edit there is, and it should not cost a trip through the
+   * whole form.
+   */
+  onPickDate: (
+    activity: ActivityDTO,
+    field: 'scheduledFor' | 'dueDate',
+    event: ReactMouseEvent<HTMLButtonElement>
+  ) => void;
 }
+
+const DATE_BUTTON_CLASS =
+  'rounded px-1 -mx-1 underline decoration-dotted underline-offset-2 transition-colors hover:bg-slate-100 hover:text-slate-700';
 
 export function ActivityCard({
   activity,
@@ -55,6 +69,7 @@ export function ActivityCard({
   onEdit,
   onDelete,
   onSaveNote,
+  onPickDate,
 }: ActivityCardProps) {
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [noteValue, setNoteValue] = useState(activity.notes ?? '');
@@ -179,18 +194,52 @@ export function ActivityCard({
         </div>
 
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-slate-400">
-          <span>{contextLabel}</span>
+          {activity.kind === 'TASK' ? (
+            <button
+              type="button"
+              data-no-drag=""
+              onClick={(event) => onPickDate(activity, 'scheduledFor', event)}
+              title={activity.scope === 'WEEK' ? 'Sposta a un’altra settimana' : 'Sposta a un altro giorno'}
+              className={DATE_BUTTON_CLASS}
+            >
+              {contextLabel}
+            </button>
+          ) : (
+            <span>{contextLabel}</span>
+          )}
           {activity.typeName && (
             <span className="inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: activity.typeColor ?? '#94a3b8' }} />
               {activity.typeName}
             </span>
           )}
-          {dueLabel && (
-            <span className={cn('inline-flex items-center gap-1', isOverdue && 'font-semibold text-red-600')}>
+          {dueLabel ? (
+            <button
+              type="button"
+              data-no-drag=""
+              onClick={(event) => onPickDate(activity, 'dueDate', event)}
+              title="Cambia la data entro cui chiudere"
+              className={cn(
+                'inline-flex items-center gap-1',
+                DATE_BUTTON_CLASS,
+                isOverdue && 'font-semibold text-red-600 hover:text-red-700'
+              )}
+            >
               <Clock3 className="w-3 h-3" />
               {isOverdue ? 'Scaduta ' : 'Entro '}{dueLabel}
-            </span>
+            </button>
+          ) : (
+            activity.kind === 'TASK' && (
+              <button
+                type="button"
+                data-no-drag=""
+                onClick={(event) => onPickDate(activity, 'dueDate', event)}
+                title="Imposta una data entro cui chiudere"
+                className={cn(DATE_BUTTON_CLASS, 'hover:text-blue-600')}
+              >
+                + entro il
+              </button>
+            )
           )}
         </div>
 

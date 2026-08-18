@@ -38,6 +38,19 @@ type ListFilter = 'ALL' | 'DAY' | 'WEEK' | 'DEADLINE' | 'BACKLOG' | 'DONE';
 /** Where a dragged card would land relative to the one under the pointer */
 type DropTarget = { id: string; edge: 'before' | 'after' };
 
+/** The month opened against one card's date, and where it was opened from */
+type DatePicker = {
+  activity: ActivityDTO;
+  field: 'scheduledFor' | 'dueDate';
+  x: number;
+  y: number;
+};
+
+/** Roughly what the month panel measures, used only to keep it on screen */
+const PICKER_WIDTH = 320;
+const PICKER_HEIGHT = 430;
+const PICKER_MARGIN = 12;
+
 /** How close to the edge of the screen a finger has to be to start scrolling */
 const AUTOSCROLL_EDGE = 80;
 /** How long a finger has to rest on a card before it becomes a drag */
@@ -104,6 +117,7 @@ export function Activities() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [datePicker, setDatePicker] = useState<DatePicker | null>(null);
   const pointerDragId = useRef<string | null>(null);
   // Read synchronously by dragover: state has not necessarily been committed
   // by the time the first one arrives, and a dragover that does not
@@ -228,6 +242,32 @@ export function Activities() {
 
   const handleSaveNote = async (activity: ActivityDTO, notes: string | null) => {
     await updateActivity.mutateAsync({ id: activity.id, data: { notes } });
+  };
+
+  const openDatePicker = (
+    activity: ActivityDTO,
+    field: DatePicker['field'],
+    event: ReactMouseEvent<HTMLButtonElement>
+  ) => {
+    // Anchored under the label rather than at the raw pointer, so the month
+    // hangs off the date it is about
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDatePicker({ activity, field, x: rect.left, y: rect.bottom + 6 });
+  };
+
+  const saveActivityDate = async (data: UpdateActivityDTO) => {
+    if (!datePicker) return;
+    const { activity } = datePicker;
+    setDatePicker(null);
+    setBusyId(activity.id);
+    setPageError(null);
+    try {
+      await updateActivity.mutateAsync({ id: activity.id, data });
+    } catch (cause) {
+      setPageError(cause instanceof Error ? cause.message : 'Impossibile aggiornare la data.');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const stopAutoScroll = () => {
@@ -484,38 +524,37 @@ export function Activities() {
         isSummaryOpen ? 'pb-[22rem] sm:pb-[17rem]' : 'pb-32 sm:pb-20'
       )}
     >
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <ActivityWeekStrip
-            selectedDate={selectedDate}
-            today={today}
-            isMonthOpen={isMonthOpen}
-            onToggleMonth={() => setIsMonthOpen((open) => !open)}
-            onSelectDate={selectDate}
-          />
-        </div>
-
-        {/* The two setup panels are now errands, not scenery: they get a button
-            each and give their width back to the list */}
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={openNewActivity}
-            className="btn btn-primary min-h-10 px-3 text-xs flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuova<span className="hidden sm:inline"> attività</span></span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsTypesOpen(true)}
-            className="btn btn-secondary min-h-10 px-3 text-xs flex items-center gap-1.5"
-            aria-label="Gestisci le tipologie"
-          >
-            <Tags className="w-4 h-4" />
-            <span className="hidden sm:inline">Tipologie</span>
-          </button>
-        </div>
+      <header className="mb-4">
+        <ActivityWeekStrip
+          selectedDate={selectedDate}
+          today={today}
+          isMonthOpen={isMonthOpen}
+          onToggleMonth={() => setIsMonthOpen((open) => !open)}
+          onSelectDate={selectDate}
+          actions={
+            /* The two setup panels are now errands, not scenery: a button each,
+               and their width goes back to the list */
+            <>
+              <button
+                type="button"
+                onClick={openNewActivity}
+                className="btn btn-primary min-h-9 px-2 sm:px-2.5 text-xs flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nuova<span className="hidden sm:inline"> attività</span></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTypesOpen(true)}
+                className="btn btn-secondary min-h-9 px-2 sm:px-2.5 text-xs flex items-center gap-1.5"
+                aria-label="Gestisci le tipologie"
+              >
+                <Tags className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tipologie</span>
+              </button>
+            </>
+          }
+        />
       </header>
 
       {overview.isLoading ? (
@@ -681,6 +720,7 @@ export function Activities() {
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onSaveNote={handleSaveNote}
+                        onPickDate={openDatePicker}
                       />
                     </div>
                   );
@@ -712,6 +752,65 @@ export function Activities() {
             onSelectDate={selectDate}
           />
         </div>
+      )}
+
+      {datePicker && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setDatePicker(null)} />
+          <div
+            className="fixed z-50 w-80 max-w-[calc(100vw-1.5rem)]"
+            style={{
+              left: Math.max(
+                PICKER_MARGIN,
+                Math.min(datePicker.x, window.innerWidth - PICKER_WIDTH - PICKER_MARGIN)
+              ),
+              top: Math.max(
+                PICKER_MARGIN,
+                Math.min(datePicker.y, window.innerHeight - PICKER_HEIGHT - PICKER_MARGIN)
+              ),
+            }}
+          >
+            <ActivityMonthPanel
+              // The month it opens on is the card's own date, not the day the
+              // page happens to be showing
+              selectedDate={
+                (datePicker.field === 'dueDate'
+                  ? datePicker.activity.dueDate
+                  : datePicker.activity.scheduledFor) ?? selectedDate
+              }
+              today={today}
+              caption={
+                <>
+                  <p className="font-semibold text-slate-700 truncate">{datePicker.activity.title}</p>
+                  <p>
+                    {datePicker.field === 'dueDate'
+                      ? 'Scegli entro quando va chiusa.'
+                      : datePicker.activity.scope === 'WEEK'
+                        ? 'Scegli un giorno: il task si sposta alla sua settimana.'
+                        : 'Scegli il giorno del task.'}
+                  </p>
+                </>
+              }
+              footer={
+                datePicker.field === 'dueDate' && datePicker.activity.dueDate ? (
+                  <button
+                    type="button"
+                    onClick={() => void saveActivityDate({ dueDate: null, dueTime: null })}
+                    className="btn btn-secondary min-h-8 w-full px-2 text-[11px]"
+                  >
+                    Togli la data entro cui chiudere
+                  </button>
+                ) : undefined
+              }
+              onClose={() => setDatePicker(null)}
+              onSelectDate={(date) =>
+                void saveActivityDate(
+                  datePicker.field === 'dueDate' ? { dueDate: date } : { scheduledFor: date }
+                )
+              }
+            />
+          </div>
+        </>
       )}
 
       <ActivityEditorModal
