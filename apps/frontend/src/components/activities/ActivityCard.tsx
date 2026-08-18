@@ -1,4 +1,10 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type FormEvent } from 'react';
+import {
+  useEffect,
+  useState,
+  type ButtonHTMLAttributes,
+  type FormEvent,
+  type HTMLAttributes,
+} from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { CalendarClock, Check, CheckSquare2, Circle, Clock3, GripVertical, Loader2, Pencil, Trash2, X } from 'lucide-react';
@@ -19,6 +25,16 @@ interface ActivityCardProps {
   /** Left open on an earlier day, and shown here so it is not forgotten */
   isBacklog?: boolean;
   isBusy: boolean;
+  /**
+   * Applied to the whole card: a task moves by grabbing it anywhere, the way
+   * an expense moves between categories on the dashboard. Aiming at a 6px
+   * handle was the reason reordering felt like a chore.
+   */
+  dragProps: HTMLAttributes<HTMLElement>;
+  /** False while a filter or a search is on, when neighbours are not real neighbours */
+  canDrag: boolean;
+  isDragging?: boolean;
+  /** The grip is now an affordance and the keyboard route, not the only grab point */
   dragHandleProps: ButtonHTMLAttributes<HTMLButtonElement>;
   onToggle: (activity: ActivityDTO) => void;
   onEdit: (activity: ActivityDTO) => void;
@@ -31,6 +47,9 @@ export function ActivityCard({
   today,
   isBacklog = false,
   isBusy,
+  dragProps,
+  canDrag,
+  isDragging = false,
   dragHandleProps,
   onToggle,
   onEdit,
@@ -87,12 +106,23 @@ export function ActivityCard({
   };
 
   return (
-    <article className="group flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm transition-colors hover:border-slate-300">
+    <article
+      {...dragProps}
+      // Off while the note is open, or the browser would drag the card instead
+      // of letting the text be selected
+      draggable={canDrag && !isEditingNote}
+      className={cn(
+        'group flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 shadow-sm transition-colors hover:border-slate-300',
+        canDrag && !isEditingNote && 'cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-50'
+      )}
+    >
       <button
         type="button"
+        data-drag-handle=""
         {...restDragHandleProps}
         className={cn(
-          'w-8 h-10 sm:w-6 sm:h-7 -ml-1 rounded-lg flex items-center justify-center shrink-0 touch-none cursor-grab active:cursor-grabbing text-slate-300 hover:bg-slate-50 hover:text-slate-500',
+          'w-8 h-10 sm:w-6 sm:h-7 -ml-1 rounded-lg flex items-center justify-center shrink-0 touch-none cursor-grab active:cursor-grabbing text-slate-300 group-hover:text-slate-500 hover:bg-slate-50',
           dragHandleClassName
         )}
       >
@@ -100,6 +130,7 @@ export function ActivityCard({
       </button>
       <button
         type="button"
+        data-no-drag=""
         onClick={() => onToggle(activity)}
         disabled={isBusy}
         aria-label={isDone ? 'Segna come da fare' : 'Segna come completata'}
@@ -164,7 +195,7 @@ export function ActivityCard({
         </div>
 
         {isEditingNote ? (
-          <form onSubmit={saveNote} className="mt-1.5">
+          <form onSubmit={saveNote} data-no-drag="" className="mt-1.5">
             <div className="flex items-start gap-1.5">
               <textarea
                 autoFocus
@@ -224,6 +255,7 @@ export function ActivityCard({
       <div className="flex shrink-0 self-start">
         <button
           type="button"
+          data-no-drag=""
           onClick={() => onEdit(activity)}
           title="Modifica"
           aria-label={`Modifica ${activity.title}`}
@@ -233,6 +265,7 @@ export function ActivityCard({
         </button>
         <button
           type="button"
+          data-no-drag=""
           onClick={() => onDelete(activity)}
           title="Elimina"
           aria-label={`Elimina ${activity.title}`}

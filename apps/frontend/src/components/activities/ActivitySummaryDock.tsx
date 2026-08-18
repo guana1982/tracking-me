@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Loader2, RotateCcw } from 'lucide-react';
+import { ArrowDownWideNarrow, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import type { ActivityOverviewDTO } from '@budget/shared';
 import { cn } from '../../lib/utils';
 
@@ -10,9 +10,8 @@ interface ActivitySummaryDockProps {
    */
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  isManualOrder: boolean;
-  isResettingOrder: boolean;
-  onResetOrder: () => Promise<void>;
+  isSorting: boolean;
+  onSortByRule: () => Promise<void>;
 }
 
 /**
@@ -25,9 +24,8 @@ export function ActivitySummaryDock({
   summary,
   isOpen,
   onOpenChange,
-  isManualOrder,
-  isResettingOrder,
-  onResetOrder,
+  isSorting,
+  onSortByRule,
 }: ActivitySummaryDockProps) {
   const attention = summary.overdue > 0 ? summary.overdue : summary.backlog;
 
@@ -63,25 +61,20 @@ export function ActivitySummaryDock({
             dovevano chiudersi.
           </p>
 
-          {/* The list header only says that a manual order is in force; the rule
-              it replaced, and the way back, belong to the panel that explains */}
+          {/* Priority and due date are no longer a mode to go back to, so the
+              rule is offered as something that rearranges the list once */}
           <div className="px-3 pb-3 text-[10px] leading-snug text-slate-500 border-t border-slate-100 pt-2">
-            {isManualOrder ? (
-              <>
-                <p>Ordine tuo: priorità e scadenze non decidono più la posizione.</p>
-                <button
-                  type="button"
-                  onClick={() => void onResetOrder()}
-                  disabled={isResettingOrder}
-                  className="btn btn-secondary mt-2 min-h-8 w-full px-2 text-[11px] flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  {isResettingOrder ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                  Ordine automatico
-                </button>
-              </>
-            ) : (
-              <p>Ordine: Urgente → Alta → Media → Bassa. A parità, prima le scadenze più vicine.</p>
-            )}
+            <p>L’ordine della lista è quello che dai tu trascinando le schede.</p>
+            <button
+              type="button"
+              onClick={() => void onSortByRule()}
+              disabled={isSorting}
+              title="Dispone le schede per priorità e scadenza. Dopo puoi ritrascinarle come vuoi."
+              className="btn btn-secondary mt-2 min-h-8 w-full px-2 text-[11px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isSorting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowDownWideNarrow className="w-3 h-3" />}
+              Riordina per priorità
+            </button>
           </div>
         </section>
       ) : (

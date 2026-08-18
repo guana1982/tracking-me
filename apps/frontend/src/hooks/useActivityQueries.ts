@@ -97,7 +97,7 @@ export function useReorderActivities() {
   });
 }
 
-/** Gives the list back to priority and due dates after a manual reorder. */
+/** Lays the list out by priority and due date once; the order stays the user's after that. */
 export function useResetActivityOrder() {
   const refresh = useRefreshActivities();
   return useMutation({

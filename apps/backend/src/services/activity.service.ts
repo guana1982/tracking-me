@@ -47,34 +47,36 @@ export function weekStartForDate(date: string): string {
   return toIsoDate(value);
 }
 
-function sortActivities(left: ActivityDTO, right: ActivityDTO): number {
-  if (left.isManuallyPositioned && right.isManuallyPositioned) {
-    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
-  }
-  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
-    return left.isManuallyPositioned ? -1 : 1;
-  }
+/**
+ * One order, and it belongs to the user. Priority and due date used to decide
+ * where a card sat, which meant a task could not be put where it was actually
+ * going to be done; they now survive as `reorderByRule`, an action that writes
+ * positions once and then gets out of the way. The only thing that still moves
+ * a card on its own is finishing it.
+ */
+export function sortActivities(left: ActivityDTO, right: ActivityDTO): number {
+  if (left.status === 'DONE' && right.status !== 'DONE') return 1;
+  if (left.status !== 'DONE' && right.status === 'DONE') return -1;
+  return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
+}
+
+/**
+ * The old automatic rule, kept in one place because it is now an action rather
+ * than a sort: urgent first, then whatever is due soonest.
+ */
+function compareByRule(
+  left: { status: string; priority: ActivityPriorityDTO; dueDate: Date | null; createdAt: Date },
+  right: { status: string; priority: ActivityPriorityDTO; dueDate: Date | null; createdAt: Date }
+): number {
   if (left.status === 'DONE' && right.status !== 'DONE') return 1;
   if (left.status !== 'DONE' && right.status === 'DONE') return -1;
   const priority = PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
   if (priority !== 0) return priority;
-  return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
-}
-
-function sortDeadlines(left: ActivityDTO, right: ActivityDTO): number {
-  if (left.isManuallyPositioned && right.isManuallyPositioned) {
-    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
-  }
-  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
-    return left.isManuallyPositioned ? -1 : 1;
-  }
-  if (left.status === 'DONE' && right.status !== 'DONE') return 1;
-  if (left.status !== 'DONE' && right.status === 'DONE') return -1;
-  const byDate = (left.dueDate ?? '9999-12-31').localeCompare(right.dueDate ?? '9999-12-31');
+  const byDate = (left.dueDate ? toIsoDate(left.dueDate) : '9999-12-31').localeCompare(
+    right.dueDate ? toIsoDate(right.dueDate) : '9999-12-31'
+  );
   if (byDate !== 0) return byDate;
-  const byTime = (left.dueTime ?? '23:59').localeCompare(right.dueTime ?? '23:59');
-  if (byTime !== 0) return byTime;
-  return PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
+  return left.createdAt.getTime() - right.createdAt.getTime();
 }
 
 /**
@@ -97,7 +99,7 @@ export function splitActivities(activities: ActivityDTO[], date: string, weekSta
     .sort(sortActivities);
   const deadlines = activities
     .filter((activity) => activity.kind === 'DEADLINE')
-    .sort(sortDeadlines);
+    .sort(sortActivities);
   const backlog = activities
     .filter(
       (activity) =>
@@ -240,7 +242,7 @@ class ActivityService {
         dueDate: schedule.dueDate ? dateOnly(schedule.dueDate) : null,
         dueTime: schedule.dueTime,
         priority: data.priority ?? 'MEDIUM',
-        position: await this.nextActivityPosition(userId, schedule.kind, schedule.scheduledFor),
+        position: await this.nextActivityPosition(userId),
       },
       include: { type: true },
     });
@@ -310,35 +312,52 @@ class ActivityService {
   async reorder(userId: string, activityIds: string[]): Promise<void> {
     const activities = await prisma.activity.findMany({
       where: { userId, id: { in: activityIds } },
-      select: { id: true },
+      select: { id: true, position: true },
     });
     if (activities.length !== activityIds.length) {
       throw new AppError('Una o più attività non sono state trovate', 404, 'NOT_FOUND');
     }
 
+    // The cards trade places among themselves instead of being renumbered from
+    // zero: a list only ever holds one day, and renumbering would shove it in
+    // front of every other day the user never touched
+    const slots = activities.map((activity) => activity.position).sort((a, b) => a - b);
     await prisma.$transaction(
-      activityIds.map((id, position) =>
+      activityIds.map((id, index) =>
         prisma.activity.update({
           where: { id },
-          data: { position, isManuallyPositioned: true },
+          data: { position: slots[index], isManuallyPositioned: true },
         })
       )
     );
   }
 
   /**
-   * Hands the list back to priority and due dates. Without this a single drag
-   * would switch the whole list to manual for good, while the interface keeps
-   * promising an automatic order.
+   * Lays the cards out by priority and due date, once. This used to be a mode
+   * the sort fell back to; now that the order is the user's own, the only
+   * honest way to offer the rule is as something that rearranges the list and
+   * then leaves it alone.
    */
   async resetOrder(userId: string, activityIds?: string[]): Promise<void> {
-    await prisma.activity.updateMany({
+    const activities = await prisma.activity.findMany({
       where: {
         userId,
         ...(activityIds && activityIds.length > 0 ? { id: { in: activityIds } } : {}),
       },
-      data: { isManuallyPositioned: false },
+      select: { id: true, position: true, status: true, priority: true, dueDate: true, createdAt: true },
     });
+    if (activities.length === 0) return;
+
+    const slots = activities.map((activity) => activity.position).sort((a, b) => a - b);
+    const ordered = [...activities].sort(compareByRule);
+    await prisma.$transaction(
+      ordered.map((activity, index) =>
+        prisma.activity.update({
+          where: { id: activity.id },
+          data: { position: slots[index], isManuallyPositioned: false },
+        })
+      )
+    );
   }
 
   async delete(userId: string, id: string): Promise<void> {
@@ -475,9 +494,14 @@ class ActivityService {
     return type;
   }
 
-  private async nextActivityPosition(userId: string, kind: ActivityKindDTO, date: string) {
+  /**
+   * One sequence for the whole user, not one per day and kind: a list mixes
+   * days, weeks and deadlines, and per-group numbering made every group start
+   * at zero again, so the merged order came out interleaved at random.
+   */
+  private async nextActivityPosition(userId: string) {
     const last = await prisma.activity.findFirst({
-      where: { userId, kind, scheduledFor: dateOnly(date) },
+      where: { userId },
       orderBy: { position: 'desc' },
       select: { position: true },
     });

@@ -5,12 +5,13 @@ import {
   useState,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { CheckSquare2, Loader2, Plus, RotateCcw, Search, Tags, X } from 'lucide-react';
-import type { ActivityDTO, ActivityPriorityDTO, UpdateActivityDTO } from '@budget/shared';
+import { ArrowDownWideNarrow, CheckSquare2, Loader2, Plus, Search, Tags, X } from 'lucide-react';
+import type { ActivityDTO, UpdateActivityDTO } from '@budget/shared';
 import { ActivityCard } from '../components/activities/ActivityCard';
 import { ActivityEditorModal } from '../components/activities/ActivityEditorModal';
 import type { ActivityEditorData } from '../components/activities/ActivityEditorPanel';
@@ -34,35 +35,29 @@ import { cn } from '../lib/utils';
 
 type ListFilter = 'ALL' | 'DAY' | 'WEEK' | 'DEADLINE' | 'BACKLOG' | 'DONE';
 
-const PRIORITY_WEIGHT: Record<ActivityPriorityDTO, number> = {
-  URGENT: 4,
-  HIGH: 3,
-  MEDIUM: 2,
-  LOW: 1,
-};
+/** Where a dragged card would land relative to the one under the pointer */
+type DropTarget = { id: string; edge: 'before' | 'after' };
 
 /** How close to the edge of the screen a finger has to be to start scrolling */
 const AUTOSCROLL_EDGE = 80;
+/** How long a finger has to rest on a card before it becomes a drag */
+const LONG_PRESS_MS = 320;
+/** Movement that means the finger meant to scroll, not to pick the card up */
+const PRESS_SLOP = 10;
 
 function localIsoDate(date = new Date()): string {
   return format(date, 'yyyy-MM-dd');
 }
 
-function sortByImportance(left: ActivityDTO, right: ActivityDTO): number {
-  if (left.isManuallyPositioned && right.isManuallyPositioned) {
-    return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
-  }
-  if (left.isManuallyPositioned !== right.isManuallyPositioned) {
-    return left.isManuallyPositioned ? -1 : 1;
-  }
+/**
+ * The list is in the order the user put it in. Priority and due date are still
+ * shown on the cards but no longer decide anything; the only thing that moves
+ * a card on its own is finishing it, and it goes to the bottom so the open
+ * ones stay together.
+ */
+function sortByPosition(left: ActivityDTO, right: ActivityDTO): number {
   if (left.status === 'DONE' && right.status !== 'DONE') return 1;
   if (left.status !== 'DONE' && right.status === 'DONE') return -1;
-  const priority = PRIORITY_WEIGHT[right.priority] - PRIORITY_WEIGHT[left.priority];
-  if (priority !== 0) return priority;
-  const dueDate = (left.dueDate ?? '9999-12-31').localeCompare(right.dueDate ?? '9999-12-31');
-  if (dueDate !== 0) return dueDate;
-  const dueTime = (left.dueTime ?? '23:59').localeCompare(right.dueTime ?? '23:59');
-  if (dueTime !== 0) return dueTime;
   return left.position - right.position || left.createdAt.localeCompare(right.createdAt);
 }
 
@@ -75,6 +70,20 @@ function scrollableAncestor(node: HTMLElement | null): HTMLElement | null {
     }
   }
   return null;
+}
+
+/** Above or below the card under the pointer, decided by its midline */
+function edgeFor(clientY: number, element: HTMLElement): DropTarget['edge'] {
+  const rect = element.getBoundingClientRect();
+  return clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
+
+function targetAtPoint(clientX: number, clientY: number): DropTarget | null {
+  const element = document
+    .elementFromPoint(clientX, clientY)
+    ?.closest<HTMLElement>('[data-activity-id]');
+  const id = element?.dataset.activityId;
+  return element && id ? { id, edge: edgeFor(clientY, element) } : null;
 }
 
 export function Activities() {
@@ -94,8 +103,13 @@ export function Activities() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const pointerDragId = useRef<string | null>(null);
+  const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  // A long press that turned into a drag must not also fire the click of
+  // whatever sat under the finger when it was released
+  const swallowClick = useRef(false);
   const autoScroll = useRef<{ frame: number | null; speed: number; container: HTMLElement | null }>({
     frame: null,
     speed: 0,
@@ -125,7 +139,7 @@ export function Activities() {
           ...(overview.data.backlog ?? []),
         ];
     const unique = new Map(source.map((activity) => [activity.id, activity]));
-    return [...unique.values()].sort(sortByImportance);
+    return [...unique.values()].sort(sortByPosition);
   }, [overview.data]);
 
   const backlogIds = useMemo(
@@ -134,7 +148,6 @@ export function Activities() {
   );
 
   const weekStart = overview.data?.weekStart ?? selectedDate;
-  const isManualOrder = allActivities.some((activity) => activity.isManuallyPositioned);
 
   const matchesFilter = (activity: ActivityDTO, key: ListFilter) => {
     if (key === 'DAY') {
@@ -220,6 +233,20 @@ export function Activities() {
 
   useEffect(() => stopAutoScroll, []);
 
+  /**
+   * The browser decides whether a touch scrolls the page the moment the finger
+   * lands, and a `touch-action` set later does not change its mind. Blocking
+   * the default here is what keeps the page still while a card is carried.
+   */
+  useEffect(() => {
+    if (!draggedId) return undefined;
+    const block = (event: TouchEvent) => {
+      if (pointerDragId.current) event.preventDefault();
+    };
+    document.addEventListener('touchmove', block, { passive: false });
+    return () => document.removeEventListener('touchmove', block);
+  }, [draggedId]);
+
   const stepAutoScroll = () => {
     const { speed, container } = autoScroll.current;
     if (speed === 0) {
@@ -255,22 +282,35 @@ export function Activities() {
     }
   };
 
+  const cancelPressTimer = () => {
+    if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+    pressOrigin.current = null;
+  };
+
   const clearDragState = () => {
+    cancelPressTimer();
     pointerDragId.current = null;
     stopAutoScroll();
     setDraggedId(null);
-    setOverId(null);
+    setDropTarget(null);
   };
 
-  const reorder = async (activeId: string, targetId: string) => {
-    if (activeId === targetId) return;
+  /**
+   * Moves the card to where the insertion line was drawn. The whole list goes
+   * to the server, not just the pair that swapped: position is what the order
+   * is made of, and it is rewritten in one go.
+   */
+  const applyDrop = async (activeId: string, target: DropTarget) => {
+    if (activeId === target.id) return;
     const activityIds = allActivities.map((activity) => activity.id);
     const sourceIndex = activityIds.indexOf(activeId);
-    const targetIndex = activityIds.indexOf(targetId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
+    if (sourceIndex < 0) return;
+    activityIds.splice(sourceIndex, 1);
+    const anchorIndex = activityIds.indexOf(target.id);
+    if (anchorIndex < 0) return;
+    activityIds.splice(target.edge === 'before' ? anchorIndex : anchorIndex + 1, 0, activeId);
 
-    const [movedId] = activityIds.splice(sourceIndex, 1);
-    activityIds.splice(targetIndex, 0, movedId);
     setPageError(null);
     try {
       await reorderActivities.mutateAsync(activityIds);
@@ -279,58 +319,82 @@ export function Activities() {
     }
   };
 
-  /**
-   * Resets everywhere, not just what is on screen: a drag marks every card
-   * loaded at that moment, so a reset scoped to the current day would leave
-   * other days quietly stuck in manual order.
-   */
-  const handleResetOrder = async () => {
+  /** Lays the list out by priority and due date once, then leaves it alone. */
+  const handleSortByRule = async () => {
     setPageError(null);
     try {
       await resetOrder.mutateAsync(undefined);
     } catch (cause) {
-      setPageError(cause instanceof Error ? cause.message : 'Impossibile ripristinare l’ordine.');
+      setPageError(cause instanceof Error ? cause.message : 'Impossibile riordinare la lista.');
     }
   };
 
-  const activityAtPoint = (clientX: number, clientY: number) =>
-    document
-      .elementFromPoint(clientX, clientY)
-      ?.closest<HTMLElement>('[data-activity-id]')
-      ?.dataset.activityId ?? null;
-
-  const handlePointerDown = (activityId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType === 'mouse') return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+  const beginPointerDrag = (activityId: string, element: HTMLElement, pointerId: number) => {
     pointerDragId.current = activityId;
     setDraggedId(activityId);
-    setOverId(activityId);
+    if (element.isConnected && !element.hasPointerCapture(pointerId)) {
+      element.setPointerCapture(pointerId);
+    }
+    navigator.vibrate?.(15);
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!pointerDragId.current) return;
+  const handlePointerDown = (activityId: string, event: ReactPointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse') return;
+    const origin = event.target as HTMLElement;
+    if (origin.closest('[data-no-drag]')) return;
+
+    const element = event.currentTarget;
+    const { pointerId, clientX, clientY } = event;
+    pressOrigin.current = { x: clientX, y: clientY };
+
+    // The grip still picks a card up straight away: it is the one spot on the
+    // card that exists for nothing else
+    if (origin.closest('[data-drag-handle]')) {
+      event.preventDefault();
+      beginPointerDrag(activityId, element, pointerId);
+      return;
+    }
+    if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      beginPointerDrag(activityId, element, pointerId);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!pointerDragId.current) {
+      const origin = pressOrigin.current;
+      if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > PRESS_SLOP) {
+        cancelPressTimer();
+      }
+      return;
+    }
     event.preventDefault();
     updateAutoScroll(event.clientY, event.currentTarget);
-    const targetId = activityAtPoint(event.clientX, event.clientY);
-    if (targetId) setOverId(targetId);
+    setDropTarget(targetAtPoint(event.clientX, event.clientY));
   };
 
-  const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
     const activeId = pointerDragId.current;
-    if (!activeId) return;
-    const targetId = activityAtPoint(event.clientX, event.clientY);
+    if (!activeId) {
+      cancelPressTimer();
+      return;
+    }
+    const target = targetAtPoint(event.clientX, event.clientY);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    swallowClick.current = true;
     clearDragState();
-    if (targetId) void reorder(activeId, targetId);
+    if (target) void applyDrop(activeId, target);
   };
 
   const moveWithKeyboard = (activityId: string, direction: -1 | 1) => {
     const currentIndex = visibleActivities.findIndex((activity) => activity.id === activityId);
     const target = visibleActivities[currentIndex + direction];
-    if (currentIndex >= 0 && target) void reorder(activityId, target.id);
+    if (currentIndex >= 0 && target) {
+      void applyDrop(activityId, { id: target.id, edge: direction === -1 ? 'before' : 'after' });
+    }
   };
 
   const handleDelete = async (activity: ActivityDTO) => {
@@ -367,6 +431,33 @@ export function Activities() {
     setEditing(null);
     setEditorVersion((version) => version + 1);
   };
+
+  // Dragging only makes sense against the whole list: with a filter or a
+  // search on, the neighbours on screen are not the neighbours in the order
+  const isReorderable = filter === 'ALL' && search.trim() === '';
+
+  const dragPropsFor = (activity: ActivityDTO) =>
+    isReorderable
+      ? {
+          onDragStart: (event: ReactDragEvent<HTMLElement>) => {
+            setDraggedId(activity.id);
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', activity.id);
+          },
+          onDragEnd: clearDragState,
+          onPointerDown: (event: ReactPointerEvent<HTMLElement>) =>
+            handlePointerDown(activity.id, event),
+          onPointerMove: handlePointerMove,
+          onPointerUp: handlePointerUp,
+          onPointerCancel: clearDragState,
+          onClickCapture: (event: ReactMouseEvent<HTMLElement>) => {
+            if (!swallowClick.current) return;
+            swallowClick.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+          },
+        }
+      : {};
 
   return (
     <div
@@ -424,18 +515,16 @@ export function Activities() {
                   <h2 className="text-sm font-semibold text-slate-900">Da fare</h2>
                   <p className="text-[11px] text-slate-500 truncate capitalize">{selectedLabel}</p>
                 </div>
-                {isManualOrder && (
-                  <button
-                    type="button"
-                    onClick={() => void handleResetOrder()}
-                    disabled={resetOrder.isPending}
-                    title="Torna all’ordine per priorità e scadenza"
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                  >
-                    {resetOrder.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                    Ordine manuale
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => void handleSortByRule()}
+                  disabled={resetOrder.isPending}
+                  title="Riordina per priorità e scadenza, una volta sola. Dopo l’ordine torna a essere il tuo."
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {resetOrder.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowDownWideNarrow className="w-3 h-3" />}
+                  <span className="hidden sm:inline">Riordina</span>
+                </button>
                 <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{visibleActivities.length}</span>
               </div>
 
@@ -481,6 +570,12 @@ export function Activities() {
                   ))}
                 </div>
               </div>
+
+              {!isReorderable && visibleActivities.length > 1 && (
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Per spostare le schede togli la ricerca e torna al filtro «Tutti».
+                </p>
+              )}
             </div>
 
             {pageError && <div className="m-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{pageError}</div>}
@@ -497,62 +592,70 @@ export function Activities() {
               </div>
             ) : (
               <div className="space-y-2 bg-slate-50/60 p-2.5 sm:p-3">
-                {visibleActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    data-activity-id={activity.id}
-                    onDragOver={(event) => {
-                      if (!draggedId) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                      setOverId(activity.id);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const activeId = event.dataTransfer.getData('text/plain') || draggedId;
-                      clearDragState();
-                      if (activeId) void reorder(activeId, activity.id);
-                    }}
-                    className={cn(
-                      'rounded-xl transition-all',
-                      draggedId === activity.id && 'opacity-40',
-                      overId === activity.id && draggedId !== activity.id && 'ring-2 ring-sky-400 ring-offset-2'
-                    )}
-                  >
-                    <ActivityCard
-                      activity={activity}
-                      today={today}
-                      isBacklog={backlogIds.has(activity.id)}
-                      isBusy={busyId === activity.id}
-                      dragHandleProps={{
-                        draggable: true,
-                        title: 'Trascina per riordinare',
-                        'aria-label': `Riordina ${activity.title}`,
-                        onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => {
-                          setDraggedId(activity.id);
-                          setOverId(activity.id);
-                          event.dataTransfer.effectAllowed = 'move';
-                          event.dataTransfer.setData('text/plain', activity.id);
-                        },
-                        onDragEnd: clearDragState,
-                        onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => handlePointerDown(activity.id, event),
-                        onPointerMove: handlePointerMove,
-                        onPointerUp: handlePointerUp,
-                        onPointerCancel: clearDragState,
-                        onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-                          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                            event.preventDefault();
-                            moveWithKeyboard(activity.id, event.key === 'ArrowUp' ? -1 : 1);
-                          }
-                        },
+                {visibleActivities.map((activity) => {
+                  const isTarget =
+                    dropTarget?.id === activity.id && draggedId !== null && draggedId !== activity.id;
+                  return (
+                    <div
+                      key={activity.id}
+                      data-activity-id={activity.id}
+                      onDragOver={(event) => {
+                        if (!draggedId || !isReorderable) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        setDropTarget({
+                          id: activity.id,
+                          edge: edgeFor(event.clientY, event.currentTarget),
+                        });
                       }}
-                      onToggle={handleToggle}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onSaveNote={handleSaveNote}
-                    />
-                  </div>
-                ))}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const activeId = event.dataTransfer.getData('text/plain') || draggedId;
+                        // Read off the event, never off the state: the last
+                        // dragover may not have been rendered yet
+                        const edge = edgeFor(event.clientY, event.currentTarget);
+                        clearDragState();
+                        if (activeId) void applyDrop(activeId, { id: activity.id, edge });
+                      }}
+                      className="relative"
+                    >
+                      {isTarget && (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute left-1 right-1 z-10 h-0.5 rounded-full bg-sky-500',
+                            dropTarget.edge === 'before' ? '-top-1' : '-bottom-1'
+                          )}
+                        />
+                      )}
+                      <ActivityCard
+                        activity={activity}
+                        today={today}
+                        isBacklog={backlogIds.has(activity.id)}
+                        isBusy={busyId === activity.id}
+                        isDragging={draggedId === activity.id}
+                        canDrag={isReorderable}
+                        dragProps={dragPropsFor(activity)}
+                        dragHandleProps={{
+                          title: isReorderable ? 'Trascina la scheda per spostarla' : undefined,
+                          'aria-label': `Sposta ${activity.title}`,
+                          tabIndex: isReorderable ? 0 : -1,
+                          onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                            if (!isReorderable) return;
+                            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              moveWithKeyboard(activity.id, event.key === 'ArrowUp' ? -1 : 1);
+                            }
+                          },
+                        }}
+                        onToggle={handleToggle}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onSaveNote={handleSaveNote}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -564,9 +667,8 @@ export function Activities() {
               summary={data.summary}
               isOpen={isSummaryOpen}
               onOpenChange={setIsSummaryOpen}
-              isManualOrder={isManualOrder}
-              isResettingOrder={resetOrder.isPending}
-              onResetOrder={handleResetOrder}
+              isSorting={resetOrder.isPending}
+              onSortByRule={handleSortByRule}
             />
           </div>
         </>

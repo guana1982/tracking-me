@@ -134,29 +134,41 @@ describe('activities', () => {
       expect(result.backlog).toEqual([]);
     });
 
-    it('sorts the open ones before the done ones, and by priority', () => {
+    it('sinks the done ones, and otherwise follows the order the user arranged', () => {
       const result = splitActivities(
         [
-          activity({ id: 'bassa', priority: 'LOW' }),
-          activity({ id: 'chiusa', priority: 'URGENT', status: 'DONE' }),
-          activity({ id: 'urgente', priority: 'URGENT' }),
+          activity({ id: 'terza', position: 2 }),
+          activity({ id: 'chiusa', position: 0, status: 'DONE' }),
+          activity({ id: 'seconda', position: 1 }),
         ],
         date,
         weekStart
       );
-      expect(result.today.map((entry) => entry.id)).toEqual(['urgente', 'bassa', 'chiusa']);
+      expect(result.today.map((entry) => entry.id)).toEqual(['seconda', 'terza', 'chiusa']);
     });
 
-    it('puts a manually placed task first, whatever its priority says', () => {
+    it('lets priority and due date decide nothing: only the position does', () => {
       const result = splitActivities(
         [
-          activity({ id: 'urgente', priority: 'URGENT' }),
-          activity({ id: 'trascinata', priority: 'LOW', isManuallyPositioned: true, position: 0 }),
+          activity({ id: 'urgente-lontana', priority: 'URGENT', dueDate: '2026-08-18', position: 1 }),
+          activity({ id: 'bassa-vicina', priority: 'LOW', dueDate: '2026-12-31', position: 0 }),
         ],
         date,
         weekStart
       );
-      expect(result.today.map((entry) => entry.id)).toEqual(['trascinata', 'urgente']);
+      expect(result.today.map((entry) => entry.id)).toEqual(['bassa-vicina', 'urgente-lontana']);
+    });
+
+    it('orders deadlines by the same hand-made position, not by when they fall', () => {
+      const result = splitActivities(
+        [
+          activity({ id: 'tardi', kind: 'DEADLINE', dueDate: '2026-12-31', scheduledFor: '2026-12-31', position: 0 }),
+          activity({ id: 'presto', kind: 'DEADLINE', dueDate: '2026-08-20', scheduledFor: '2026-08-20', position: 1 }),
+        ],
+        date,
+        weekStart
+      );
+      expect(result.deadlines.map((entry) => entry.id)).toEqual(['tardi', 'presto']);
     });
   });
 });
