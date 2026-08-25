@@ -11,7 +11,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ArrowDownWideNarrow, CheckSquare2, ListPlus, Loader2, Plus, Search, Tags, X } from 'lucide-react';
-import type { ActivityDTO, UpdateActivityDTO } from '@budget/shared';
+import type { ActivityDTO, ActivityPriorityDTO, UpdateActivityDTO } from '@budget/shared';
 import { ActivityCard } from '../components/activities/ActivityCard';
 import { ActivityEditorModal } from '../components/activities/ActivityEditorModal';
 import type { ActivityEditorData } from '../components/activities/ActivityEditorPanel';
@@ -256,6 +256,22 @@ export function Activities() {
 
   const handleSaveNote = async (activity: ActivityDTO, notes: string | null) => {
     await updateActivity.mutateAsync({ id: activity.id, data: { notes } });
+  };
+
+  const handleSaveTitle = async (activity: ActivityDTO, title: string) => {
+    await updateActivity.mutateAsync({ id: activity.id, data: { title } });
+  };
+
+  const handleSetPriority = async (activity: ActivityDTO, priority: ActivityPriorityDTO) => {
+    setBusyId(activity.id);
+    setPageError(null);
+    try {
+      await updateActivity.mutateAsync({ id: activity.id, data: { priority } });
+    } catch (cause) {
+      setPageError(cause instanceof Error ? cause.message : 'Impossibile cambiare la priorità.');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const openDatePicker = (
@@ -745,6 +761,8 @@ export function Activities() {
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onSaveNote={handleSaveNote}
+                        onSaveTitle={handleSaveTitle}
+                        onSetPriority={handleSetPriority}
                         onPickDate={openDatePicker}
                       />
                     </div>
