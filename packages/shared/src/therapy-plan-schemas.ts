@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MILESTONE_KINDS } from './therapy-plan-types';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MIME_TYPES, MILESTONE_KINDS } from './therapy-plan-types';
 
 // ============================================================
 // Therapy plan - Zod validation schemas
@@ -44,6 +44,24 @@ export const updateMilestoneSchema = z
     message: 'At least one field must be provided',
   });
 
+// ---------- Attachments (referti) ----------
+
+export const createMilestoneAttachmentSchema = z.object({
+  fileName: z.string().trim().min(1).max(180),
+  mimeType: z.enum(ATTACHMENT_MIME_TYPES),
+  // base64 is 4 bytes per 3, plus padding and any newlines a client inserts.
+  // This is only a cheap upper bound: the size that counts is the decoded
+  // one, and it is checked server-side after decoding
+  content: z
+    .string()
+    .min(1)
+    .max(Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 4096),
+});
+
+export const updateMilestoneAttachmentSchema = z.object({
+  includeInExport: z.boolean(),
+});
+
 // ---------- Weight ----------
 
 export const saveWeightSchema = z.object({
@@ -65,4 +83,6 @@ export const therapyRangeQuerySchema = z.object({
 export type CreateTitrationStepInput = z.infer<typeof createTitrationStepSchema>;
 export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
 export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
+export type CreateMilestoneAttachmentInput = z.infer<typeof createMilestoneAttachmentSchema>;
+export type UpdateMilestoneAttachmentInput = z.infer<typeof updateMilestoneAttachmentSchema>;
 export type SaveWeightInput = z.infer<typeof saveWeightSchema>;

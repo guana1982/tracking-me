@@ -1,10 +1,12 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
 import { examAdvisories } from '../lib/therapy-config.js';
+import { milestoneAttachmentService } from './milestone-attachment.service.js';
 import { WEIGHT_INTERVAL_DAYS } from '@budget/shared';
 import type {
   CreateMilestoneDTO,
   CreateTitrationStepDTO,
+  MilestoneAttachmentDTO,
   MilestoneDTO,
   SaveWeightDTO,
   ScheduleItemDTO,
@@ -104,11 +106,15 @@ class TherapyPlanService {
   // ---------- Milestones (§3.7) ----------
 
   async listMilestones(userId: string): Promise<MilestoneDTO[]> {
-    const milestones = await prisma.milestone.findMany({
-      where: { userId },
-      orderBy: { date: 'asc' },
-    });
-    return milestones.map((milestone) => this.toMilestoneDTO(milestone));
+    // One query for every attachment rather than one per milestone: the list
+    // is short, and the files are what the schedule is now partly about
+    const [milestones, attachments] = await Promise.all([
+      prisma.milestone.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+      milestoneAttachmentService.mapByMilestone(userId),
+    ]);
+    return milestones.map((milestone) =>
+      this.toMilestoneDTO(milestone, attachments.get(milestone.id) ?? [])
+    );
   }
 
   async createMilestone(userId: string, data: CreateMilestoneDTO): Promise<MilestoneDTO> {
@@ -146,7 +152,11 @@ class TherapyPlanService {
         isDone: data.isDone,
       },
     });
-    return this.toMilestoneDTO(milestone);
+    // Ticking a box must not look like it dropped the files attached to it
+    return this.toMilestoneDTO(
+      milestone,
+      await milestoneAttachmentService.listByMilestone(userId, milestone.id)
+    );
   }
 
   async deleteMilestone(userId: string, id: string): Promise<void> {
@@ -267,7 +277,10 @@ class TherapyPlanService {
     };
   }
 
-  private toMilestoneDTO(milestone: Milestone): MilestoneDTO {
+  private toMilestoneDTO(
+    milestone: Milestone,
+    attachments: MilestoneAttachmentDTO[] = []
+  ): MilestoneDTO {
     return {
       id: milestone.id,
       kind: milestone.kind,
@@ -277,6 +290,7 @@ class TherapyPlanService {
       items: milestone.items,
       advisories: milestone.advisories,
       isDone: milestone.isDone,
+      attachments,
     };
   }
 

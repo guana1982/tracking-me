@@ -30,4 +30,21 @@ describe('AI food export package', () => {
       'almeno 21 osservazioni abbinate'
     );
   });
+
+  it('carries the attached reports at the path the CSV points at, and says so in the readme', () => {
+    const archive = buildFoodAiPackage('﻿record_type,date,time\n', { tzOffset: 0 }, [
+      { path: 'referti/2026-08-25-emocromo.pdf', bytes: strToU8('%PDF-1.4 finto') },
+    ]);
+    const files = unzipSync(archive);
+
+    expect(strFromU8(files['referti/2026-08-25-emocromo.pdf'])).toBe('%PDF-1.4 finto');
+    // Without this line the folder is just there, and a model has no reason
+    // to open anything in it
+    expect(strFromU8(files['LEGGIMI.md'])).toContain('1 referto allegato');
+  });
+
+  it('says nothing about reports when none were included', () => {
+    const files = unzipSync(buildFoodAiPackage('﻿record_type\n', { tzOffset: 0 }));
+    expect(strFromU8(files['LEGGIMI.md'])).not.toContain('referti/');
+  });
 });

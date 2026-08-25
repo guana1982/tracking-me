@@ -45,6 +45,62 @@ export interface MilestoneDTO {
   /** Conditional reminders, e.g. the 72 h without heavy training before a CPK */
   advisories: string[];
   isDone: boolean;
+  /** Metadata only - the bytes are never carried in a list response */
+  attachments: MilestoneAttachmentDTO[];
+}
+
+// ---------- Attachments on a scheduled date (referti) ----------
+
+/**
+ * What may be attached. Deliberately short: these are reports, and a list
+ * that accepts anything is a list nobody can reason about when it comes out
+ * the other end inside an export.
+ */
+export const ATTACHMENT_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/webp',
+  'text/plain',
+  'text/csv',
+] as const;
+export type AttachmentMimeTypeDTO = (typeof ATTACHMENT_MIME_TYPES)[number];
+
+/** Extension the file gets when written into the export archive */
+export const ATTACHMENT_EXTENSIONS: Record<AttachmentMimeTypeDTO, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/webp': 'webp',
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+};
+
+/** 10 MB: a scanned report fits, a photo album does not */
+export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+export interface MilestoneAttachmentDTO {
+  id: string;
+  milestoneId: string;
+  fileName: string;
+  mimeType: AttachmentMimeTypeDTO;
+  sizeBytes: number;
+  /** Whether the next export carries the file itself */
+  includeInExport: boolean;
+  createdAt: string; // ISO datetime
+}
+
+export interface CreateMilestoneAttachmentDTO {
+  fileName: string;
+  mimeType: AttachmentMimeTypeDTO;
+  /** base64 of the file, without the `data:` URL prefix */
+  content: string;
+}
+
+export interface UpdateMilestoneAttachmentDTO {
+  includeInExport: boolean;
 }
 
 export interface CreateMilestoneDTO {

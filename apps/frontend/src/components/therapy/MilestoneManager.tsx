@@ -8,6 +8,7 @@ import {
   useMilestones,
   useUpdateMilestone,
 } from '../../hooks/useTherapyPlanQueries';
+import { MilestoneAttachments } from './MilestoneAttachments';
 import { MILESTONE_KINDS, MILESTONE_KIND_LABELS } from '@budget/shared';
 import type { MilestoneKindDTO } from '@budget/shared';
 
@@ -303,6 +304,10 @@ export function MilestoneManager({ isOpen, onClose }: MilestoneManagerProps) {
                       {milestone.notes && (
                         <p className="mt-1 text-[11px] text-slate-500">{milestone.notes}</p>
                       )}
+                      <MilestoneAttachments
+                        milestoneId={milestone.id}
+                        attachments={milestone.attachments}
+                      />
                     </div>
                     <button
                       type="button"

@@ -26,6 +26,7 @@ import { toLocalParts, addDays, foodDashboardService } from './food-dashboard.se
 import { mealTypeDefinitionService } from './meal-type-definition.service.js';
 import { mealUnitDefinitionService } from './meal-unit-definition.service.js';
 import { buildFoodAiPackage } from './food-ai-export.js';
+import { milestoneAttachmentService } from './milestone-attachment.service.js';
 
 // CSV format (designed to be fed to an external LLM for analysis).
 // One row per record, all chronologically interleaved; record_type says what
@@ -76,6 +77,11 @@ import { buildFoodAiPackage } from './food-ai-export.js';
 //                 dose, intake_status = "applicata"/"programmata")
 //   milestone   - an exam, an appointment or another date (category = kind,
 //                 text = title, values and conditions to respect)
+//   attachment  - a report filed under one of those dates (category = kind,
+//                 quantity/unit = its size, text = the path of the file inside
+//                 the AI archive followed by the title of the date it belongs
+//                 to). Only the files the user marked for export appear here.
+//                 The plain CSV names them; the ZIP is what carries them
 //   activity    - something planned for that day: a task or a deadline
 //                 (category = its type, valence = priority, meal_type =
 //                 giornata/settimana/scadenza, text = title and note,
@@ -197,6 +203,15 @@ export interface CsvMilestoneInput {
   isDone: boolean;
 }
 
+export interface CsvAttachmentInput {
+  date: string; // the day on the schedule the report is filed under
+  /** Where the file sits inside the AI archive */
+  exportPath: string;
+  sizeBytes: number;
+  milestoneTitle: string;
+  kindLabel: string;
+}
+
 export interface CsvActivityInput {
   date: string; // the day it is planned for, or the day it is due
   time: string; // HH:MM, "00:00" when no hour was set
@@ -241,7 +256,8 @@ export function buildFoodCsv(
   doseChanges: CsvDoseChangeInput[] = [],
   milestones: CsvMilestoneInput[] = [],
   habits: CsvHabitInput[] = [],
-  activities: CsvActivityInput[] = []
+  activities: CsvActivityInput[] = [],
+  attachments: CsvAttachmentInput[] = []
 ): string {
   const rows: { sortKey: string; line: string }[] = [];
 
@@ -594,6 +610,30 @@ export function buildFoodCsv(
     rows.push({ sortKey: `${activity.date} ${activity.time} 1`, line });
   }
 
+  // Right after the milestone they belong to: the appointment states what was
+  // being looked for, and the file is the answer that came back
+  for (const attachment of attachments) {
+    const line = [
+      'attachment',
+      attachment.date,
+      '00:00',
+      escapeCsvField(attachment.kindLabel),
+      '',
+      '',
+      '',
+      String(Math.max(1, Math.round(attachment.sizeBytes / 1024))),
+      'kB',
+      escapeCsvField(`${attachment.exportPath} · ${attachment.milestoneTitle}`),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ].join(',');
+    rows.push({ sortKey: `${attachment.date} 00:00 1`, line });
+  }
+
   rows.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
 
   // BOM so Excel detects UTF-8
@@ -607,8 +647,18 @@ class FoodExportService {
     to?: string,
     tzOffset = 0
   ): Promise<Uint8Array> {
-    const csv = await this.exportCsv(userId, from, to, tzOffset);
-    return buildFoodAiPackage(csv, { from, to, tzOffset });
+    // The CSV names the files, the archive carries them. Both read the same
+    // set in the same order, which is what keeps the paths in the rows and
+    // the paths in the ZIP the same paths
+    const [csv, attachments] = await Promise.all([
+      this.exportCsv(userId, from, to, tzOffset),
+      milestoneAttachmentService.listFilesForExport(userId, from, to),
+    ]);
+    return buildFoodAiPackage(
+      csv,
+      { from, to, tzOffset },
+      attachments.map((attachment) => ({ path: attachment.exportPath, bytes: attachment.data }))
+    );
   }
 
   /** Full history by default; optional date range filter */
@@ -679,7 +729,18 @@ class FoodExportService {
           }
         : {};
 
-    const [intakes, checkIns, ratings, weights, treatments, doseSteps, milestones, habits, activities] = await Promise.all([
+    const [
+      intakes,
+      checkIns,
+      ratings,
+      weights,
+      treatments,
+      doseSteps,
+      milestones,
+      habits,
+      activities,
+      attachments,
+    ] = await Promise.all([
       prisma.treatmentIntake.findMany({
         where: { userId, ...dayFilter },
         orderBy: { date: 'asc' },
@@ -721,6 +782,8 @@ class FoodExportService {
         include: { type: { select: { name: true } } },
         orderBy: { scheduledFor: 'asc' },
       }),
+      // Metadata only here: the CSV names the reports, it does not carry them
+      milestoneAttachmentService.listForExport(userId, from, to),
     ]);
 
     return buildFoodCsv(
@@ -852,6 +915,13 @@ class FoodExportService {
               : 'Giornata',
         priorityLabel: ACTIVITY_PRIORITY_LABELS[activity.priority],
         statusLabel: ACTIVITY_STATUS_LABELS[activity.status],
+      })),
+      attachments.map((attachment) => ({
+        date: attachment.date,
+        exportPath: attachment.exportPath,
+        sizeBytes: attachment.sizeBytes,
+        milestoneTitle: attachment.milestoneTitle,
+        kindLabel: attachment.kindLabel,
       }))
     );
   }

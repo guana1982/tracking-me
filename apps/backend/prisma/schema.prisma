@@ -44,6 +44,7 @@ model User {
   ratingEntries          RatingEntry[]
   titrationSteps         TitrationStep[]
   milestones             Milestone[]
+  milestoneAttachments   MilestoneAttachment[]
   weightEntries          WeightEntry[]
   habitDefinitions       HabitDefinition[]
   habitEntries           HabitEntry[]
@@ -765,10 +766,41 @@ model Milestone {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments MilestoneAttachment[]
 
   @@index([userId, date])
   @@map("milestones")
+}
+
+/// The report itself, attached to the date it belongs to: a blood panel next
+/// to the exam that produced it, so the file is found by looking at the
+/// calendar rather than by remembering where it was saved.
+///
+/// The bytes live in the database on purpose. The app has no object storage,
+/// and a container filesystem does not survive a redeploy - anywhere else the
+/// file would quietly disappear a week later. Personal volumes here are a few
+/// PDFs a year, which is nothing for Postgres; if it ever stops being that,
+/// only this model and its service have to move.
+model MilestoneAttachment {
+  id          String   @id @default(cuid())
+  userId      String
+  milestoneId String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  data        Bytes
+  /// Whether the next export carries the file. Decided per file, because an
+  /// export meant for a model is not the place for everything ever uploaded
+  includeInExport Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([milestoneId])
+  @@map("milestone_attachments")
 }
 
 // ============================================================

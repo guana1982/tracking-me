@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { therapyPlanApi } from '../lib/therapyPlanApi';
 import type {
+  CreateMilestoneAttachmentDTO,
   CreateMilestoneDTO,
   CreateTitrationStepDTO,
   SaveWeightDTO,
@@ -95,6 +96,41 @@ export function useDeleteMilestone() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => therapyPlanApi.removeMilestone(id),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+// ---------- Attachments (referti) ----------
+// No query of their own: the metadata travels with the milestone list, so a
+// file appears in the schedule the moment it is uploaded
+
+export function useUploadMilestoneAttachment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      milestoneId,
+      data,
+    }: {
+      milestoneId: string;
+      data: CreateMilestoneAttachmentDTO;
+    }) => therapyPlanApi.uploadMilestoneAttachment(milestoneId, data),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useSetAttachmentInExport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, includeInExport }: { id: string; includeInExport: boolean }) =>
+      therapyPlanApi.setAttachmentInExport(id, includeInExport),
+    onSuccess: () => invalidateFoodData(queryClient),
+  });
+}
+
+export function useDeleteAttachment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => therapyPlanApi.removeAttachment(id),
     onSuccess: () => invalidateFoodData(queryClient),
   });
 }

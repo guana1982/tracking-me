@@ -288,6 +288,39 @@ describe('CSV export', () => {
     expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,0 pasti registrati,,,0.5,,,');
   });
 
+  it('names an attached report on the day it is filed under', () => {
+    const csv = buildFoodCsv(
+      [], // meals
+      [], // quick logs
+      120,
+      [], // day summaries
+      [], // intakes
+      [], // check-ins
+      [], // ratings
+      [], // weights
+      [], // treatments
+      [], // dose changes
+      [], // milestones
+      [], // habits
+      [], // activities
+      [
+        {
+          date: '2026-08-25',
+          exportPath: 'referti/2026-08-25-emocromo.pdf',
+          sizeBytes: 240_000,
+          milestoneTitle: 'Emocromo completo',
+          kindLabel: 'Esame',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The path is the whole point: it is how the row and the file in the
+    // archive find each other
+    expect(lines[1]).toBe(
+      'attachment,2026-08-25,00:00,Esame,,,,234,kB,referti/2026-08-25-emocromo.pdf · Emocromo completo,,,,,,'
+    );
+  });
+
   it('starts with a UTF-8 BOM so Excel opens it correctly', () => {
     expect(buildFoodCsv([], [], 0).startsWith(BOM)).toBe(true);
   });

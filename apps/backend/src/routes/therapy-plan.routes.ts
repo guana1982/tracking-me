@@ -1,17 +1,29 @@
 import type { FastifyPluginAsync } from 'fastify';
 import {
+  ATTACHMENT_MAX_BYTES,
+  createMilestoneAttachmentSchema,
   createMilestoneSchema,
   createTitrationStepSchema,
   saveWeightSchema,
   therapyRangeQuerySchema,
+  updateMilestoneAttachmentSchema,
   updateMilestoneSchema,
 } from '@budget/shared';
 import { therapyPlanService } from '../services/therapy-plan.service.js';
 import { therapyTrendsService } from '../services/therapy-trends.service.js';
+import { milestoneAttachmentService } from '../services/milestone-attachment.service.js';
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Only the upload route is allowed to be big. The default 1 MB stands
+ * everywhere else, so raising the ceiling for a report does not raise it for
+ * every other endpoint in the app. base64 costs a third on top of the file,
+ * plus room for the surrounding JSON.
+ */
+const UPLOAD_BODY_LIMIT = Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 64 * 1024;
 
 export const therapyPlanRoutes: FastifyPluginAsync = async (fastify) => {
   // ---------- Titration ----------
@@ -93,6 +105,77 @@ export const therapyPlanRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       await therapyPlanService.deleteMilestone(request.authUser!.id, request.params.id);
       return { success: true };
+    },
+  });
+
+  // ---------- Attachments on a milestone (referti) ----------
+
+  fastify.get<{ Params: { id: string } }>('/milestones/:id/attachments', {
+    schema: { tags: ['Therapy plan'], summary: 'Files attached to a date (metadata only)' },
+    handler: async (request) => ({
+      success: true,
+      data: await milestoneAttachmentService.listByMilestone(
+        request.authUser!.id,
+        request.params.id
+      ),
+    }),
+  });
+
+  fastify.post<{ Params: { id: string } }>('/milestones/:id/attachments', {
+    bodyLimit: UPLOAD_BODY_LIMIT,
+    schema: { tags: ['Therapy plan'], summary: 'Attach a report to a date' },
+    handler: async (request, reply) => {
+      const data = createMilestoneAttachmentSchema.parse(request.body);
+      const attachment = await milestoneAttachmentService.create(
+        request.authUser!.id,
+        request.params.id,
+        data
+      );
+      reply.status(201);
+      return { success: true, data: attachment };
+    },
+  });
+
+  fastify.patch<{ Params: { attachmentId: string } }>('/attachments/:attachmentId', {
+    schema: { tags: ['Therapy plan'], summary: 'Include or exclude a file from the next export' },
+    handler: async (request) => {
+      const data = updateMilestoneAttachmentSchema.parse(request.body);
+      return {
+        success: true,
+        data: await milestoneAttachmentService.setIncludeInExport(
+          request.authUser!.id,
+          request.params.attachmentId,
+          data.includeInExport
+        ),
+      };
+    },
+  });
+
+  fastify.delete<{ Params: { attachmentId: string } }>('/attachments/:attachmentId', {
+    schema: { tags: ['Therapy plan'], summary: 'Remove an attached file' },
+    handler: async (request) => {
+      await milestoneAttachmentService.remove(request.authUser!.id, request.params.attachmentId);
+      return { success: true };
+    },
+  });
+
+  fastify.get<{ Params: { attachmentId: string } }>('/attachments/:attachmentId/file', {
+    schema: { tags: ['Therapy plan'], summary: 'Download an attached file' },
+    handler: async (request, reply) => {
+      const file = await milestoneAttachmentService.getFile(
+        request.authUser!.id,
+        request.params.attachmentId
+      );
+      // Always as a download, never rendered in place: the stored type is
+      // whatever was declared at upload, and nothing declared is worth
+      // executing inside the app's own origin
+      return reply
+        .type(file.mimeType)
+        .header(
+          'Content-Disposition',
+          `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`
+        )
+        .send(file.data);
     },
   });
 

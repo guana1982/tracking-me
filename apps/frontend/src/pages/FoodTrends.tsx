@@ -4,6 +4,7 @@ import { ArrowLeft, Download, Loader2, RefreshCw, Info } from 'lucide-react';
 import { foodDashboardApi } from '../lib/foodApi';
 import { todayLocal, addDaysLocal } from '../lib/foodUtils';
 import { useFoodOverview, useRecalculateQuickLogs } from '../hooks/useFoodQueries';
+import { useMilestones } from '../hooks/useTherapyPlanQueries';
 import { MonthCalendar } from '../components/food/MonthCalendar';
 import { StateTimeline } from '../components/food/StateTimeline';
 import type { FoodTrack } from '../components/food/TrackToggle';
@@ -29,6 +30,7 @@ export function FoodTrends() {
   const from = addDaysLocal(to, -89);
   const overview = useFoodOverview(from, to);
   const recalculate = useRecalculateQuickLogs();
+  const milestones = useMilestones();
 
   const trackedDays = overview.data?.totalTrackedDays ?? 0;
   const hasEnoughData = trackedDays >= MIN_DAYS_FOR_ANALYTICS;
@@ -36,6 +38,18 @@ export function FoodTrends() {
   const supplementNames = useMemo(
     () => [...new Set((overview.data?.supplementPeriods ?? []).map((p) => p.name))],
     [overview.data]
+  );
+
+  // The same rule the server applies: a report belongs to the date it is filed
+  // under, so the window is the milestone's date and not the upload day
+  const includedReports = useMemo(
+    () =>
+      (milestones.data ?? []).reduce((total, milestone) => {
+        if (exportFrom && milestone.date < exportFrom) return total;
+        if (exportTo && milestone.date > exportTo) return total;
+        return total + milestone.attachments.filter((file) => file.includeInExport).length;
+      }, 0),
+    [milestones.data, exportFrom, exportTo]
   );
 
   const showToast = (message: string) => {
@@ -181,6 +195,23 @@ export function FoodTrends() {
         <p className="mt-2 text-xs text-slate-500">
           Il pacchetto AI include CSV, dizionario dei campi, guida di interpretazione e prompt
           pronto all'uso. Estrai lo ZIP e carica tutti i file nella chat.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {includedReports === 0 ? (
+            <>
+              Nessun referto nel pacchetto: spunta <strong className="font-medium">export</strong>{' '}
+              sui file allegati alle date dello scadenziario per farceli entrare.
+            </>
+          ) : (
+            <>
+              Nel pacchetto entrano anche{' '}
+              <strong className="font-medium text-slate-700">
+                {includedReports} {includedReports === 1 ? 'referto' : 'referti'}
+              </strong>{' '}
+              (cartella <code>referti/</code>). Il CSV li cita in ogni caso con una riga{' '}
+              <code>attachment</code>, ma solo lo ZIP contiene i file.
+            </>
+          )}
         </p>
         {exportError && <p className="mt-2 text-xs text-red-600">{exportError}</p>}
       </div>
