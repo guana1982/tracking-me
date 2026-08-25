@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Download, Loader2, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Loader2, RefreshCw, Info } from 'lucide-react';
 import { foodDashboardApi } from '../lib/foodApi';
 import { todayLocal, addDaysLocal } from '../lib/foodUtils';
 import { useFoodOverview, useRecalculateQuickLogs } from '../hooks/useFoodQueries';
@@ -19,7 +19,7 @@ const MIN_DAYS_FOR_ANALYTICS = 7;
 export function FoodTrends() {
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
-  const [isExporting, setIsExporting] = useState<'csv' | 'ai' | null>(null);
+  const [isExporting, setIsExporting] = useState<'csv' | 'ai' | 'obsidian' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // One source of truth for both the calendar and the timeline: switching in
@@ -76,6 +76,18 @@ export function FoodTrends() {
       await foodDashboardApi.downloadAiPackage(exportFrom || undefined, exportTo || undefined);
     } catch {
       setExportError("Errore durante l'export per AI.");
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleObsidianExport = async () => {
+    setIsExporting('obsidian');
+    setExportError(null);
+    try {
+      await foodDashboardApi.downloadObsidianVault(exportFrom || undefined, exportTo || undefined);
+    } catch {
+      setExportError("Errore durante l'export per Obsidian.");
     } finally {
       setIsExporting(null);
     }
@@ -191,6 +203,29 @@ export function FoodTrends() {
             )}
             Esporta per AI (.zip)
           </button>
+        </div>
+
+        {/* A third destination for the same data, deliberately its own button:
+            the two above are unchanged and keep doing exactly what they did */}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <button
+            onClick={handleObsidianExport}
+            disabled={isExporting !== null}
+            className="btn btn-secondary min-h-11 w-full text-sm flex items-center justify-center gap-1.5"
+          >
+            {isExporting === 'obsidian' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileText className="w-4 h-4" />
+            )}
+            Esporta per Obsidian (.zip)
+          </button>
+          <p className="mt-2 text-xs text-slate-500">
+            Esporta il diario come note Markdown, una per ogni giornata, compatibili con Obsidian:
+            l'archivio contiene una cartella <code>Diario/</code> con i file{' '}
+            <code>AAAA-MM-GG.md</code>, pronta da aprire come vault. Sono Markdown standard, quindi
+            restano leggibili anche fuori da Obsidian.
+          </p>
         </div>
         <p className="mt-2 text-xs text-slate-500">
           Il pacchetto AI include CSV, dizionario dei campi, guida di interpretazione e prompt

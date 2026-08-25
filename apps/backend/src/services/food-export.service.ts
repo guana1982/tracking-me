@@ -661,8 +661,18 @@ class FoodExportService {
     );
   }
 
-  /** Full history by default; optional date range filter */
-  async exportCsv(userId: string, from?: string, to?: string, tzOffset = 0): Promise<string> {
+  /**
+   * Everything the exports read, fetched once and handed over raw.
+   *
+   * Split out of exportCsv so a second view of the diary - the Obsidian vault -
+   * can be built from the same rows instead of querying for itself. It returns
+   * the records as they come out of the database rather than the CSV's flat
+   * shape on purpose: the CSV turns statuses into Italian labels, and a second
+   * renderer needs the state back, not the word for it.
+   *
+   * Full history by default; optional date range filter.
+   */
+  async collectForExport(userId: string, from?: string, to?: string, tzOffset = 0) {
     const meals = await prisma.meal.findMany({
       where: {
         userId,
@@ -785,6 +795,45 @@ class FoodExportService {
       // Metadata only here: the CSV names the reports, it does not carry them
       milestoneAttachmentService.listForExport(userId, from, to),
     ]);
+
+    return {
+      meals,
+      quickLogs,
+      daySummaries,
+      intakes,
+      checkIns,
+      ratings,
+      weights,
+      treatments,
+      doseSteps,
+      milestones,
+      habits,
+      activities,
+      attachments,
+      mealTypeNames: names,
+      unitNames,
+    };
+  }
+
+  /** Full history by default; optional date range filter */
+  async exportCsv(userId: string, from?: string, to?: string, tzOffset = 0): Promise<string> {
+    const {
+      meals,
+      quickLogs,
+      daySummaries,
+      intakes,
+      checkIns,
+      ratings,
+      weights,
+      treatments,
+      doseSteps,
+      milestones,
+      habits,
+      activities,
+      attachments,
+      mealTypeNames: names,
+      unitNames,
+    } = await this.collectForExport(userId, from, to, tzOffset);
 
     return buildFoodCsv(
       meals.map((meal) => ({
@@ -962,3 +1011,9 @@ class FoodExportService {
 }
 
 export const foodExportService = new FoodExportService();
+
+/**
+ * The raw rows both exports read. Derived from the method rather than written
+ * out by hand, so adding a query to collectForExport cannot leave this behind.
+ */
+export type ExportSource = Awaited<ReturnType<typeof foodExportService.collectForExport>>;

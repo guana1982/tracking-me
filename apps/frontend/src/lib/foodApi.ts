@@ -1,5 +1,6 @@
 import { fetchApi, ApiError } from './api';
 import { useAuthStore } from '../stores/authStore';
+import { todayLocal } from './foodUtils';
 import type {
   MealDTO,
   CreateMealDTO,
@@ -176,6 +177,32 @@ export const foodDashboardApi = {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'diario-alimentare.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  /**
+   * The same diary as Markdown, one note per day. The file name carries the
+   * user's local day, not a UTC one: at 01:00 in Rome those are two different
+   * dates, and the archive would be stamped yesterday
+   */
+  downloadObsidianVault: async (from?: string, to?: string): Promise<void> => {
+    const token = useAuthStore.getState().token;
+    const qs = buildQuery({ from, to, tzOffset: tzOffsetMinutes() });
+    const response = await fetch(`${API_BASE}/api/food-dashboard/export-obsidian.zip${qs}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new ApiError("Errore durante l'export per Obsidian", 'EXPORT_ERROR');
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `diario-obsidian-${todayLocal()}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { foodDashboardService } from '../services/food-dashboard.service.js';
 import { foodExportService } from '../services/food-export.service.js';
+import { obsidianExportService } from '../services/obsidian-export.service.js';
 import { foodRangeQuerySchema, foodComparisonQuerySchema } from '@budget/shared';
 
 export const foodDashboardRoutes: FastifyPluginAsync = async (fastify) => {
@@ -108,6 +109,28 @@ export const foodDashboardRoutes: FastifyPluginAsync = async (fastify) => {
       reply
         .header('Content-Type', 'application/zip')
         .header('Content-Disposition', 'attachment; filename="diario-alimentare-ai.zip"');
+      return reply.send(Buffer.from(archive));
+    },
+  });
+
+  // A second view of the same rows: one Markdown note per day, ready to drop
+  // into an Obsidian vault. The CSV and the AI package are untouched by it
+  fastify.get('/export-obsidian.zip', {
+    schema: {
+      tags: ['Food Dashboard'],
+      summary: 'Export the diary as one Markdown note per day (Obsidian vault)',
+    },
+    handler: async (request, reply) => {
+      const { from, to, tzOffset } = foodRangeQuerySchema.parse(request.query);
+      const archive = await obsidianExportService.exportVault(
+        request.authUser!.id,
+        from,
+        to,
+        tzOffset
+      );
+      reply
+        .header('Content-Type', 'application/zip')
+        .header('Content-Disposition', 'attachment; filename="diario-obsidian.zip"');
       return reply.send(Buffer.from(archive));
     },
   });
