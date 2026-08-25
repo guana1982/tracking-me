@@ -18,6 +18,7 @@ import type { ActivityEditorData } from '../components/activities/ActivityEditor
 import { ActivityMonthPanel, ActivityWeekStrip } from '../components/activities/ActivityCalendar';
 import { ActivitySummaryDock } from '../components/activities/ActivitySummaryDock';
 import { ActivityTypesModal } from '../components/activities/ActivityTypesModal';
+import { ActivityQuickBar } from '../components/activities/ActivityQuickBar';
 import {
   useActivityOverview,
   useActivityTypes,
@@ -196,6 +197,17 @@ export function Activities() {
     // matchesFilter closes over the same values the deps already cover
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allActivities, backlogIds, filter, search, selectedDate, weekStart]);
+
+  /**
+   * A task typed into the bar is a task on the selected day, at medium
+   * priority - which a search or a filter on weeks, deadlines or done items
+   * would hide. Something created and not shown is something the user creates
+   * a second time, so the view gives way to what was just written.
+   */
+  const revealNewActivity = () => {
+    if (search.trim()) setSearch('');
+    if (filter !== 'ALL' && filter !== 'DAY') setFilter('ALL');
+  };
 
   const openNewActivity = () => {
     setEditing(null);
@@ -556,6 +568,17 @@ export function Activities() {
           }
         />
       </header>
+
+      {/*
+        Between the days and the list, in the same place the diary keeps its
+        comment bar: it is an input, and an input belongs where the day is
+        chosen rather than buried behind a button.
+      */}
+      <div className="mb-4">
+        <div className="card p-3">
+          <ActivityQuickBar selectedDate={selectedDate} onCreated={revealNewActivity} />
+        </div>
+      </div>
 
       {overview.isLoading ? (
         <div className="card min-h-48 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
