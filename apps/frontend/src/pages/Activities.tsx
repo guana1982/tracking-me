@@ -114,6 +114,21 @@ export function Activities() {
   // fixed panel over the last cards would put the handle and the checkbox
   // out of reach
   const [isSummaryOpen, setIsSummaryOpen] = useState(() => window.innerWidth >= 640);
+  /**
+   * HTML5 drag and drop and the touch implementation cannot both be live on the
+   * same gesture: a long press on a `draggable` element makes the browser start
+   * a native drag of its own, and it announces that by taking the pointer away
+   * with a pointercancel - which tore our drag down a moment before the drop.
+   * That was the whole bug on a phone: the card lifted, moved, and went home.
+   *
+   * Seeded from the pointer the device actually has, so a phone starts with
+   * the native drag already off instead of relying on a re-render beating the
+   * browser's own long-press timer. Every gesture then corrects it, which is
+   * what keeps both routes working on a laptop with a touchscreen.
+   */
+  const [usesTouch, setUsesTouch] = useState(
+    () => window.matchMedia?.('(pointer: coarse)').matches === true
+  );
   const [filter, setFilter] = useState<ListFilter>('ALL');
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -128,6 +143,12 @@ export function Activities() {
   const dragSourceId = useRef<string | null>(null);
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * The last card the finger was actually over. A release lands in the gap
+   * between two cards often enough that reading the drop target only from the
+   * release point loses the move, and the card springs back
+   */
+  const lastDropTarget = useRef<DropTarget | null>(null);
   // A long press that turned into a drag must not also fire the click of
   // whatever sat under the finger when it was released
   const swallowClick = useRef(false);
@@ -366,6 +387,7 @@ export function Activities() {
     cancelPressTimer();
     pointerDragId.current = null;
     dragSourceId.current = null;
+    lastDropTarget.current = null;
     stopAutoScroll();
     setDraggedId(null);
     setDropTarget(null);
@@ -425,6 +447,9 @@ export function Activities() {
   };
 
   const handlePointerDown = (activityId: string, event: ReactPointerEvent<HTMLElement>) => {
+    // Decided per gesture, not per device: the native drag has to be off before
+    // the browser's own long-press timer gets a chance to start one
+    setUsesTouch(event.pointerType !== 'mouse');
     if (event.pointerType === 'mouse') return;
     const origin = event.target as HTMLElement;
     if (origin.closest('[data-no-drag]')) return;
@@ -457,22 +482,55 @@ export function Activities() {
     }
     event.preventDefault();
     updateAutoScroll(event.clientY, event.currentTarget);
-    setDropTarget(targetAtPoint(event.clientX, event.clientY));
+    const target = targetAtPoint(event.clientX, event.clientY);
+    if (target) lastDropTarget.current = target;
+    setDropTarget(target);
   };
 
-  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+  /**
+   * Ends a touch drag wherever the finger was let go. Guarded on
+   * pointerDragId, so the card handler and the window listener can both call
+   * it and only the first one does anything.
+   */
+  const concludePointerDrag = (clientX: number, clientY: number) => {
     const activeId = pointerDragId.current;
-    if (!activeId) {
+    if (!activeId) return;
+    const target = targetAtPoint(clientX, clientY) ?? lastDropTarget.current;
+    swallowClick.current = true;
+    clearDragState();
+    if (target && target.id !== activeId) void applyDrop(activeId, target);
+  };
+
+  // The latest closure, so the window listener below never applies a drop
+  // against a list that has since changed
+  const concludeRef = useRef(concludePointerDrag);
+  useEffect(() => {
+    concludeRef.current = concludePointerDrag;
+  });
+
+  /**
+   * The release is listened for on the window as well as on the card. Pointer
+   * capture is what should keep the pointerup on the card it started from, and
+   * when it does the card handler wins the race; when it does not - the capture
+   * silently lost, the finger ending up over another element - this is what
+   * still finishes the move instead of dropping it.
+   */
+  useEffect(() => {
+    if (!draggedId) return undefined;
+    const onUp = (event: PointerEvent) => concludeRef.current(event.clientX, event.clientY);
+    window.addEventListener('pointerup', onUp);
+    return () => window.removeEventListener('pointerup', onUp);
+  }, [draggedId]);
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!pointerDragId.current) {
       cancelPressTimer();
       return;
     }
-    const target = targetAtPoint(event.clientX, event.clientY);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    swallowClick.current = true;
-    clearDragState();
-    if (target) void applyDrop(activeId, target);
+    concludePointerDrag(event.clientX, event.clientY);
   };
 
   const moveWithKeyboard = (activityId: string, direction: -1 | 1) => {
@@ -744,6 +802,7 @@ export function Activities() {
                         isBusy={busyId === activity.id}
                         isDragging={draggedId === activity.id}
                         canDrag={isReorderable}
+                        allowNativeDrag={!usesTouch}
                         dragProps={dragPropsFor(activity)}
                         dragHandleProps={{
                           title: isReorderable ? 'Trascina la scheda per spostarla' : undefined,

@@ -61,6 +61,12 @@ interface ActivityCardProps {
   dragProps: HTMLAttributes<HTMLElement>;
   /** False while a filter or a search is on, when neighbours are not real neighbours */
   canDrag: boolean;
+  /**
+   * False once the page has seen a touch. HTML5 drag and drop is the mouse
+   * route only: leaving it on for a finger makes the browser start a native
+   * drag of its own halfway through ours, and take the pointer away with it
+   */
+  allowNativeDrag: boolean;
   isDragging?: boolean;
   /** The grip is now an affordance and the keyboard route, not the only grab point */
   dragHandleProps: ButtonHTMLAttributes<HTMLButtonElement>;
@@ -93,6 +99,7 @@ export function ActivityCard({
   isBusy,
   dragProps,
   canDrag,
+  allowNativeDrag,
   isDragging = false,
   dragHandleProps,
   onToggle,
@@ -229,13 +236,16 @@ export function ActivityCard({
     <article
       {...dragProps}
       // Off while a field is open, or the browser would drag the card instead
-      // of letting the text be selected
-      draggable={canDrag && !isEditing}
+      // of letting the text be selected - and off on touch, which carries a
+      // card with its own implementation and must not race the browser's
+      draggable={canDrag && allowNativeDrag && !isEditing}
       className={cn(
         'group flex items-start gap-2 rounded-xl border border-l-4 border-slate-200 bg-white px-2.5 py-2.5 shadow-sm transition-colors hover:border-slate-300',
         // A finished task has no urgency left to advertise
         isDone ? 'border-l-slate-200 bg-slate-50/60' : PRIORITY_RAIL[activity.priority],
-        canDrag && !isEditing && 'cursor-grab active:cursor-grabbing',
+        // No text selection while a card can be picked up: on a phone the long
+        // press would otherwise raise the selection magnifier over the drag
+        canDrag && !isEditing && 'cursor-grab select-none active:cursor-grabbing',
         isDragging && 'opacity-50'
       )}
     >
