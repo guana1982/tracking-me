@@ -10,6 +10,8 @@ interface ActivityQuickBarProps {
    * showing is a list the new card can appear in
    */
   onCreated: () => void;
+  multiline?: boolean;
+  autoFocus?: boolean;
 }
 
 /**
@@ -21,7 +23,12 @@ interface ActivityQuickBarProps {
  * - a task, on the selected day, medium priority, no type. Anything beyond
  * that is what the modal is still there for.
  */
-export function ActivityQuickBar({ selectedDate, onCreated }: ActivityQuickBarProps) {
+export function ActivityQuickBar({
+  selectedDate,
+  onCreated,
+  multiline = false,
+  autoFocus = false,
+}: ActivityQuickBarProps) {
   const createActivity = useCreateActivity();
 
   const save = async (title: string) => {
@@ -38,7 +45,7 @@ export function ActivityQuickBar({ selectedDate, onCreated }: ActivityQuickBarPr
 
   return (
     <QuickEntryBar
-      id="activity-quick-input"
+      id={multiline ? 'activity-quick-sheet' : 'activity-quick-input'}
       icon={ListPlus}
       title="Aggiungi un’attività al volo"
       hint="finisce nel giorno selezionato con priorità media; per scadenze, tipologia e note usa «Nuova attività»"
@@ -46,6 +53,8 @@ export function ActivityQuickBar({ selectedDate, onCreated }: ActivityQuickBarPr
       submitLabel="Aggiungi attività"
       isPending={createActivity.isPending}
       onSubmit={save}
+      multiline={multiline}
+      autoFocus={autoFocus}
     />
   );
 }

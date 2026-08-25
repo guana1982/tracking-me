@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ArrowDownWideNarrow, CheckSquare2, Loader2, Plus, Search, Tags, X } from 'lucide-react';
+import { ArrowDownWideNarrow, CheckSquare2, ListPlus, Loader2, Plus, Search, Tags, X } from 'lucide-react';
 import type { ActivityDTO, UpdateActivityDTO } from '@budget/shared';
 import { ActivityCard } from '../components/activities/ActivityCard';
 import { ActivityEditorModal } from '../components/activities/ActivityEditorModal';
@@ -19,6 +19,7 @@ import { ActivityMonthPanel, ActivityWeekStrip } from '../components/activities/
 import { ActivitySummaryDock } from '../components/activities/ActivitySummaryDock';
 import { ActivityTypesModal } from '../components/activities/ActivityTypesModal';
 import { ActivityQuickBar } from '../components/activities/ActivityQuickBar';
+import { ActivityQuickModal } from '../components/activities/ActivityQuickModal';
 import {
   useActivityOverview,
   useActivityTypes,
@@ -107,6 +108,7 @@ export function Activities() {
   const [editorVersion, setEditorVersion] = useState(0);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isTypesOpen, setIsTypesOpen] = useState(false);
+  const [isQuickOpen, setIsQuickOpen] = useState(false);
   const [isMonthOpen, setIsMonthOpen] = useState(false);
   // Lifted out of the dock because the page has to reserve room for it: a
   // fixed panel over the last cards would put the handle and the checkbox
@@ -835,6 +837,28 @@ export function Activities() {
           </div>
         </>
       )}
+
+      {/*
+        FAB (mobile). The field is already under the days, and this is only the
+        way back to it once the list has been scrolled past. On sm and up there
+        is no button: the header stands still there, and so does the field.
+      */}
+      <button
+        type="button"
+        onClick={() => setIsQuickOpen(true)}
+        className="sm:hidden fixed bottom-20 right-4 z-40 w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+        title="Aggiungi un’attività al volo"
+        aria-label="Aggiungi un’attività al volo"
+      >
+        <ListPlus className="w-6 h-6" />
+      </button>
+
+      <ActivityQuickModal
+        isOpen={isQuickOpen}
+        onClose={() => setIsQuickOpen(false)}
+        selectedDate={selectedDate}
+        onCreated={revealNewActivity}
+      />
 
       <ActivityEditorModal
         key={editing ? `edit-${editing.id}` : `new-${selectedDate}-${editorVersion}`}
