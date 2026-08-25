@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, TrendingUp, Loader2, AlertCircle, PenLine } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { todayLocal, addDaysLocal, localDateOf } from '../lib/foodUtils';
 import { useMeals, useQuickLogs, useDeleteMeal } from '../hooks/useFoodQueries';
@@ -8,6 +8,7 @@ import { MealFormModal } from '../components/food/MealFormModal';
 import { MealCard } from '../components/food/MealCard';
 import { QuickLogNote } from '../components/food/QuickLogNote';
 import { QuickLogBar } from '../components/food/QuickLogBar';
+import { DayNoteModal } from '../components/food/DayNoteModal';
 import { DailyRatingsCard } from '../components/food/DailyRatingsCard';
 import { RatingNote } from '../components/food/RatingNote';
 import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
@@ -70,6 +71,7 @@ export function FoodDiary() {
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealDTO | null>(null);
   const [duplicateFrom, setDuplicateFrom] = useState<MealDTO | null>(null);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const from = weekStart(selectedDate);
@@ -169,12 +171,12 @@ export function FoodDiary() {
       className={cn(
         // Sidebar offset on the page root, like every other page: the nav is
         // fixed, and without this a full-width layout slides underneath it
-        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl pb-36 sm:pb-24',
+        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl',
         // From xl the page stops scrolling as a whole: it fills the height it
         // has and hands the scrolling to the middle column. Full width, so the
         // rails start at the nav and end at the edge instead of floating in
         // the middle with empty margins either side.
-        'xl:max-w-none xl:h-full xl:pb-24 xl:flex xl:flex-col xl:overflow-hidden'
+        'xl:max-w-none xl:h-full xl:flex xl:flex-col xl:overflow-hidden'
       )}
     >
       <div className="mb-4 xl:shrink-0">
@@ -200,6 +202,20 @@ export function FoodDiary() {
             </>
           )}
         />
+      </div>
+
+      {/*
+        The day's comment, right under the date bar and above everything the
+        day contains. It used to be pinned to the bottom of the window, which
+        is where a chat box goes: something you fire off without looking. This
+        is the opposite - it is the sentence that explains the rest of the
+        page, so it sits where the day is chosen and is read before the day is
+        read back.
+      */}
+      <div className="mb-4 xl:shrink-0">
+        <div className="card p-3">
+          <QuickLogBar onSaved={showToast} date={selectedDate} />
+        </div>
       </div>
 
       {/*
@@ -296,15 +312,22 @@ export function FoodDiary() {
         </section>
       </div>
 
-      {/* Sticky quick log bar (dictation-friendly, always one tap away) */}
-      <div className="fixed bottom-16 sm:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-3 py-2 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
-        <div className="max-w-6xl xl:max-w-none mx-auto">
-          <QuickLogBar onSaved={showToast} date={selectedDate} />
-        </div>
-      </div>
-
-      {/* FAB (mobile): only the meal, for the same reason as the header */}
-      <div className="sm:hidden fixed bottom-40 right-4 z-40 flex flex-col items-center gap-3">
+      {/*
+        FABs (mobile). The comment sits above the meal and is the smaller of
+        the two: the field is already under the calendar, and this is only the
+        way back to it once the day has been scrolled past. On sm and up there
+        is no button at all - the header stands still there, and so does the
+        field.
+      */}
+      <div className="sm:hidden fixed bottom-20 right-4 z-40 flex flex-col items-center gap-3">
+        <button
+          onClick={() => setIsNoteModalOpen(true)}
+          className="w-12 h-12 bg-white text-slate-700 border border-slate-200 rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+          title="Scrivi un commento sulla giornata"
+          aria-label="Scrivi un commento sulla giornata"
+        >
+          <PenLine className="w-5 h-5" />
+        </button>
         <button
           onClick={openCreate}
           className="w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
@@ -316,10 +339,17 @@ export function FoodDiary() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-40 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+        <div className="fixed bottom-36 sm:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
           {toast}
         </div>
       )}
+
+      <DayNoteModal
+        isOpen={isNoteModalOpen}
+        onClose={() => setIsNoteModalOpen(false)}
+        onSaved={showToast}
+        date={selectedDate}
+      />
 
       <MealFormModal
         isOpen={isMealModalOpen}
