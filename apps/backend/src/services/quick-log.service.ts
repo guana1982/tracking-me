@@ -46,9 +46,12 @@ class QuickLogService {
     const loggedAt = data.loggedAt ? new Date(data.loggedAt) : new Date();
     const derived = classifyQuickLog(data.text);
     // Structured entries (mood picker) pin their own meaning: the explicit
-    // value wins and is flagged manual, so recalculate() never rewrites it
-    const category = data.derivedCategory ?? derived.category;
-    const valence = data.derivedValence ?? derived.valence;
+    // value wins and is flagged manual, so recalculate() never rewrites it.
+    // `undefined` means nobody said, and the dictionaries answer; `null` is an
+    // answer - the free day note refuses a classification, and both flags stay
+    // manual so no later recompute can hand it one
+    const category = data.derivedCategory !== undefined ? data.derivedCategory : derived.category;
+    const valence = data.derivedValence !== undefined ? data.derivedValence : derived.valence;
 
     const linkWindowStart = new Date(
       loggedAt.getTime() - FOOD_CONFIG.MEAL_LINK_WINDOW_HOURS * 3600 * 1000

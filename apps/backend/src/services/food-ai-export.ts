@@ -3,34 +3,38 @@ import { strToU8, zipSync } from 'fflate';
 const FIELD_DICTIONARY_HEADER = 'field,type,applies_to,description,allowed_values';
 
 const FIELD_DICTIONARY_ROWS = [
-  ['record_type', 'string', 'all', 'Tipo della registrazione; determina il significato delle altre colonne', 'meal_item;quick_log;mood_log;intake;checkin;rating;event;weight;treatment;dose_change;milestone;day_summary'],
+  ['record_type', 'string', 'all', 'Tipo della registrazione; determina il significato delle altre colonne', 'meal_item;day_note;quick_log;mood_log;intake;checkin;rating;event;side_effect;habit;activity;weight;treatment;dose_change;milestone;day_summary'],
   ['date', 'date', 'all', 'Data locale della registrazione in formato ISO 8601', 'YYYY-MM-DD'],
   ['time', 'time', 'all', 'Ora locale; 00:00 indica spesso un dato riferito al giorno e non un orario effettivo', 'HH:mm'],
-  ['category', 'string', 'quick_log;mood_log;intake;checkin;rating;event;weight;treatment;dose_change;milestone', 'Categoria del commento oppure nome di terapia scala evento misurazione o tipo di scadenza; interpretare sempre tramite record_type', ''],
-  ['valence', 'string', 'quick_log;mood_log;checkin;event;treatment;milestone', 'Valenza del commento; direzione della scala; innesco dell evento; stato della terapia o della scadenza a seconda di record_type', ''],
+  ['category', 'string', 'quick_log;mood_log;intake;checkin;rating;event;side_effect;habit;activity;weight;treatment;dose_change;milestone', 'Categoria del commento oppure nome di terapia scala evento effetto collaterale abitudine tipologia di attivita misurazione o tipo di scadenza; interpretare sempre tramite record_type; su day_note e sempre vuoto', ''],
+  ['valence', 'string', 'quick_log;mood_log;checkin;event;activity;treatment;milestone', 'Valenza del commento; direzione della scala; innesco dell evento; priorita dell attivita; stato della terapia o della scadenza a seconda di record_type; su day_note e sempre vuoto', ''],
   ['meal_type', 'string', 'meal_item;intake;treatment', 'Tipo di pasto oppure momento pianificato dell assunzione', 'Valore personalizzabile dall utente'],
   ['food_name', 'string', 'meal_item;treatment', 'Nome dell alimento; per treatment contiene invece il tipo di trattamento', ''],
-  ['quantity', 'decimal_or_text', 'meal_item;weight;treatment', 'Quantita registrata; per treatment puo contenere una dose testuale', ''],
-  ['unit', 'string', 'meal_item;weight;treatment', 'Unita della quantita', 'Valore personalizzabile per gli alimenti'],
-  ['text', 'string', 'all', 'Testo libero o descrittivo: nota pasto commento dose descrizione scala o dettagli', ''],
-  ['linked_meal', 'string', 'quick_log;mood_log', 'Pasto associato al commento nel formato data e tipo pasto', 'YYYY-MM-DD tipo_pasto'],
+  ['quantity', 'decimal_or_text', 'meal_item;weight;habit;treatment', 'Quantita registrata; per treatment puo contenere una dose testuale; per habit e quanto e stato fatto quando l abitudine e misurata', ''],
+  ['unit', 'string', 'meal_item;weight;habit;treatment', 'Unita della quantita', 'Valore personalizzabile per gli alimenti e per le abitudini'],
+  ['text', 'string', 'all', 'Testo libero o descrittivo: nota pasto commento dose descrizione scala o dettagli; per day_note contiene il commento integrale scritto dall utente sulla giornata', ''],
+  ['linked_meal', 'string', 'day_note;quick_log;mood_log', 'Pasto associato al commento nel formato data e tipo pasto; indica solo vicinanza temporale', 'YYYY-MM-DD tipo_pasto'],
   ['body_state', 'decimal', 'day_summary', 'Media giornaliera delle valenze fisiche in intervallo da -1 a +1; vuoto significa non rilevato', '-1..1'],
   ['mood_state', 'decimal', 'day_summary', 'Media giornaliera delle valenze dell umore in intervallo da -1 a +1; vuoto significa non rilevato', '-1..1'],
-  ['scale_value', 'integer', 'checkin;rating;event', 'Valore numerico registrato sulla scala', '0..scale_max'],
-  ['scale_max', 'integer', 'checkin;rating;event', 'Valore massimo della scala usata', 'Intero positivo'],
-  ['intake_status', 'string', 'intake;dose_change', 'Esito dell assunzione oppure stato di applicazione del cambio dose', 'preso;non preso;preso in ritardo;applicata;programmata'],
+  ['scale_value', 'integer', 'checkin;rating;event;side_effect', 'Valore numerico registrato sulla scala', '0..scale_max'],
+  ['scale_max', 'integer', 'checkin;rating;event;side_effect', 'Valore massimo della scala usata', 'Intero positivo'],
+  ['intake_status', 'string', 'intake;dose_change;habit;activity', 'Esito dell assunzione; stato di applicazione del cambio dose; esito dell abitudine; stato dell attivita', 'preso;non preso;preso in ritardo;applicata;programmata;fatto;non fatto;da fare;in corso;completata'],
 ];
 
 const RECORD_TYPE_HEADER = 'record_type,meaning,important_rules';
 
 const RECORD_TYPE_ROWS = [
   ['meal_item', 'Singolo alimento appartenente a un pasto', 'Le righe con stessa data ora e meal_type possono appartenere allo stesso pasto; text e la nota comune del pasto'],
+  ['day_note', 'Commento libero scritto dall utente sulla propria giornata', 'E la testimonianza diretta dell utente e va usata come chiave di lettura degli altri record dello stesso giorno; non ha categoria ne valenza e non entra in nessun punteggio calcolato; possono essercene piu di uno nello stesso giorno e vanno letti tutti insieme'],
   ['quick_log', 'Commento rapido relativo al corpo o alle abitudini', 'category e valence possono essere vuoti; linked_meal indica un associazione temporale non una causalita'],
   ['mood_log', 'Commento rapido appartenente alla dimensione psicologica', 'Tenere distinto dal tracciato fisico; linked_meal indica un associazione temporale non una causalita'],
   ['intake', 'Registrazione di una assunzione prevista', 'E la prova operativa dello stato preso o non preso; non confondere con treatment'],
   ['checkin', 'Risposta a una scala del check-in', 'Se category e nota la riga contiene solo la nota generale; altrimenti se valence e negativo valori bassi sono migliori e se positivo valori alti sono migliori'],
   ['rating', 'Valutazione libera registrata nel diario', 'Valori alti sono migliori; possono esistere piu valutazioni della stessa caratteristica nello stesso giorno'],
   ['event', 'Episodio registrato nel momento in cui e avvenuto', 'category e il tipo; valence contiene l innesco; scale_value e l intensita quando presente'],
+  ['side_effect', 'Effetto collaterale della terapia registrato quando si manifesta', 'category e il nome; scale_value e l intensita su scale_max; l assenza non viene mai registrata quindi una riga significa che e accaduto'],
+  ['habit', 'Abitudine risposta per la giornata', 'category e il nome; intake_status dice fatto o non fatto; quantity e unit indicano quanto quando l abitudine e misurata'],
+  ['activity', 'Attivita pianificata o scadenza riferita a quel giorno', 'category e la tipologia; valence e la priorita; meal_type distingue giornata settimana e scadenza; intake_status e lo stato; una riga non completata con data passata indica qualcosa di slittato'],
   ['weight', 'Misurazione del peso riferita alla giornata', 'quantity e espresso in kg; 00:00 non rappresenta necessariamente l ora della pesata'],
   ['treatment', 'Definizione della terapia pianificata', 'Descrive lo stato ma non dimostra una assunzione; date e la data iniziale o il primo giorno dell intervallo se la terapia era gia iniziata'],
   ['dose_change', 'Cambio di dose pianificato o applicato', 'Leggere la nuova dose in text e lo stato in intake_status'],
@@ -87,14 +91,15 @@ supporta direttamente gli archivi ZIP, chiedigli comunque di leggere prima \`LEG
 
 1. Leggere sempre \`record_type\` prima delle altre colonne: alcune colonne sono polimorfiche e cambiano significato tra tipi di record.
 2. Una cella vuota significa dato non registrato o non applicabile, mai zero.
-3. \`treatment\` descrive una terapia pianificata; solo \`intake\` descrive lo stato di una specifica assunzione.
-4. \`linked_meal\` e la vicinanza temporale mostrano un collegamento, non dimostrano un rapporto causale.
-5. \`day_summary\` e calcolato: \`body_state\` e \`mood_state\` sono medie indipendenti tra -1 e +1.
-6. Piu righe \`meal_item\` con la stessa data, ora e tipo di pasto possono appartenere allo stesso pasto.
-7. I valori \`rating\` possono essere ripetuti nello stesso giorno e devono restare osservazioni separate.
-8. Testi, sensazioni ed eventi sono registrazioni soggettive dell'utente.
-9. Non formulare diagnosi, non modificare terapie e non trasformare correlazioni in causalita.
-10. Per associazioni quantitative robuste usare almeno 21 osservazioni abbinate; con meno dati presentare solo segnali esplorativi e dichiarare il campione.
+3. \`day_note\` e il commento libero scritto dall'utente sulla giornata: leggerlo prima degli altri record dello stesso giorno e usarlo come chiave di interpretazione. Non e classificato, non ha valenza e non entra in nessun punteggio calcolato; possono essercene piu di uno nello stesso giorno.
+4. \`treatment\` descrive una terapia pianificata; solo \`intake\` descrive lo stato di una specifica assunzione.
+5. \`linked_meal\` e la vicinanza temporale mostrano un collegamento, non dimostrano un rapporto causale.
+6. \`day_summary\` e calcolato: \`body_state\` e \`mood_state\` sono medie indipendenti tra -1 e +1, e non tengono conto di \`day_note\`.
+7. Piu righe \`meal_item\` con la stessa data, ora e tipo di pasto possono appartenere allo stesso pasto.
+8. I valori \`rating\` possono essere ripetuti nello stesso giorno e devono restare osservazioni separate.
+9. Testi, sensazioni ed eventi sono registrazioni soggettive dell'utente.
+10. Non formulare diagnosi, non modificare terapie e non trasformare correlazioni in causalita.
+11. Per associazioni quantitative robuste usare almeno 21 osservazioni abbinate; con meno dati presentare solo segnali esplorativi e dichiarare il campione.
 `;
 }
 
@@ -106,8 +111,14 @@ Prima di analizzare i dati:
 3. Usa tipi-record.csv per interpretare ogni record_type.
 4. Non dedurre il significato di una cella ignorando record_type.
 
+Per ogni giorno leggi per prime le righe day_note: sono le parole dell'utente sulla
+giornata e sono la chiave con cui interpretare i dati numerici dello stesso giorno.
+Non sono classificate e non entrano in nessun punteggio: usale per spiegare, non per
+misurare, e citale quando sostengono o contraddicono un dato registrato.
+
 Obiettivi:
 - riassumere alimentazione, terapia, assunzioni, sonno, umore, benessere fisico ed eventi;
+- mettere in relazione i commenti liberi dell'utente (day_note) con i dati registrati nello stesso giorno, segnalando conferme e contraddizioni;
 - distinguere sempre terapia pianificata, cambio dose e assunzione effettivamente registrata;
 - cercare associazioni temporali tra pasti, alimenti, assunzioni, sonno, umore, benessere ed eventi;
 - evidenziare dati mancanti, incoerenze e possibili duplicati;

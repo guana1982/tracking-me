@@ -145,9 +145,11 @@ export const createQuickLogSchema = z.object({
   // Raw free text, no content validation by design (dictation-friendly)
   text: z.string().trim().min(1).max(2000),
   loggedAt: z.string().datetime({ offset: true }).optional(),
-  // Structured entries (mood picker) pin category/valence explicitly
-  derivedCategory: quickLogCategorySchema.optional(),
-  derivedValence: quickLogValenceSchema.optional(),
+  // Structured entries (mood picker) pin category/valence explicitly; an
+  // explicit null pins the opposite - a free note about the day, classified
+  // by nobody, that must stay out of every score
+  derivedCategory: quickLogCategorySchema.nullable().optional(),
+  derivedValence: quickLogValenceSchema.nullable().optional(),
 });
 
 export const updateQuickLogSchema = z

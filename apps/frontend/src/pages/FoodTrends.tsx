@@ -84,7 +84,7 @@ export function FoodTrends() {
           onClick={handleRecalculate}
           disabled={recalculate.isPending}
           className="btn btn-secondary text-xs flex items-center gap-1.5"
-          title="Riapplica i dizionari di parole chiave a tutte le note"
+          title="Riapplica i dizionari di parole chiave alle note classificate; i commenti liberi della giornata non vengono toccati"
         >
           {recalculate.isPending ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

@@ -221,6 +221,55 @@ describe('CSV export', () => {
     );
   });
 
+  it('gives the free comment on the day its own record_type, with no category and no valence', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-08-25T07:21:00Z'), // 09:21 local
+          text: 'giornata pesante, ho dormito poco e mangiato di fretta',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The whole point of the row: the text reaches the file, and nothing in
+    // it claims to be a measurement
+    expect(lines[1]).toBe(
+      'day_note,2026-08-25,09:21,,,,,,,"giornata pesante, ho dormito poco e mangiato di fretta",,,,,,'
+    );
+  });
+
+  it('keeps every comment of the same day as its own row', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-08-25T07:21:00Z'), // 09:21 local
+          text: 'partito male',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+        {
+          loggedAt: new Date('2026-08-25T19:05:00Z'), // 21:05 local
+          text: 'recuperato nel pomeriggio',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines).toHaveLength(3); // header + both comments
+    expect(lines[1]).toContain('day_note,2026-08-25,09:21');
+    expect(lines[2]).toContain('day_note,2026-08-25,21:05');
+  });
+
   it('opens each tracked day with a day_summary carrying both day scores', () => {
     const csv = buildFoodCsv(meals, quickLogs, 120, [
       { date: '2026-07-16', bodyState: -1, moodState: 0.5, mealCount: 1 },

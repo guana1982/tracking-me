@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { Pencil, Trash2, StickyNote, Link2, Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import {
-  localTimeOf,
-  quickLogCategoryLabel,
-  quickLogValenceLabel,
-  valenceColor,
-  categoryColor,
-} from '../../lib/foodUtils';
+import { localTimeOf, quickLogCategoryLabel, valenceColor, categoryColor } from '../../lib/foodUtils';
 import { useUpdateQuickLog, useDeleteQuickLog } from '../../hooks/useFoodQueries';
-import { QUICK_LOG_CATEGORIES, QUICK_LOG_VALENCES } from '@budget/shared';
 import type { QuickLogDTO } from '@budget/shared';
 
 interface QuickLogNoteProps {
@@ -17,13 +10,19 @@ interface QuickLogNoteProps {
 }
 
 /**
- * A quick log rendered as a "nota" interleaved in the diary. Category and
- * valence chips are tappable to correct the automatic classification.
+ * A note as it reads back in the diary.
+ *
+ * The category and valence chips used to be pickers here, so a free comment
+ * could be filed and given a direction. That is gone: what is written in the
+ * bar is a comment on the day and nothing else, and there is nothing to
+ * correct about it. A category survives only on entries that were given one
+ * explicitly (the mood picker) or by the old dictionaries, and it is shown
+ * read-only - those still count in the day curves, so hiding the label would
+ * hide why.
  */
 export function QuickLogNote({ log }: QuickLogNoteProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(log.text);
-  const [openPicker, setOpenPicker] = useState<'category' | 'valence' | null>(null);
   const updateLog = useUpdateQuickLog();
   const deleteLog = useDeleteQuickLog();
 
@@ -38,7 +37,7 @@ export function QuickLogNote({ log }: QuickLogNoteProps) {
   };
 
   const handleDelete = () => {
-    if (window.confirm('Eliminare questa nota?')) {
+    if (window.confirm('Eliminare questo commento?')) {
       deleteLog.mutate(log.id);
     }
   };
@@ -49,66 +48,15 @@ export function QuickLogNote({ log }: QuickLogNoteProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <StickyNote className="w-3.5 h-3.5 text-slate-400" />
           <span className="text-xs text-slate-400">{localTimeOf(log.loggedAt)}</span>
-
-          {/* Category chip - tap to correct */}
-          <div className="relative">
-            <button
-              onClick={() => setOpenPicker(openPicker === 'category' ? null : 'category')}
+          {log.derivedCategory ? (
+            <span
               className={cn('px-2 py-0.5 rounded-full text-xs font-medium', cColors.bg, cColors.text)}
-              title="Correggi categoria"
             >
-              {log.derivedCategory ? quickLogCategoryLabel(log.derivedCategory) : '—'}
-            </button>
-            {openPicker === 'category' && (
-              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
-                {QUICK_LOG_CATEGORIES.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => {
-                      updateLog.mutate({ id: log.id, data: { derivedCategory: category } });
-                      setOpenPicker(null);
-                    }}
-                    className={cn(
-                      'block w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 whitespace-nowrap',
-                      category === log.derivedCategory && 'font-semibold'
-                    )}
-                  >
-                    {quickLogCategoryLabel(category)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Valence chip - tap to correct */}
-          <div className="relative">
-            <button
-              onClick={() => setOpenPicker(openPicker === 'valence' ? null : 'valence')}
-              className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', vColors.text, vColors.border)}
-              title="Correggi valenza"
-            >
-              {log.derivedValence ? quickLogValenceLabel(log.derivedValence) : '—'}
-            </button>
-            {openPicker === 'valence' && (
-              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
-                {QUICK_LOG_VALENCES.map((valence) => (
-                  <button
-                    key={valence}
-                    onClick={() => {
-                      updateLog.mutate({ id: log.id, data: { derivedValence: valence } });
-                      setOpenPicker(null);
-                    }}
-                    className={cn(
-                      'block w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 whitespace-nowrap',
-                      valence === log.derivedValence && 'font-semibold'
-                    )}
-                  >
-                    {quickLogValenceLabel(valence)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              {quickLogCategoryLabel(log.derivedCategory)}
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-slate-500">Commento del giorno</span>
+          )}
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
@@ -133,32 +81,35 @@ export function QuickLogNote({ log }: QuickLogNoteProps) {
       </div>
 
       {isEditing ? (
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="text"
+        <div className="mt-2 flex items-start gap-2">
+          {/* A textarea, not a line: a comment on a day is allowed to be long,
+              and revising one through a one-line field is how they stay short */}
+          <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSaveText()}
-            className="input text-sm"
+            rows={3}
+            className="input text-sm resize-y"
             autoFocus
           />
-          <button
-            onClick={handleSaveText}
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
-            title="Salva"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setIsEditing(false)}
-            className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"
-            title="Annulla"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              onClick={handleSaveText}
+              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+              title="Salva"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"
+              title="Annulla"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ) : (
-        <p className="mt-1.5 text-sm text-slate-700">{log.text}</p>
+        <p className="mt-1.5 text-sm text-slate-700 whitespace-pre-wrap break-words">{log.text}</p>
       )}
 
       {log.linkedMeal && (

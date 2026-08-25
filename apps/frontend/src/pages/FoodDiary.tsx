@@ -169,12 +169,12 @@ export function FoodDiary() {
       className={cn(
         // Sidebar offset on the page root, like every other page: the nav is
         // fixed, and without this a full-width layout slides underneath it
-        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl pb-28 sm:pb-20',
+        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl pb-36 sm:pb-24',
         // From xl the page stops scrolling as a whole: it fills the height it
         // has and hands the scrolling to the middle column. Full width, so the
         // rails start at the nav and end at the edge instead of floating in
         // the middle with empty margins either side.
-        'xl:max-w-none xl:h-full xl:pb-14 xl:flex xl:flex-col xl:overflow-hidden'
+        'xl:max-w-none xl:h-full xl:pb-24 xl:flex xl:flex-col xl:overflow-hidden'
       )}
     >
       <div className="mb-4 xl:shrink-0">
@@ -304,7 +304,7 @@ export function FoodDiary() {
       </div>
 
       {/* FAB (mobile): only the meal, for the same reason as the header */}
-      <div className="sm:hidden fixed bottom-32 right-4 z-40 flex flex-col items-center gap-3">
+      <div className="sm:hidden fixed bottom-40 right-4 z-40 flex flex-col items-center gap-3">
         <button
           onClick={openCreate}
           className="w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
@@ -316,7 +316,7 @@ export function FoodDiary() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-32 sm:bottom-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+        <div className="fixed bottom-40 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
           {toast}
         </div>
       )}

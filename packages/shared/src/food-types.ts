@@ -178,9 +178,11 @@ export interface CreateQuickLogDTO {
   text: string;
   loggedAt?: string; // only when the user explicitly overrides the timestamp
   // Structured entries (mood picker) pin the classification instead of
-  // relying on the keyword dictionaries; both set the corresponding *Manual flag
-  derivedCategory?: QuickLogCategoryDTO;
-  derivedValence?: QuickLogValenceDTO;
+  // relying on the keyword dictionaries; both set the corresponding *Manual flag.
+  // `null` is itself a decision: the free day note asks for no classification
+  // at all, which is what keeps it out of the day scores
+  derivedCategory?: QuickLogCategoryDTO | null;
+  derivedValence?: QuickLogValenceDTO | null;
 }
 
 // Manual category/valence corrections set the *Manual flags server-side

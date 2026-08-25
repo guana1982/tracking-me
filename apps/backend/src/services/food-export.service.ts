@@ -32,6 +32,11 @@ import { buildFoodAiPackage } from './food-ai-export.js';
 // each row is, so food, body, mood, intakes and check-in can be correlated
 // by date:
 //   meal_item   - one food eaten (meal notes in `text`)
+//   day_note    - what the user wrote about the day in their own words, from
+//                 the free bar in the diary (text = the comment). It carries
+//                 no category and no valence on purpose and enters no score:
+//                 it is the reading key for everything else logged that day,
+//                 and there can be several of them in one day
 //   quick_log   - a body/physical note (category = allenamento/sonno/sensazione/integratore)
 //   mood_log    - a MOOD note, the psychological track kept separate by design
 //   intake      - one dose taken/skipped (category = what, meal_type = when,
@@ -305,8 +310,11 @@ export function buildFoodCsv(
         }`
       : '';
     const line = [
-      // Mood gets its own record_type: the psychological track stays separable
-      log.category === 'MOOD' ? 'mood_log' : 'quick_log',
+      // Three different things share one table. A note with no category was
+      // never classified by anyone: it is the user commenting on their day,
+      // and an LLM has to read it as testimony, not as a measurement. Mood
+      // gets its own type too, so the psychological track stays separable
+      log.category === null ? 'day_note' : log.category === 'MOOD' ? 'mood_log' : 'quick_log',
       local.date,
       time,
       log.category ? QUICK_LOG_CATEGORY_LABELS[log.category] : '',

@@ -113,7 +113,7 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
         <p className="text-sm text-slate-500 py-6 text-center">
           {track === 'MOOD'
             ? 'Nessun umore registrato nel periodo: votalo dal diario, o aprilo da «Stati d’umore».'
-            : "Nessun dato nel periodo: la linea appare con i voti, gli episodi, il check-in e le note del diario."}
+            : "Nessun dato nel periodo: la linea appare con i voti, gli episodi, il check-in e le abitudini — non con i commenti liberi della giornata."}
         </p>
       ) : (
         <>
