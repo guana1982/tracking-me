@@ -73,11 +73,23 @@ function TrackReadout({ label, stroke, score, contributions }: TrackReadoutProps
       {shown.length > 0 && (
         <ul className="mt-1 space-y-0.5 pl-4">
           {shown.map((entry) => (
-            <li key={entry.label} className="flex items-baseline gap-2 text-[11px]">
-              <span className="min-w-0 flex-1 truncate text-slate-500">{entry.label}</span>
-              <span className={cn('shrink-0 tabular-nums font-medium', scoreColor(entry.score))}>
-                {formatScore(entry.score)}
-              </span>
+            <li key={entry.label} className="text-[11px]">
+              <div className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-slate-500">{entry.label}</span>
+                <span className={cn('shrink-0 tabular-nums font-medium', scoreColor(entry.score))}>
+                  {formatScore(entry.score)}
+                </span>
+              </div>
+              {/* The words written next to the vote: a score says how much the
+                  day moved, and only this says what moved it */}
+              {entry.details.map((detail) => (
+                <p
+                  key={detail}
+                  className="mt-0.5 border-l-2 border-slate-200 pl-1.5 text-[11px] leading-snug text-slate-500 line-clamp-3"
+                >
+                  {detail}
+                </p>
+              ))}
             </li>
           ))}
           {hidden > 0 && (
@@ -140,7 +152,7 @@ function DayTooltip({ active, payload, label, data, showBody, showMood }: DayToo
   const hiddenMoments = moments.length - shownMoments.length;
 
   return (
-    <div className="max-w-[16rem] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg">
+    <div className="max-w-[20rem] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg">
       <p className="mb-1.5 text-[11px] font-semibold capitalize text-slate-900">
         {format(parseISO(row.date), 'EEEE d MMMM', { locale: it })}
       </p>

@@ -207,6 +207,12 @@ export interface RecalculateQuickLogsResultDTO {
 export interface DayContributionDTO {
   label: string;
   score: number; // [-1, +1], the instrument's mean for that day
+  /**
+   * What was written next to it, in the user's own words: the note on a vote,
+   * the text of a quick log, the trigger of an episode. A score says how much
+   * a day moved, and only this says what moved it.
+   */
+  details: string[];
 }
 
 /**

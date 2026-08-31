@@ -53,7 +53,14 @@ import type {
  * average and the number alone explains nothing: a day at -0.4 is a day where
  * something was -0.4, and the chart is unreadable until it can say what.
  */
-type TrackGroups = Map<string, { label: string; scores: number[] }>;
+interface TrackGroup {
+  label: string;
+  scores: number[];
+  /** Whatever was written next to those scores, in the user's own words */
+  details: string[];
+}
+
+type TrackGroups = Map<string, TrackGroup>;
 
 interface DayData {
   mealCount: number;
@@ -95,13 +102,19 @@ function emptyDay(): DayData {
   };
 }
 
-function pushScore(groups: TrackGroups, source: string, label: string, score: number): void {
-  const bucket = groups.get(source);
-  if (bucket) {
-    bucket.scores.push(score);
-  } else {
-    groups.set(source, { label, scores: [score] });
-  }
+function pushScore(
+  groups: TrackGroups,
+  source: string,
+  label: string,
+  score: number,
+  detail?: string | null
+): void {
+  const bucket = groups.get(source) ?? { label, scores: [], details: [] };
+  bucket.scores.push(score);
+  const text = detail?.trim();
+  // Deduped: the same sentence said twice is one reason, not two
+  if (text && !bucket.details.includes(text)) bucket.details.push(text);
+  groups.set(source, bucket);
 }
 
 /** One mean per instrument: the inner level of the two-level average */
@@ -118,7 +131,11 @@ export function groupMeans(groups: TrackGroups): number[] {
  */
 function groupBreakdown(groups: TrackGroups): DayContributionDTO[] {
   return [...groups.values()]
-    .map((group) => ({ label: group.label, score: average(group.scores) }))
+    .map((group) => ({
+      label: group.label,
+      score: average(group.scores),
+      details: group.details,
+    }))
     .filter((entry): entry is DayContributionDTO => entry.score !== null)
     .sort((left, right) => Math.abs(right.score) - Math.abs(left.score));
 }
@@ -518,10 +535,11 @@ class FoodDashboardService {
       // Named "nota <categoria>": a rating can be called Sonno too, and the
       // two must not read as one line in the tooltip
       const label = `Note ${QUICK_LOG_CATEGORY_LABELS[log.derivedCategory ?? 'FEELING']}`;
+      // The note's own words: for a quick log the text is the whole reason
       if (log.derivedCategory === 'MOOD') {
-        pushScore(day.moodGroups, source, label, score);
+        pushScore(day.moodGroups, source, label, score, log.text);
       } else {
-        pushScore(day.stateGroups, source, label, score);
+        pushScore(day.stateGroups, source, label, score, log.text);
       }
       if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(sign);
       if (log.derivedCategory === 'SLEEP') day.sleepScores.push(sign);
@@ -549,7 +567,12 @@ class FoodDashboardService {
   ): Promise<void> {
     const entries = await prisma.ratingEntry.findMany({
       where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
-      include: { rating: { select: { track: true } } },
+      include: {
+        rating: { select: { track: true } },
+        // The mood entry opened from a rating row: the diary shows the two
+        // together, and the tooltip has to be able to do the same
+        quickLog: { select: { text: true } },
+      },
     });
 
     for (const entry of entries) {
@@ -609,7 +632,10 @@ class FoodDashboardService {
           : entry.kind === 'SIDE_EFFECT'
             ? `Effetto: ${entry.ratingName}`
             : entry.ratingName,
-        score
+        score,
+        // A vote carries its reasons in three places: the trigger, the note
+        // written beside it, and the mood entry opened from that row
+        [entry.trigger, entry.note, entry.quickLog?.text].filter(Boolean).join(' · ')
       );
     }
   }
@@ -692,7 +718,8 @@ class FoodDashboardService {
         track === 'MOOD' ? day.moodGroups : day.stateGroups,
         `habit:${entry.habitKey}`,
         `${entry.habitName}${entry.status === 'DONE' ? '' : ' (non fatta)'}`,
-        score
+        score,
+        entry.note
       );
     }
   }
