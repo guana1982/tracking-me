@@ -1,14 +1,15 @@
 import { prisma } from '../lib/prisma.js';
 import type { IncomeDTO, CreateIncomeDTO, UpdateIncomeDTO } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
+import { monthPeriodService } from './month-period.service.js';
 
 export class IncomeService {
   /**
-   * Get all incomes for a period
+   * Get all incomes for a period (user-scoped)
    */
-  async getByPeriodKey(periodKey: string): Promise<IncomeDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getByPeriodKey(periodKey: string, userId: string): Promise<IncomeDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         incomes: {
           orderBy: { createdAt: 'asc' },
@@ -24,33 +25,42 @@ export class IncomeService {
   }
 
   /**
-   * Get income by ID
+   * Get income by ID (user-scoped)
    */
-  async getById(id: string): Promise<IncomeDTO | null> {
-    const income = await prisma.income.findUnique({
-      where: { id },
+  async getById(id: string, userId: string): Promise<IncomeDTO | null> {
+    const income = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     return income ? this.toDTO(income) : null;
   }
 
   /**
-   * Create a new income entry
+   * Create a new income entry (user-scoped)
+   * Auto-creates the month period if it doesn't exist
    */
-  async create(periodKey: string, data: CreateIncomeDTO): Promise<IncomeDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
-    });
+  async create(periodKey: string, userId: string, data: CreateIncomeDTO): Promise<IncomeDTO> {
+    // Parse periodKey to get year and month
+    const [yearStr, monthStr] = periodKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
 
-    if (!period) {
-      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
     }
+
+    // Get or create period (handles race conditions)
+    const monthPeriod = await monthPeriodService.getOrCreate(userId, year, month);
 
     const income = await prisma.income.create({
       data: {
-        monthPeriodId: period.id,
+        monthPeriodId: monthPeriod.id,
         label: data.label,
         amount: data.amount,
+        sourcePeriodKey: data.sourcePeriodKey ?? null,
       },
     });
 
@@ -58,11 +68,14 @@ export class IncomeService {
   }
 
   /**
-   * Update an income entry
+   * Update an income entry (user-scoped)
    */
-  async update(id: string, data: UpdateIncomeDTO): Promise<IncomeDTO> {
-    const existing = await prisma.income.findUnique({
-      where: { id },
+  async update(id: string, userId: string, data: UpdateIncomeDTO): Promise<IncomeDTO> {
+    const existing = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -81,11 +94,14 @@ export class IncomeService {
   }
 
   /**
-   * Delete an income entry
+   * Delete an income entry (user-scoped)
    */
-  async delete(id: string): Promise<void> {
-    const existing = await prisma.income.findUnique({
-      where: { id },
+  async delete(id: string, userId: string): Promise<void> {
+    const existing = await prisma.income.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -102,6 +118,7 @@ export class IncomeService {
     monthPeriodId: string;
     label: string;
     amount: number;
+    sourcePeriodKey: string | null;
     createdAt: Date;
   }): IncomeDTO {
     return {
@@ -109,6 +126,7 @@ export class IncomeService {
       monthPeriodId: income.monthPeriodId,
       label: income.label,
       amount: income.amount,
+      sourcePeriodKey: income.sourcePeriodKey,
       createdAt: income.createdAt.toISOString(),
     };
   }

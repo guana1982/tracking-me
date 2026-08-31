@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { expenseService } from '../services/expense.service.js';
 import {
+  CATEGORIES,
   createExpenseSchema,
   updateExpenseSchema,
   expenseFiltersSchema,
@@ -26,7 +27,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         querystring: {
           type: 'object',
           properties: {
-            category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+            category: { type: 'string', enum: [...CATEGORIES] },
             startDate: { type: 'string', format: 'date' },
             endDate: { type: 'string', format: 'date' },
             search: { type: 'string', maxLength: 100 },
@@ -40,12 +41,49 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         periodKeySchema.parse(periodKey);
 
         const filters = expenseFiltersSchema.parse(request.query);
-        const result = await expenseService.getByPeriodKey(periodKey, filters);
+        const result = await expenseService.getByPeriodKey(periodKey, request.authUser!.id, filters);
 
         return { success: true, data: result };
       },
     }
   );
+
+  // Get all expenses for a period without pagination (for exports)
+  fastify.get<{ Params: { periodKey: string } }>(
+    '/period/:periodKey/all',
+    {
+      schema: {
+        tags: ['Expenses'],
+        summary: 'Get all expenses for a period (no pagination, for exports)',
+        params: {
+          type: 'object',
+          properties: {
+            periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+          },
+          required: ['periodKey'],
+        },
+      },
+      handler: async (request) => {
+        const { periodKey } = request.params;
+        periodKeySchema.parse(periodKey);
+
+        const expenses = await expenseService.getAllByPeriodKey(periodKey, request.authUser!.id);
+        return { success: true, data: expenses };
+      },
+    }
+  );
+
+  // Get all expenses across all periods (for exports)
+  fastify.get('/all', {
+    schema: {
+      tags: ['Expenses'],
+      summary: 'Get all expenses across all periods (for exports)',
+    },
+    handler: async (request) => {
+      const expenses = await expenseService.getAllByUser(request.authUser!.id);
+      return { success: true, data: expenses };
+    },
+  });
 
   // Get expense by ID
   fastify.get<{ Params: { id: string } }>('/:id', {
@@ -62,7 +100,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const { id } = request.params;
-      const expense = await expenseService.getById(id);
+      const expense = await expenseService.getById(id, request.authUser!.id);
 
       if (!expense) {
         reply.status(404);
@@ -91,10 +129,12 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
           type: 'object',
           properties: {
             date: { type: 'string' },
-            category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+            category: { type: 'string', enum: [...CATEGORIES] },
             label: { type: 'string', minLength: 1, maxLength: 200 },
             amount: { type: 'number', minimum: 0.01 },
             notes: { type: 'string', maxLength: 500 },
+            isFixed: { type: 'boolean' },
+            tricountType: { type: ['string', 'null'], enum: ['IO', 'FRA', null] },
           },
           required: ['date', 'category', 'label', 'amount'],
         },
@@ -104,7 +144,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         periodKeySchema.parse(periodKey);
 
         const data = createExpenseSchema.parse(request.body);
-        const expense = await expenseService.create(periodKey, data);
+        const expense = await expenseService.create(periodKey, request.authUser!.id, data);
 
         reply.status(201);
         return { success: true, data: expense };
@@ -128,17 +168,20 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           date: { type: 'string' },
-          category: { type: 'string', enum: ['NEEDS', 'WANTS', 'SAVINGS'] },
+          category: { type: 'string', enum: [...CATEGORIES] },
           label: { type: 'string', minLength: 1, maxLength: 200 },
           amount: { type: 'number', minimum: 0.01 },
           notes: { type: 'string', maxLength: 500 },
+          isFixed: { type: 'boolean' },
+          tricountType: { type: ['string', 'null'], enum: ['IO', 'FRA', null] },
+          spendingCategoryId: { type: ['string', 'null'] },
         },
       },
     },
     handler: async (request) => {
       const { id } = request.params;
       const data = updateExpenseSchema.parse(request.body);
-      const expense = await expenseService.update(id, data);
+      const expense = await expenseService.update(id, request.authUser!.id, data);
 
       return { success: true, data: expense };
     },
@@ -159,7 +202,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request) => {
       const { id } = request.params;
-      await expenseService.delete(id);
+      await expenseService.delete(id, request.authUser!.id);
       return { success: true };
     },
   });

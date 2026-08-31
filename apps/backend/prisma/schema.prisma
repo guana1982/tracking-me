@@ -7,23 +7,129 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User - authenticated user via Google OAuth
+model User {
+  id        String   @id @default(cuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String?
+  picture   String?
+  // Stamped the first time the diary asks for the rating rows, so the
+  // suggested set is installed exactly once and a deletion stays deleted
+  ratingsSeededAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations - user owns all their data
+  monthPeriods     MonthPeriod[]
+  cashFlowChecks   CashFlowCheck[]
+  cashFlowSettings CashFlowSettings?
+  fixedExpenseTemplates FixedExpenseTemplate[]
+  investedPortfolio      InvestedPortfolio?
+  portfolioAssetClasses  PortfolioAssetClass[]
+  portfolioInstruments   PortfolioInstrument[]
+  spendingCategories     SpendingCategory[]
+  sinkingFunds           SinkingFund[]
+  wealthGoals            WealthGoal[]
+  meals                  Meal[]
+  mealTypeDefinitions    MealTypeDefinition[]
+  mealUnitDefinitions    MealUnitDefinition[]
+  moodDefinitions        MoodDefinition[]
+  quickLogs              QuickLog[]
+  treatmentDefinitions   TreatmentDefinition[]
+  treatmentIntakes       TreatmentIntake[]
+  checkInScales          CheckInScale[]
+  checkInEntries         CheckInEntry[]
+  ratingDefinitions      RatingDefinition[]
+  ratingEntries          RatingEntry[]
+  titrationSteps         TitrationStep[]
+  milestones             Milestone[]
+  milestoneAttachments   MilestoneAttachment[]
+  weightEntries          WeightEntry[]
+  habitDefinitions       HabitDefinition[]
+  habitEntries           HabitEntry[]
+  activityTypes          ActivityType[]
+  activities             Activity[]
+
+  @@index([googleId])
+  @@index([email])
+  @@map("users")
+}
+
+// Portfolio Asset Class - user-defined classes (Azionario, Obbligazionario, etc.)
+model PortfolioAssetClass {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instruments PortfolioInstrument[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("portfolio_asset_classes")
+}
+
+// Invested Portfolio - persisted real portfolio allocation per user
+model InvestedPortfolio {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  positionsJson Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("invested_portfolios")
+}
+
+// Portfolio Instrument - user catalog of investable instruments
+model PortfolioInstrument {
+  id           String   @id @default(cuid())
+  userId     String
+  symbol       String
+  name         String
+  isin         String
+  assetClassId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetClass PortfolioAssetClass @relation(fields: [assetClassId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, symbol])
+  @@unique([userId, isin])
+  @@index([userId])
+  @@index([assetClassId])
+  @@map("portfolio_instruments")
+}
+
 // Month Period - represents a budget month (e.g., 2026-01)
 model MonthPeriod {
   id          String   @id @default(cuid())
+  userId      String
   year        Int
   month       Int      // 1-12
-  periodKey   String   @unique // YYYY-MM format for easy querying
+  periodKey   String   // YYYY-MM format for easy querying
+  isClosed    Boolean  @default(false) // When true, no edits allowed
+  closedAt    DateTime? // When the month was closed
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
   budgetRule    BudgetRule?
   incomes       Income[]
   expenses      Expense[]
   reallocations Reallocation[]
 
-  @@unique([year, month])
+  @@unique([userId, periodKey])
+  @@unique([userId, year, month])
   @@index([periodKey])
+  @@index([userId])
   @@map("month_periods")
 }
 
@@ -51,6 +157,9 @@ model Income {
   monthPeriodId String
   label         String
   amount        Float    // Store as float (EUR), we'll handle precision in app
+  // Set when this income is a surplus carried forward from that period's
+  // positive reallocation (YYYY-MM of the source month). Null for real income.
+  sourcePeriodKey String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -61,32 +170,122 @@ model Income {
   @@map("incomes")
 }
 
-// Category enum
+// Category enum (EXTRA is tracked outside the 65/25/10 budget)
 enum Category {
   NEEDS
   WANTS
   SAVINGS
+  EXTRA
+}
+
+// Tricount type enum for shared expenses
+enum TricountType {
+  IO
+  FRA
 }
 
 // Expense - individual expense entry
 model Expense {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   monthPeriodId String
   date          DateTime
   category      Category
   label         String
-  amount        Float    // Store as float (EUR)
+  amount        Float         // Store as float (EUR)
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isFixed       Boolean       @default(false)  // Fixed monthly expense
+  tricountType  TricountType?                  // Shared expense type (IO/FRA)
+  spendingCategoryId     String?               // Auto-assigned spending category (Spesa, Bollette, ...)
+  spendingCategoryManual Boolean @default(false) // True when the user overrode the auto classification
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
-  monthPeriod MonthPeriod @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+  monthPeriod      MonthPeriod       @relation(fields: [monthPeriodId], references: [id], onDelete: Cascade)
+  spendingCategory SpendingCategory? @relation(fields: [spendingCategoryId], references: [id], onDelete: SetNull)
 
   @@index([monthPeriodId])
   @@index([category])
   @@index([date])
+  @@index([spendingCategoryId])
   @@map("expenses")
+}
+
+// Spending Category - fine-grained expense classification (Spesa, Bollette, Auto, ...)
+// Assigned automatically from the expense label via CategoryRule keywords
+model SpendingCategory {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#64748b")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rules        CategoryRule[]
+  expenses     Expense[]
+  sinkingFunds SinkingFund[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("spending_categories")
+}
+
+// Sinking Fund - monthly accrual for irregular expenses (vacanze, bollo, regali...).
+// Balance is computed: months since startPeriodKey × monthlyAmount, minus every
+// expense classified under the linked SpendingCategory from startPeriodKey onwards
+model SinkingFund {
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String
+  monthlyAmount      Float
+  startPeriodKey     String   // YYYY-MM: accrual starts here, earlier expenses don't drain the fund
+  spendingCategoryId String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spendingCategory SpendingCategory @relation(fields: [spendingCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([spendingCategoryId])
+  @@map("sinking_funds")
+}
+
+// Category Rule - keyword (regex) that maps an expense label to a SpendingCategory.
+// Rules are evaluated in ascending priority order: the first match wins,
+// so user-added rules (priority 0) override the seeded dictionary
+model CategoryRule {
+  id                 String   @id @default(cuid())
+  spendingCategoryId String
+  keyword            String   // regex tested against the normalized label (lowercase, no accents)
+  priority           Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  spendingCategory SpendingCategory @relation(fields: [spendingCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([spendingCategoryId])
+  @@map("category_rules")
+}
+
+// Fixed Expense Template - recurring monthly defaults
+model FixedExpenseTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  category  Category
+  label     String
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@map("fixed_expense_templates")
 }
 
 // Reallocation - transfer between categories at end of month
@@ -106,4 +305,685 @@ model Reallocation {
 
   @@index([monthPeriodId])
   @@map("reallocations")
+}
+
+// Wealth Goal - net worth target with run-rate projections computed from the
+// cash-flow check history (progress, ETA, required vs actual monthly pace)
+model WealthGoal {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  targetAmount Float
+  targetDate   DateTime? @db.Date
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("wealth_goals")
+}
+
+// CashFlow Check - net worth snapshot at a point in time
+model CashFlowCheck {
+  id              String   @id @default(cuid())
+  userId          String
+  checkLabel      String
+  date            DateTime @db.Date
+  bbva            Float    @default(0)
+  tradeRepublic   Float    @default(0)
+  webankCc        Float    @default(0)
+  webankObbl      Float    @default(0)
+  etfLordo        Float    @default(0)
+  rendimentoLordo Float    @default(0)
+  bper            Float    @default(0)
+  tricount        Float    @default(0)
+  cartaWebank     Float    @default(0)
+  edenred         Float    @default(0)
+  valuesJson      Json     @default("{}")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
+  @@map("cashflow_checks")
+}
+
+// ============================================================
+// Food Diary module - isolated domain, shares only User/auth
+// ============================================================
+
+enum QuickLogCategory {
+  WORKOUT
+  SLEEP
+  SUPPLEMENT
+  FEELING
+  MOOD
+}
+
+enum QuickLogValence {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+// Meal - one logged meal (colazione/pranzo/cena/spuntino) on a given day
+model Meal {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  mealType  String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     MealItem[]
+  photo     MealPhoto?
+  quickLogs QuickLog[]
+
+  @@index([userId])
+  @@index([userId, date])
+  @@map("meals")
+}
+
+model MealTypeDefinition {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  position  Int
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("meal_type_definitions")
+}
+
+model MealUnitDefinition {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  position  Int
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("meal_unit_definitions")
+}
+
+// Mood Definition - user-owned catalog of mood states offered by the picker.
+// Each carries its own valence, so a mood log's meaning is pinned at write
+// time and editing the catalog never rewrites history.
+model MoodDefinition {
+  id        String          @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  valence   QuickLogValence
+  position  Int
+  isActive  Boolean         @default(true)
+  isDefault Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("mood_definitions")
+}
+
+// Meal Item - free-text food entry; quantity/unit optional by design
+model MealItem {
+  id       String        @id @default(cuid())
+  mealId   String
+  foodName String
+  quantity Float?
+  unit     String?
+  position Int           @default(0)
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@index([mealId])
+  @@map("meal_items")
+}
+
+// Meal Photo - resized JPEG stored in-db (no external storage available);
+// kept in its own table so meal list queries never pull the bytes
+model MealPhoto {
+  id        String   @id @default(cuid())
+  mealId    String   @unique
+  mimeType  String   @default("image/jpeg")
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@map("meal_photos")
+}
+
+// Quick Log - raw free-text note; derived fields are recomputed from keyword
+// dictionaries and never structured by the user (text is the source of truth)
+model QuickLog {
+  id              String            @id @default(cuid())
+  userId          String
+  loggedAt        DateTime          @default(now())
+  text            String
+  mealId          String?
+  derivedCategory QuickLogCategory?
+  derivedValence  QuickLogValence?
+  categoryManual  Boolean           @default(false) // user override wins over recompute
+  valenceManual   Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meal Meal? @relation(fields: [mealId], references: [id], onDelete: SetNull)
+  // Set when the log was written from a rating row: the two are shown as one
+  // recap in the timeline instead of two entries at the same minute
+  ratingEntry RatingEntry?
+
+  @@index([userId])
+  @@index([userId, loggedAt])
+  @@index([mealId])
+  @@map("quick_logs")
+}
+
+// ============================================================
+// Intake & check-in module - grafted onto the food diary, not beside it.
+// Nothing here is preloaded: an empty catalogue keeps the whole module
+// invisible for users who do not track medication or supplements.
+// ============================================================
+
+enum TreatmentKind {
+  MEDICATION
+  SUPPLEMENT
+  OTHER
+}
+
+enum IntakeStatus {
+  TAKEN
+  SKIPPED
+  LATE
+}
+
+// One thing the user takes daily. `slots` holds meal-type keys (so the intake
+// surfaces inside that meal's form) plus the "bedtime" pseudo-slot.
+model TreatmentDefinition {
+  id        String        @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  kind      TreatmentKind @default(MEDICATION)
+  detail    String?
+  form      String?
+  dose      String?
+  slots     String[]
+  notes     String?
+  startedOn DateTime?     @db.Date
+  position  Int
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  intakes    TreatmentIntake[]
+  titrations TitrationStep[]
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("treatment_definitions")
+}
+
+// One answer for one treatment in one slot of one day. Name and dose are
+// snapshots: editing or deleting the definition never rewrites adherence.
+model TreatmentIntake {
+  id            String       @id @default(cuid())
+  userId        String
+  treatmentId   String?
+  treatmentKey  String
+  treatmentName String
+  doseLabel     String?
+  slot          String
+  date          DateTime     @db.Date
+  status        IntakeStatus
+  loggedAt      DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  treatment TreatmentDefinition? @relation(fields: [treatmentId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, date, treatmentKey, slot])
+  @@index([userId, date])
+  @@map("treatment_intakes")
+}
+
+// A configurable check-in scale. Core scales are always on screen, the rest
+// sit in the optional section; levelLabels turns a slider into named steps.
+model CheckInScale {
+  id          String   @id @default(cuid())
+  userId      String
+  key         String
+  name        String
+  lowLabel    String   @default("")
+  highLabel   String   @default("")
+  levelLabels String[] @default([])
+  maxValue    Int      @default(10)
+  isPositive  Boolean  @default(false)
+  isCore      Boolean  @default(true)
+  // A side effect is read differently from a symptom: what matters is when it
+  // appeared and whether it faded, not the shape of its curve
+  // Legacy: side effects moved to RatingDefinition (kind SIDE_EFFECT) so they
+  // could be logged as moments with a comment instead of answered nightly.
+  // Kept so the scales archived by that move stay readable.
+  isSideEffect Boolean @default(false)
+  sourceTreatmentKeys String[] @default([])
+  track       DayTrack @default(MOOD)
+  position    Int
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("check_in_scales")
+}
+
+// One evaluative entry per day - the uniqueness is the feature, not an
+// optimisation: it can be edited, never duplicated. Values snapshot their
+// scale, so the catalogue can change without touching past entries.
+model CheckInEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  date       DateTime @db.Date
+  valuesJson Json     @default("[]")
+  note       String?
+  loggedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("check_in_entries")
+}
+
+// ============================================================
+// Daily ratings - the 1..n rows of clickable boxes at the top of the diary.
+// A rating is timestamped and lands in the day timeline, which is what
+// separates it from the check-in (one silent evaluation of the whole day).
+// ============================================================
+
+enum RatingLinkedForm {
+  NONE
+  MOOD
+}
+
+// SCALE = a periodic mark (a row of boxes); EVENT = an episode logged the
+// moment it happens (a chip to tap); SIDE_EFFECT = the same, but tied to the
+// treatment that can cause it. One storage, three ways in.
+enum RatingKind {
+  SCALE
+  EVENT
+  SIDE_EFFECT
+}
+
+// Which of the two independent day curves an answer feeds. Never inferred
+// from a name: what is "physical" and what is "psychological" is the user's
+// call, and NONE keeps something out of the day state entirely.
+enum DayTrack {
+  BODY
+  MOOD
+  NONE
+}
+
+// One characteristic the user rates. Everything about it is editable: the
+// three installed at first run are a suggestion, not a fixed set.
+model RatingDefinition {
+  id         String           @id @default(cuid())
+  userId     String
+  key        String
+  name       String
+  kind       RatingKind       @default(SCALE)
+  maxValue   Int              @default(10)
+  track      DayTrack         @default(BODY)
+  // For a SIDE_EFFECT: which treatments brought it up, so the diary groups
+  // the chips under the drug they belong to
+  sourceTreatmentKeys String[] @default([])
+  linkedForm RatingLinkedForm @default(NONE)
+  position   Int
+  isActive   Boolean          @default(true)
+  isDefault  Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries RatingEntry[]
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("rating_definitions")
+}
+
+// One vote, at one moment. Deliberately NOT unique per day: the rating row is
+// an input, not a display of state, so the same characteristic can be voted
+// again later and each vote keeps its own place in the timeline.
+model RatingEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  ratingId   String?
+  ratingKey  String
+  ratingName String
+  // Snapshot too: a recorded episode keeps reading as an episode even if the
+  // characteristic is later turned into a periodic mark
+  kind       RatingKind @default(SCALE)
+  value      Int?
+  maxValue   Int      @default(10)
+  note       String?
+  // What set the episode off. Free text on purpose: the vocabulary of the
+  // triggers has to be the user's own, and it is what the ranking reads
+  trigger    String?
+  quickLogId String?  @unique
+  date       DateTime @db.Date
+  loggedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating   RatingDefinition? @relation(fields: [ratingId], references: [id], onDelete: SetNull)
+  quickLog QuickLog?         @relation(fields: [quickLogId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([userId, ratingKey])
+  @@map("rating_entries")
+}
+
+// ============================================================
+// Therapy plan - the parts that sit on a calendar rather than in the day
+// ============================================================
+
+enum MilestoneKind {
+  EXAM
+  APPOINTMENT
+  OTHER
+}
+
+// A planned dose change. Kept apart from the treatment's current dose so the
+// plan stays readable after the change has been applied, and so the weekly
+// charts can mark the day the dose actually moved.
+model TitrationStep {
+  id          String   @id @default(cuid())
+  userId      String
+  treatmentId String
+  date        DateTime @db.Date
+  dose        String
+  applied     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  treatment TreatmentDefinition @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([treatmentId])
+  @@map("titration_steps")
+}
+
+// Exams, appointments and anything else with a date. `advisories` holds the
+// conditional reminders that make an exam valid (no heavy training for 72 h,
+// creatine stopped days before), which are worthless if remembered too late.
+model Milestone {
+  id         String        @id @default(cuid())
+  userId     String
+  kind       MilestoneKind @default(OTHER)
+  title      String
+  date       DateTime      @db.Date
+  notes      String?
+  items      String[]      @default([])
+  advisories String[]      @default([])
+  isDone     Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments MilestoneAttachment[]
+
+  @@index([userId, date])
+  @@map("milestones")
+}
+
+/// The report itself, attached to the date it belongs to: a blood panel next
+/// to the exam that produced it, so the file is found by looking at the
+/// calendar rather than by remembering where it was saved.
+///
+/// The bytes live in the database on purpose. The app has no object storage,
+/// and a container filesystem does not survive a redeploy - anywhere else the
+/// file would quietly disappear a week later. Personal volumes here are a few
+/// PDFs a year, which is nothing for Postgres; if it ever stops being that,
+/// only this model and its service have to move.
+model MilestoneAttachment {
+  id          String   @id @default(cuid())
+  userId      String
+  milestoneId String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  data        Bytes
+  /// Whether the next export carries the file. Decided per file, because an
+  /// export meant for a model is not the place for everything ever uploaded
+  includeInExport Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([milestoneId])
+  @@map("milestone_attachments")
+}
+
+// ============================================================
+// Habits - same shape as the intakes, but nothing here is a dose. What the
+// user tracks and how it is measured is entirely their choice.
+// ============================================================
+
+enum HabitMeasure {
+  DONE
+  COUNT
+  DURATION
+}
+
+enum HabitStatus {
+  DONE
+  SKIPPED
+}
+
+model HabitDefinition {
+  id       String       @id @default(cuid())
+  userId   String
+  key      String
+  name     String
+  measure  HabitMeasure @default(DONE)
+  // Free text, like a dose: "min", "km", "pagine"
+  unit     String       @default("")
+  target   Int?
+  // Optional grouping label for the daily card
+  moment   String?
+  // ISO weekdays it is expected on; empty = every day. A rest day is not a
+  // skipped day, so outside these the habit is not asked about at all
+  daysOfWeek Int[]      @default([])
+  // NONE by default: a habit joins the day curves only if the user says so
+  track    DayTrack     @default(NONE)
+  position Int
+  isActive Boolean      @default(true)
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries HabitEntry[]
+
+  @@unique([userId, key])
+  @@index([userId, position])
+  @@map("habit_definitions")
+}
+
+// One answer per habit per day: answering again edits it. Name, measure and
+// unit are snapshots, so editing the catalogue never rewrites the past.
+model HabitEntry {
+  id        String       @id @default(cuid())
+  userId    String
+  habitId   String?
+  habitKey  String
+  habitName String
+  measure   HabitMeasure @default(DONE)
+  unit      String       @default("")
+  date      DateTime     @db.Date
+  status    HabitStatus
+  value     Int?
+  note      String?
+  loggedAt  DateTime     @default(now())
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit HabitDefinition? @relation(fields: [habitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, date, habitKey])
+  @@index([userId, date])
+  @@map("habit_entries")
+}
+
+// Weight, weekly by design (§3.6): one entry per day at most, and the diary
+// only asks again once a week has gone by.
+model WeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  weightKg  Float
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("weight_entries")
+}
+
+// ============================================================
+// Activities - daily tasks, weekly planning and deadlines
+// ============================================================
+
+enum ActivityKind {
+  TASK
+  DEADLINE
+}
+
+enum ActivityScope {
+  DAY
+  WEEK
+}
+
+enum ActivityPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model ActivityType {
+  id        String       @id @default(cuid())
+  userId    String
+  key       String
+  name      String
+  color     String
+  kind      ActivityKind
+  position  Int
+  isActive  Boolean      @default(true)
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities Activity[]
+
+  @@unique([userId, key])
+  @@index([userId, kind, position])
+  @@map("activity_types")
+}
+
+model Activity {
+  id           String           @id @default(cuid())
+  userId       String
+  typeId       String?
+  /// Label copied when the type was attached, so deleting the type does not
+  /// strip the category from everything it ever tagged
+  typeName     String?
+  typeColor    String?
+  title        String
+  notes        String?
+  kind         ActivityKind     @default(TASK)
+  scope        ActivityScope    @default(DAY)
+  scheduledFor DateTime         @db.Date
+  dueDate      DateTime?        @db.Date
+  dueTime      String?
+  priority     ActivityPriority @default(MEDIUM)
+  status       ActivityStatus   @default(TODO)
+  position     Int              @default(0)
+  isManuallyPositioned Boolean  @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type ActivityType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledFor, status])
+  @@index([userId, dueDate, status])
+  @@index([typeId])
+  @@map("activities")
+}
+
+// CashFlow Settings - per-user commission/ETF configuration
+model CashFlowSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  commissionPerEtf Float    @default(12)
+  etfCount         Int      @default(12)
+  columnsJson           Json     @default("[]")
+  classificationsJson   Json     @default("[]")
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("cashflow_settings")
 }

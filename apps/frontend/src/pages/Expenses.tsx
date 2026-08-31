@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useExpenses, useDeleteExpense } from '../hooks/useQueries';
+import {
+  useExpenses,
+  useDeleteExpense,
+  useUpdateExpense,
+  useSpendingCategories,
+} from '../hooks/useQueries';
+import { expensesApi } from '../lib/api';
+import { buildExpensesCsv, downloadCsv } from '../lib/csv';
 import {
   formatCurrency,
   formatDate,
@@ -16,17 +23,20 @@ import {
   ShoppingBag,
   Wallet,
   PiggyBank,
+  Plane,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 
 const categoryIcons = {
   NEEDS: ShoppingBag,
   WANTS: Wallet,
   SAVINGS: PiggyBank,
+  EXTRA: Plane,
 };
 
-const categories: (Category | undefined)[] = [undefined, 'NEEDS', 'WANTS', 'SAVINGS'];
+const categories: (Category | undefined)[] = [undefined, 'NEEDS', 'WANTS', 'SAVINGS', 'EXTRA'];
 
 export function Expenses() {
   const { periodKey } = usePeriodStore();
@@ -37,6 +47,12 @@ export function Expenses() {
 
   const { data, isLoading } = useExpenses(periodKey, filters);
   const deleteExpense = useDeleteExpense(periodKey);
+  const updateExpense = useUpdateExpense(periodKey);
+  const { data: spendingCategories } = useSpendingCategories();
+
+  const spendingCategoryById = new Map(
+    (spendingCategories ?? []).map((cat) => [cat.id, cat])
+  );
 
   const handleCategoryFilter = (category: Category | undefined) => {
     setFilters((prev) => ({ ...prev, category, page: 1 }));
@@ -60,21 +76,83 @@ export function Expenses() {
     }
   };
 
+  const [exporting, setExporting] = useState<'month' | 'all' | null>(null);
+
+  const handleExportMonth = async () => {
+    setExporting('month');
+    try {
+      const expenses = await expensesApi.getAllForPeriod(periodKey);
+      if (expenses.length > 0) {
+        downloadCsv(buildExpensesCsv(expenses), `spese-${periodKey}.csv`);
+      }
+    } catch (error) {
+      console.error('Failed to export month expenses:', error);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleExportAll = async () => {
+    setExporting('all');
+    try {
+      const expenses = await expensesApi.getAllGlobal();
+      if (expenses.length > 0) {
+        downloadCsv(buildExpensesCsv(expenses), `spese-storico-${new Date().toISOString().slice(0, 10)}.csv`);
+      }
+    } catch (error) {
+      console.error('Failed to export all expenses:', error);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
-    <div className="space-y-6 sm:ml-16">
+    <div className="space-y-5 xl:space-y-6 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-900">Spese</h1>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cerca spese..."
-            className="input pl-10 w-full sm:w-64"
-            onChange={(e) => handleSearch(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {/* Export buttons */}
+          <button
+            type="button"
+            onClick={handleExportMonth}
+            disabled={exporting !== null}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Esporta in CSV tutte le spese del mese selezionato"
+          >
+            {exporting === 'month' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            CSV mese
+          </button>
+          <button
+            type="button"
+            onClick={handleExportAll}
+            disabled={exporting !== null}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Esporta in CSV tutte le spese di tutti i mesi, da inizio storico a oggi"
+          >
+            {exporting === 'all' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            CSV storico
+          </button>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cerca spese..."
+              className="input pl-10 w-full sm:w-64"
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -137,6 +215,50 @@ export function Expenses() {
                       >
                         {getCategoryLabel(expense.category)}
                       </span>
+                      {/* Spending category badge: auto-assigned, editable inline.
+                          SAVINGS rows are transfers, so they stay unclassified */}
+                      {expense.category !== 'SAVINGS' && (
+                        <>
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{
+                              backgroundColor:
+                                spendingCategoryById.get(expense.spendingCategoryId ?? '')
+                                  ?.color ?? '#94a3b8',
+                            }}
+                          />
+                          <select
+                            value={expense.spendingCategoryId ?? ''}
+                            onChange={(e) =>
+                              updateExpense.mutate({
+                                id: expense.id,
+                                data: { spendingCategoryId: e.target.value || null },
+                              })
+                            }
+                            disabled={updateExpense.isPending}
+                            title={
+                              expense.spendingCategoryManual
+                                ? 'Categoria corretta manualmente — scegli "Altro (auto)" per tornare alla classificazione automatica'
+                                : 'Categoria assegnata automaticamente dalla descrizione — puoi correggerla'
+                            }
+                            className={cn(
+                              'max-w-[10rem] truncate rounded border-0 bg-transparent py-0 pl-0 pr-5 text-xs font-medium cursor-pointer focus:ring-0',
+                              expense.spendingCategoryId ? 'text-slate-600' : 'text-slate-400 italic'
+                            )}
+                          >
+                            <option value="">Altro (auto)</option>
+                            {(spendingCategories ?? []).map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                                {expense.spendingCategoryId === cat.id &&
+                                expense.spendingCategoryManual
+                                  ? ' ✎'
+                                  : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
                     </div>
                     {expense.notes && (
                       <p className="text-sm text-slate-500 mt-1 truncate">

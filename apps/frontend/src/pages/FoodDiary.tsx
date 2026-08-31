@@ -1,0 +1,364 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Plus, TrendingUp, Loader2, AlertCircle, PenLine } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { todayLocal, addDaysLocal, localDateOf } from '../lib/foodUtils';
+import { useMeals, useQuickLogs, useDeleteMeal } from '../hooks/useFoodQueries';
+import { MealFormModal } from '../components/food/MealFormModal';
+import { MealCard } from '../components/food/MealCard';
+import { QuickLogNote } from '../components/food/QuickLogNote';
+import { QuickLogBar } from '../components/food/QuickLogBar';
+import { DayNoteModal } from '../components/food/DayNoteModal';
+import { DailyRatingsCard } from '../components/food/DailyRatingsCard';
+import { RatingNote } from '../components/food/RatingNote';
+import { DailyIntakeCard } from '../components/therapy/DailyIntakeCard';
+import { ScheduleLine } from '../components/therapy/ScheduleLine';
+import { WeightLine } from '../components/therapy/WeightLine';
+import { DailyHabitsCard } from '../components/habits/DailyHabitsCard';
+import { SortableRail } from '../components/food/SortableRail';
+import { FoodDiaryCalendar } from '../components/food/FoodDiaryCalendar';
+import { useSectionOrder } from '../hooks/useSectionOrder';
+import { useRatingEntries, useDeleteRatingEntry } from '../hooks/useRatingQueries';
+import { useDeleteQuickLog } from '../hooks/useFoodQueries';
+import type { MealDTO, QuickLogDTO, RatingEntryDTO } from '@budget/shared';
+
+type TimelineEntry =
+  | { kind: 'meal'; timestamp: string; meal: MealDTO }
+  | { kind: 'log'; timestamp: string; log: QuickLogDTO }
+  | { kind: 'rating'; timestamp: string; rating: RatingEntryDTO; linkedLog?: QuickLogDTO };
+
+/**
+ * From xl the diary stops being one long page and becomes three panes: the
+ * rails hold still and only the middle one scrolls.
+ *
+ * Each column is its own scroll area rather than a sticky block. Sticky was
+ * the obvious try and it cannot work here: the ratings rail is the tallest
+ * column, so it sets the row height and has no slack to detach from - it just
+ * travels with the page. Giving every column the same fixed height and its own
+ * overflow removes the question entirely.
+ */
+const COLUMN_CLASS = 'xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1';
+
+/** Order the right rail ships with; the user can rearrange it from there on */
+const RAIL_SECTIONS = ['schedule', 'intakes', 'habits', 'weight'] as const;
+
+/** Monday of the week containing the date */
+function weekStart(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  const day = (d.getDay() + 6) % 7; // 0 = Monday
+  return addDaysLocal(date, -day);
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function FoodDiary() {
+  // The day lives in the URL so the trends page can point at one, and so a
+  // day can be linked to at all. State stays the source of truth for the
+  // page; the query string only mirrors it
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const requested = searchParams.get('date');
+    return requested && ISO_DATE.test(requested) ? requested : todayLocal();
+  });
+
+  useEffect(() => {
+    if (searchParams.get('date') === selectedDate) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('date', selectedDate);
+    // Replace, not push: moving a day at a time must not fill the back button
+    setSearchParams(next, { replace: true });
+  }, [searchParams, selectedDate, setSearchParams]);
+  const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<MealDTO | null>(null);
+  const [duplicateFrom, setDuplicateFrom] = useState<MealDTO | null>(null);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const from = weekStart(selectedDate);
+  const to = addDaysLocal(from, 6);
+  const rail = useSectionOrder('rail', RAIL_SECTIONS);
+
+  const meals = useMeals(from, to);
+  const quickLogs = useQuickLogs(from, to);
+  const ratingEntries = useRatingEntries(from, to);
+  const deleteMeal = useDeleteMeal();
+  const deleteRatingEntry = useDeleteRatingEntry();
+  const deleteQuickLog = useDeleteQuickLog();
+
+  const showToast = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const openCreate = () => {
+    setEditingMeal(null);
+    setDuplicateFrom(null);
+    setIsMealModalOpen(true);
+  };
+
+  const openEdit = (meal: MealDTO) => {
+    setEditingMeal(meal);
+    setDuplicateFrom(null);
+    setIsMealModalOpen(true);
+  };
+
+  const openDuplicate = (meal: MealDTO) => {
+    setEditingMeal(null);
+    setDuplicateFrom(meal);
+    setIsMealModalOpen(true);
+  };
+
+  const handleDelete = (meal: MealDTO) => {
+    if (window.confirm('Eliminare questo pasto e tutte le sue voci?')) {
+      deleteMeal.mutate(meal.id, { onSuccess: () => showToast('Pasto eliminato') });
+    }
+  };
+
+  // Meals, quick logs and votes of the selected day, interleaved chronologically
+  const timeline = useMemo((): TimelineEntry[] => {
+    const dayMeals = (meals.data ?? []).filter((meal) => meal.date === selectedDate);
+    const dayRatings = (ratingEntries.data ?? []).filter((entry) => entry.date === selectedDate);
+    const logs = quickLogs.data ?? [];
+
+    // A mood entry opened from a rating row is shown inside that row's recap,
+    // so it must not also appear on its own line at the same minute
+    const linkedLogIds = new Set(
+      dayRatings.map((entry) => entry.quickLogId).filter((id): id is string => id !== null)
+    );
+    const dayLogs = logs.filter(
+      (log) => localDateOf(log.loggedAt) === selectedDate && !linkedLogIds.has(log.id)
+    );
+
+    return [
+      ...dayMeals.map((meal): TimelineEntry => ({ kind: 'meal', timestamp: meal.createdAt, meal })),
+      ...dayLogs.map((log): TimelineEntry => ({ kind: 'log', timestamp: log.loggedAt, log })),
+      ...dayRatings.map(
+        (rating): TimelineEntry => ({
+          kind: 'rating',
+          timestamp: rating.loggedAt,
+          rating,
+          linkedLog: logs.find((log) => log.id === rating.quickLogId),
+        })
+      ),
+    ].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }, [meals.data, quickLogs.data, ratingEntries.data, selectedDate]);
+
+  const daysWithData = useMemo(() => {
+    const days = new Set<string>();
+    for (const meal of meals.data ?? []) days.add(meal.date);
+    for (const log of quickLogs.data ?? []) days.add(localDateOf(log.loggedAt));
+    for (const entry of ratingEntries.data ?? []) days.add(entry.date);
+    return days;
+  }, [meals.data, quickLogs.data, ratingEntries.data]);
+
+  const handleDeleteRating = async (entry: RatingEntryDTO) => {
+    const message = entry.quickLogId
+      ? 'Eliminare questo voto e la nota d’umore collegata?'
+      : 'Eliminare questo voto?';
+    if (!window.confirm(message)) return;
+    await deleteRatingEntry.mutateAsync(entry.id);
+    // Order matters: the link is dropped first, so the log is never orphaned
+    if (entry.quickLogId) await deleteQuickLog.mutateAsync(entry.quickLogId);
+    showToast('Voto eliminato');
+  };
+
+  const isLoading = meals.isLoading || quickLogs.isLoading;
+  const loadError = meals.error || quickLogs.error;
+  const today = todayLocal();
+
+  return (
+    <div
+      className={cn(
+        // Sidebar offset on the page root, like every other page: the nav is
+        // fixed, and without this a full-width layout slides underneath it
+        'sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-6xl',
+        // From xl the page stops scrolling as a whole: it fills the height it
+        // has and hands the scrolling to the middle column. Full width, so the
+        // rails start at the nav and end at the edge instead of floating in
+        // the middle with empty margins either side.
+        'xl:max-w-none xl:h-full xl:flex xl:flex-col xl:overflow-hidden'
+      )}
+    >
+      <div className="mb-4 xl:shrink-0">
+        <FoodDiaryCalendar
+          selectedDate={selectedDate}
+          today={today}
+          daysWithData={daysWithData}
+          onSelectDate={setSelectedDate}
+          actions={(
+            <>
+              <Link to="/food/trends" className="btn btn-secondary min-h-9 px-2 sm:px-3 text-xs flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Andamento</span>
+              </Link>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="hidden sm:flex btn btn-primary min-h-9 text-xs items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Pasto
+              </button>
+            </>
+          )}
+        />
+      </div>
+
+      {/*
+        The day's comment, right under the date bar and above everything the
+        day contains. It used to be pinned to the bottom of the window, which
+        is where a chat box goes: something you fire off without looking. This
+        is the opposite - it is the sentence that explains the rest of the
+        page, so it sits where the day is chosen and is read before the day is
+        read back.
+      */}
+      <div className="mb-4 xl:shrink-0">
+        <div className="card p-3">
+          <QuickLogBar onSaved={showToast} date={selectedDate} />
+        </div>
+      </div>
+
+      {/*
+        Three columns from xl: what you write on the left, what you take on the
+        right, and the day itself in the middle. The two rails stand still and
+        the middle one scrolls, so the inputs never walk off screen while you
+        read back the day.
+
+        Below xl everything stacks in DOM order, and the order is action-first:
+        the quick taps come before the longer ratings form. At lg there is room
+        for two columns but not three, so the timeline goes full width.
+      */}
+      <div
+        className={cn(
+          'lg:grid lg:grid-cols-2 lg:gap-4',
+          // Rails get the room, the feed keeps what is left: cards in the
+          // rails are forms, and forms are what needs the width here
+          'xl:grid-cols-[23rem_minmax(0,1fr)_23rem] 2xl:grid-cols-[28rem_minmax(0,1fr)_28rem]',
+          // Takes whatever height is left under the date bar, so the three
+          // panes end together instead of pushing the page
+          'xl:flex-1 xl:min-h-0'
+        )}
+      >
+        <aside className={cn(COLUMN_CLASS, 'lg:col-start-2 lg:row-start-1 xl:col-start-3')}>
+          <SortableRail
+            sections={[
+              { id: 'schedule', label: 'In arrivo', node: <ScheduleLine /> },
+              { id: 'intakes', label: 'Assunzioni', node: <DailyIntakeCard date={selectedDate} /> },
+              { id: 'habits', label: 'Abitudini', node: <DailyHabitsCard date={selectedDate} /> },
+              { id: 'weight', label: 'Peso', node: <WeightLine date={selectedDate} /> },
+            ]}
+            order={rail.order}
+            onMove={rail.move}
+            onMoveTo={rail.moveTo}
+            onReset={rail.reset}
+            isCustom={rail.isCustom}
+          />
+        </aside>
+
+        <aside className={cn(COLUMN_CLASS, 'lg:col-start-1 lg:row-start-1 xl:col-start-1')}>
+          <DailyRatingsCard date={selectedDate} from={from} to={to} onToast={showToast} />
+        </aside>
+
+        {/* The feed */}
+        <section
+          className={cn(
+            COLUMN_CLASS,
+            'lg:col-span-2 lg:row-start-2 xl:col-span-1 xl:col-start-2 xl:row-start-1'
+          )}
+        >
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : loadError ? (
+            <div className="card flex items-center gap-2 text-sm text-red-600">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {loadError instanceof Error ? loadError.message : 'Errore nel caricamento del diario'}
+            </div>
+          ) : timeline.length === 0 ? (
+            <div className="card text-center py-10">
+              <p className="text-sm text-slate-500">Nessun pasto o nota per questo giorno.</p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <button onClick={openCreate} className="btn btn-primary text-sm">
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Aggiungi pasto
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {timeline.map((entry) =>
+                entry.kind === 'meal' ? (
+                  <MealCard
+                    key={`meal-${entry.meal.id}`}
+                    meal={entry.meal}
+                    onEdit={openEdit}
+                    onDuplicate={openDuplicate}
+                    onDelete={handleDelete}
+                  />
+                ) : entry.kind === 'rating' ? (
+                  <RatingNote
+                    key={`rating-${entry.rating.id}`}
+                    entry={entry.rating}
+                    linkedLog={entry.linkedLog}
+                    onDelete={handleDeleteRating}
+                  />
+                ) : (
+                  <QuickLogNote key={`log-${entry.log.id}`} log={entry.log} />
+                )
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/*
+        FABs (mobile). The comment sits above the meal and is the smaller of
+        the two: the field is already under the calendar, and this is only the
+        way back to it once the day has been scrolled past. On sm and up there
+        is no button at all - the header stands still there, and so does the
+        field.
+      */}
+      <div className="sm:hidden fixed bottom-20 right-4 z-40 flex flex-col items-center gap-3">
+        <button
+          onClick={() => setIsNoteModalOpen(true)}
+          className="w-12 h-12 bg-white text-slate-700 border border-slate-200 rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+          title="Scrivi un commento sulla giornata"
+          aria-label="Scrivi un commento sulla giornata"
+        >
+          <PenLine className="w-5 h-5" />
+        </button>
+        <button
+          onClick={openCreate}
+          className="w-14 h-14 bg-slate-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+          title="Nuovo pasto"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-36 sm:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      <DayNoteModal
+        isOpen={isNoteModalOpen}
+        onClose={() => setIsNoteModalOpen(false)}
+        onSaved={showToast}
+        date={selectedDate}
+      />
+
+      <MealFormModal
+        isOpen={isMealModalOpen}
+        onClose={() => setIsMealModalOpen(false)}
+        onSaved={showToast}
+        defaultDate={selectedDate}
+        editingMeal={editingMeal}
+        duplicateFrom={duplicateFrom}
+      />
+    </div>
+  );
+}

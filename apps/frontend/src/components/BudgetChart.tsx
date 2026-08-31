@@ -1,15 +1,35 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
-import type { CategorySummary } from '@budget/shared';
+import { useState, type ReactNode } from 'react';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
+} from 'recharts';
+import { getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
+import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
+import { usePeriodStore } from '../hooks/usePeriod';
+import { IncomeModal } from './IncomeModal';
+import { Pencil, Lock } from 'lucide-react';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
   totalIncome: number;
+  extraSpent?: number; // EXTRA expenses total — shown as recap only, never part of the budget math
   compact?: boolean;
   showStats?: boolean;
+  savingsHistory?: SavingsHistoryDTO | null;
+  isClosed?: boolean;
+  middleSlot?: ReactNode;
 }
 
-export function BudgetChart({ categories, totalIncome, compact = false, showStats = false }: BudgetChartProps) {
+const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
+  const { periodKey, setPeriodKey } = usePeriodStore();
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+
+  // Parse periodKey to get month label
+  const [year, month] = periodKey.split('-');
+  const currentMonthLabel = `${MONTH_LABELS[parseInt(month, 10) - 1]} ${year}`;
+
   const data = categories.map((cat) => ({
     name: getCategoryLabel(cat.category),
     value: cat.actualAmount,
@@ -44,71 +64,237 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
     return null;
   };
 
+  const BarChartTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-xs font-medium text-slate-900">{label}</p>
+          <p className={`text-xs ${payload[0].value < 0 ? 'text-red-600' : 'text-sky-600'}`}>
+            {formatCurrency(payload[0].value)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    return (
-      <div className="card py-4 px-5">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-          {/* Donut chart */}
-          <div className="w-24 h-24 relative flex-shrink-0 mx-auto sm:mx-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={28}
-                  outerRadius={44}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; periodKey: string }) => ({
+      name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
+      risparmio: m.savings,
+      periodKey: m.periodKey,
+    })) ?? [];
 
-          {/* Legend + Stats */}
-          <div className="flex-1 flex flex-col gap-3">
-            {/* Legend */}
-            <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
-              {data.map((entry, index) => (
-                <div key={index} className="flex items-center gap-1.5">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: entry.color }}
+    // Average over complete months only (in-progress and future periods excluded),
+    // same convention as the Cash Flow page's "Risparmio medio / mese"
+    const liveCurrentKey = getCurrentPeriodKey();
+    const completedMonths = savingsHistory?.months.filter(
+      (m: { periodKey: string }) => m.periodKey < liveCurrentKey
+    ) ?? [];
+    const avgMonthlySavings = completedMonths.length > 0
+      ? completedMonths.reduce((sum: number, m: { savings: number }) => sum + m.savings, 0) / completedMonths.length
+      : null;
+
+    return (
+      <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {/* Card 1: Budget overview */}
+        <div className="card py-4 px-5 flex flex-col">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
+          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            {/* Donut chart - larger */}
+            <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={68}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {data.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
                   />
-                  <span className="text-xs text-slate-600">{entry.name}</span>
-                  <span className="text-xs font-medium text-slate-800">
-                    {entry.percentage.toFixed(0)}%
-                  </span>
-                </div>
-              ))}
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Center text */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <p className="text-sm font-bold text-slate-700">
+                  {formatCurrency(totalSpent)}
+                </p>
+              </div>
             </div>
 
-            {/* Stats: Entrate, Speso, Rimanente */}
-            <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Entrate</p>
-                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalIncome)}</p>
+            {/* Legend + Stats */}
+            <div className="flex-1 flex flex-col gap-3 min-w-0">
+              {/* Legend */}
+              <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1">
+                {data.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="text-xs text-slate-600">{entry.name}</span>
+                    <span className="text-xs font-medium text-slate-800">
+                      {entry.percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Speso</p>
-                <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-xs text-slate-500">Rimanente</p>
-                <p className={`text-sm font-bold ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(remaining)}
-                </p>
+
+              {/* Stats: Entrate, Speso, Rimanente */}
+              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+                <div className="text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1">
+                    <p className="text-xs text-slate-500">Entrate</p>
+                    {isClosed && <Lock className="w-3 h-3 text-slate-400" />}
+                  </div>
+                  <p className={`text-sm font-bold ${isClosed ? 'text-slate-500' : 'text-slate-900'}`}>
+                    {formatCurrency(totalIncome)}
+                  </p>
+                  {!isClosed && (
+                    <button
+                      onClick={() => setIsIncomeModalOpen(true)}
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-md px-1.5 py-0.5 sm:-ml-1.5 transition-colors"
+                      title="Gestisci le entrate del mese"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Modifica
+                    </button>
+                  )}
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Speso</p>
+                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalSpent)}</p>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs text-slate-500">Rimanente</p>
+                  <p className={`text-sm font-bold ${remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(remaining)}
+                  </p>
+                </div>
+                <div className="text-center sm:text-left pl-6 border-l border-dashed border-violet-200" title="Spese Extra & Vacanze (Trade Republic) — fuori budget">
+                  <p className="text-xs text-violet-500">Extra</p>
+                  <p className="text-sm font-bold text-violet-600">
+                    {formatCurrency(extraSpent)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Card 2: Middle slot (e.g. savings gauge) */}
+        {middleSlot}
+
+        {/* Card 3: Savings overview */}
+        {savingsHistory && barData.length > 0 && (
+          <div className="card py-4 px-5 flex flex-col">
+            {/* Savings header with labels */}
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-xs text-slate-500">Risparmi mese</p>
+                <p className="text-lg font-bold text-sky-600">
+                  {formatCurrency(savingsHistory.currentMonthSavings)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Mesi precedenti</p>
+                <p className="text-lg font-bold text-slate-700">
+                  {formatCurrency(savingsHistory.previousMonthsTotal)}
+                </p>
+              </div>
+              {avgMonthlySavings !== null && (
+                <div className="text-center" title={`Media dei risparmi netti sui ${completedMonths.length} mesi completi (mese in corso escluso)`}>
+                  <p className="text-xs text-slate-500">Media / mese</p>
+                  <p className={`text-lg font-bold ${avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(avgMonthlySavings)}
+                  </p>
+                </div>
+              )}
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Totale risparmi</p>
+                <p className="text-lg font-bold text-sky-700">
+                  {formatCurrency(savingsHistory.cumulativeTotal)}
+                </p>
+              </div>
+            </div>
+
+            {/* Bar chart - full width, vertically centered in remaining card space */}
+            <div className="flex-1 flex items-center min-h-0">
+              <div className="h-28 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={barData}
+                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  onClick={(data) => {
+                    if (data?.activePayload?.[0]?.payload?.periodKey) {
+                      setPeriodKey(data.activePayload[0].payload.periodKey);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v}`}
+                  />
+                  <Tooltip content={<BarChartTooltip />} />
+                  {avgMonthlySavings !== null && (
+                    <ReferenceLine
+                      y={avgMonthlySavings}
+                      stroke="#059669"
+                      strokeDasharray="4 4"
+                      label={{ value: 'media', position: 'insideTopRight', fontSize: 9, fill: '#059669' }}
+                    />
+                  )}
+                  <Bar
+                    dataKey="risparmio"
+                    radius={[3, 3, 0, 0]}
+                    cursor="pointer"
+                  >
+                    {barData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={
+                          entry.risparmio < 0
+                            ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
+                            : entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'
+                        }
+                        opacity={entry.periodKey === periodKey ? 1 : 0.7}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <IncomeModal
+          periodKey={periodKey}
+          isOpen={isIncomeModalOpen}
+          onClose={() => setIsIncomeModalOpen(false)}
+        />
       </div>
     );
   }
@@ -134,7 +320,11 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  content={<CustomTooltip />}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
+                />
               </PieChart>
             </ResponsiveContainer>
             {/* Center text */}
@@ -183,7 +373,11 @@ export function BudgetChart({ categories, totalIncome, compact = false, showStat
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip
+              content={<CustomTooltip />}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 50, outline: 'none', pointerEvents: 'none' }}
+            />
             <Legend
               verticalAlign="bottom"
               height={36}

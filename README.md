@@ -165,6 +165,11 @@ project2026/
 
 📚 Documentazione API completa: http://localhost:3001/docs
 
+## Documentazione Strategica
+
+- SaaS readiness playbook: `docs/saas-readiness-playbook-2026-03-20.md`
+- SaaS one pager (investor-ready): `docs/saas-onepager-2026-03-20.md`
+
 ## Deployment
 
 ### Opzione 1: Vercel (Frontend) + Railway/Render (Backend)

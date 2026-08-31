@@ -1,0 +1,634 @@
+import { describe, it, expect } from 'vitest';
+import {
+  classifyQuickLog,
+  classifyQuickLogCategory,
+  classifyQuickLogValence,
+  extractSupplementNames,
+  hasSupplementStopWord,
+  defaultMealTypeForHour,
+  describeScaleValue,
+} from '@budget/shared';
+import { buildFoodCsv, FOOD_CSV_HEADER } from './food-export.service.js';
+import {
+  toLocalParts,
+  addDays,
+  average,
+  valenceFromScores,
+  scoreFromVote,
+  scoreFromScale,
+  scoreFromValence,
+  groupMeans,
+} from './food-dashboard.service.js';
+
+const BOM = '﻿';
+
+describe('quick log classification (keyword dictionaries)', () => {
+  it('classifies "corsa 40 min gambe pesanti" as WORKOUT / NEGATIVE (criterio 9)', () => {
+    const { category, valence } = classifyQuickLog('corsa 40 min gambe pesanti');
+    expect(category).toBe('WORKOUT');
+    expect(valence).toBe('NEGATIVE');
+  });
+
+  it('classifies sleep notes', () => {
+    expect(classifyQuickLogCategory('dormito male, sveglio alle 3')).toBe('SLEEP');
+    expect(classifyQuickLogValence('dormito male, sveglio alle 3')).toBe('NEGATIVE');
+  });
+
+  it('classifies supplement notes', () => {
+    expect(classifyQuickLogCategory('iniziato magnesio 300 mg')).toBe('SUPPLEMENT');
+  });
+
+  it('leaves unreadable text without a valence, so it cannot score', () => {
+    const { category, valence } = classifyQuickLog('giornata come le altre');
+    expect(category).toBe('FEELING');
+    // Not NEUTRAL: the dictionaries read nothing, and a note nobody could
+    // read must not dilute the day toward zero
+    expect(valence).toBeNull();
+    expect(classifyQuickLogValence('comprato le vitamine in farmacia')).toBeNull();
+  });
+
+  it('classifies mood notes as MOOD, separate from physical sensations', () => {
+    expect(classifyQuickLogCategory('ansia e irritabilità tutto il giorno')).toBe('MOOD');
+    expect(classifyQuickLogValence('ansia e irritabilità tutto il giorno')).toBe('NEGATIVE');
+    expect(classifyQuickLogCategory('tranquillità e benessere')).toBe('MOOD');
+    expect(classifyQuickLogValence('tranquillità e benessere')).toBe('POSITIVE');
+    // A physical note stays physical even when the mood dictionary could match
+    expect(classifyQuickLogCategory('gambe pesanti dopo la corsa')).toBe('WORKOUT');
+    expect(classifyQuickLogCategory('dormito male, nottata agitata')).toBe('SLEEP');
+  });
+
+  it('keeps NEUTRAL for a genuinely mixed signal, which is information', () => {
+    expect(classifyQuickLogValence('gambe pesanti ma testa lucida')).toBe('NEUTRAL');
+  });
+
+  it('is accent- and case-insensitive with word boundaries', () => {
+    expect(classifyQuickLogCategory('PALESTRA fatta')).toBe('WORKOUT');
+    // "ok" must not match inside other words - and no match means no valence
+    expect(classifyQuickLogValence('okinawa')).toBeNull();
+  });
+});
+
+describe('supplement period detection', () => {
+  it('extracts supplement names, preferring the most specific', () => {
+    expect(extractSupplementNames('iniziato omega 3 oggi')).toEqual(['omega 3']);
+    expect(extractSupplementNames('preso magnesio e melatonina')).toEqual(
+      expect.arrayContaining(['magnesio', 'melatonina'])
+    );
+  });
+
+  it('detects stop words', () => {
+    expect(hasSupplementStopWord('smesso magnesio')).toBe(true);
+    expect(hasSupplementStopWord('iniziato magnesio')).toBe(false);
+  });
+});
+
+describe('smart default meal type by hour', () => {
+  it('maps the hour ranges from the spec', () => {
+    expect(defaultMealTypeForHour(8)).toBe('BREAKFAST');
+    expect(defaultMealTypeForHour(13)).toBe('LUNCH');
+    expect(defaultMealTypeForHour(16)).toBe('SNACK');
+    expect(defaultMealTypeForHour(20)).toBe('DINNER');
+  });
+});
+
+describe('day-state helpers', () => {
+  it('averages scores and handles the empty case as null (not zero)', () => {
+    expect(average([1, 0, -1])).toBe(0);
+    expect(average([1, 1, 0])).toBe(0.67);
+    expect(average([])).toBeNull();
+  });
+
+  it('collapses day scores into a valence by sum sign', () => {
+    expect(valenceFromScores([1, 1, -1])).toBe('POSITIVE');
+    expect(valenceFromScores([-1])).toBe('NEGATIVE');
+    expect(valenceFromScores([1, -1])).toBe('NEUTRAL');
+    expect(valenceFromScores([])).toBeNull();
+  });
+
+  it('maps a 1..max vote onto the day-state range', () => {
+    expect(scoreFromVote(1, 10)).toBe(-1); // lowest vote = worst
+    expect(scoreFromVote(10, 10)).toBe(1);
+    expect(scoreFromVote(5, 10)).toBeCloseTo(-0.11, 2); // middle sits at 5.5
+    // A one-step scale has no gradient to express: neutral, not a crash
+    expect(scoreFromVote(1, 1)).toBe(0);
+  });
+
+  it('inverts a symptom scale so a falling curve always means improvement', () => {
+    expect(scoreFromScale(0, 10, false)).toBe(1); // symptom absent = good day
+    expect(scoreFromScale(10, 10, false)).toBe(-1);
+    expect(scoreFromScale(5, 10, false)).toBe(0);
+    // The one scale flagged positive reads the other way round
+    expect(scoreFromScale(10, 10, true)).toBe(1);
+    expect(scoreFromScale(0, 10, true)).toBe(-1);
+    // Named steps use their own range (compulsioni: 0..3)
+    expect(scoreFromScale(3, 3, false)).toBe(-1);
+  });
+
+  it('gives a free note half weight, so one sentence cannot outvote a day', () => {
+    expect(scoreFromValence('NEGATIVE')).toBe(-0.5);
+    expect(scoreFromValence('POSITIVE')).toBe(0.5);
+    expect(scoreFromValence('NEUTRAL')).toBe(0);
+
+    // Benessere 5/10 (-0.11), Sonno 8/10 (+0.56) and one negative note:
+    // the note bends the day, it no longer flips it
+    const day = new Map([
+      ['rating:benessere', { label: 'Benessere', scores: [-0.11] }],
+      ['rating:sonno', { label: 'Sonno', scores: [0.56] }],
+      ['log:WORKOUT', { label: 'Note allenamento', scores: [scoreFromValence('NEGATIVE')] }],
+    ]);
+    expect(average(groupMeans(day))).toBe(-0.02); // at full weight it was -0.18
+  });
+
+  it('averages each instrument before averaging the day, so nothing votes twice', () => {
+    // Two votes on the same characteristic are one opinion said twice
+    const twice = new Map([['rating:benessere', { label: 'Benessere', scores: [-0.11, -0.11] }]]);
+    expect(groupMeans(twice)).toEqual([-0.11]);
+
+    // Sonno 8/10 once, Benessere 5/10 twice: the doubled vote must not
+    // outweigh the single one just by being repeated
+    const day = new Map([
+      ['rating:sonno', { label: 'Sonno', scores: [0.56] }],
+      ['rating:benessere', { label: 'Benessere', scores: [-0.11, -0.11] }],
+    ]);
+    expect(average(groupMeans(day))).toBe(0.23); // not 0.11, as a flat mean gave
+  });
+
+  it('shifts instants into the local day via tzOffset', () => {
+    // 23:30 UTC + 120 min (Italy summer) = 01:30 next day
+    const parts = toLocalParts(new Date('2026-07-16T23:30:00Z'), 120);
+    expect(parts.date).toBe('2026-07-17');
+    expect(parts.hour).toBe(1);
+    expect(addDays('2026-07-31', 1)).toBe('2026-08-01');
+  });
+});
+
+describe('CSV export', () => {
+  const meals = [
+    {
+      date: '2026-07-16',
+      mealType: 'LUNCH' as const,
+      notes: 'con olio evo',
+      createdAt: new Date('2026-07-16T11:10:00Z'), // 13:10 local (+120)
+      items: [
+        { foodName: 'pasta al pomodoro', quantity: 90, unit: 'G' as const },
+        { foodName: 'insalata, mista', quantity: 1, unit: 'PORTION' as const },
+      ],
+    },
+  ];
+  const quickLogs = [
+    {
+      loggedAt: new Date('2026-07-16T12:40:00Z'), // 14:40 local
+      text: 'sonnolento e fiacco',
+      category: 'FEELING' as const,
+      valence: 'NEGATIVE' as const,
+      linkedMeal: { date: '2026-07-16', mealType: 'LUNCH' as const },
+    },
+  ];
+
+  it('produces the specified header and one row per item, chronologically interleaved', () => {
+    const csv = buildFoodCsv(meals, quickLogs, 120);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[0]).toBe(FOOD_CSV_HEADER);
+    expect(lines).toHaveLength(4); // header + 2 items + 1 quick log
+    expect(lines[1]).toBe(
+      'meal_item,2026-07-16,13:10,,,pranzo,pasta al pomodoro,90,g,con olio evo,,,,,,'
+    );
+    // Fields containing commas are quoted
+    expect(lines[2]).toContain('"insalata, mista"');
+    // Quick log after the meal, with category/valence and linked_meal (criteri 7/8)
+    expect(lines[3]).toBe(
+      'quick_log,2026-07-16,14:40,sensazione,negativa,,,,,sonnolento e fiacco,2026-07-16 pranzo,,,,,'
+    );
+  });
+
+  it('marks mood notes with their own record_type, keeping the tracks separable', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-07-16T08:00:00Z'), // 10:00 local
+          text: 'ansia dal mattino',
+          category: 'MOOD' as const,
+          valence: 'NEGATIVE' as const,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'mood_log,2026-07-16,10:00,umore,negativa,,,,,ansia dal mattino,,,,,,'
+    );
+  });
+
+  it('gives the free comment on the day its own record_type, with no category and no valence', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-08-25T07:21:00Z'), // 09:21 local
+          text: 'giornata pesante, ho dormito poco e mangiato di fretta',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The whole point of the row: the text reaches the file, and nothing in
+    // it claims to be a measurement
+    expect(lines[1]).toBe(
+      'day_note,2026-08-25,09:21,,,,,,,"giornata pesante, ho dormito poco e mangiato di fretta",,,,,,'
+    );
+  });
+
+  it('keeps every comment of the same day as its own row', () => {
+    const csv = buildFoodCsv(
+      [],
+      [
+        {
+          loggedAt: new Date('2026-08-25T07:21:00Z'), // 09:21 local
+          text: 'partito male',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+        {
+          loggedAt: new Date('2026-08-25T19:05:00Z'), // 21:05 local
+          text: 'recuperato nel pomeriggio',
+          category: null,
+          valence: null,
+          linkedMeal: null,
+        },
+      ],
+      120
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines).toHaveLength(3); // header + both comments
+    expect(lines[1]).toContain('day_note,2026-08-25,09:21');
+    expect(lines[2]).toContain('day_note,2026-08-25,21:05');
+  });
+
+  it('opens each tracked day with a day_summary carrying both day scores', () => {
+    const csv = buildFoodCsv(meals, quickLogs, 120, [
+      { date: '2026-07-16', bodyState: -1, moodState: 0.5, mealCount: 1 },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The summary sorts first within its day, before the meal rows
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,1 pasti registrati,,-1,0.5,,,');
+    expect(lines[2]).toContain('meal_item');
+  });
+
+  it('leaves a day score empty when that track was not logged', () => {
+    const csv = buildFoodCsv([], [], 0, [
+      { date: '2026-07-16', bodyState: null, moodState: 0.5, mealCount: 0 },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('day_summary,2026-07-16,00:00,,,,,,,0 pasti registrati,,,0.5,,,');
+  });
+
+  it('names an attached report on the day it is filed under', () => {
+    const csv = buildFoodCsv(
+      [], // meals
+      [], // quick logs
+      120,
+      [], // day summaries
+      [], // intakes
+      [], // check-ins
+      [], // ratings
+      [], // weights
+      [], // treatments
+      [], // dose changes
+      [], // milestones
+      [], // habits
+      [], // activities
+      [
+        {
+          date: '2026-08-25',
+          exportPath: 'referti/2026-08-25-emocromo.pdf',
+          sizeBytes: 240_000,
+          milestoneTitle: 'Emocromo completo',
+          kindLabel: 'Esame',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The path is the whole point: it is how the row and the file in the
+    // archive find each other
+    expect(lines[1]).toBe(
+      'attachment,2026-08-25,00:00,Esame,,,,234,kB,referti/2026-08-25-emocromo.pdf · Emocromo completo,,,,,,'
+    );
+  });
+
+  it('starts with a UTF-8 BOM so Excel opens it correctly', () => {
+    expect(buildFoodCsv([], [], 0).startsWith(BOM)).toBe(true);
+  });
+
+  it('exports what was planned for the day, status included', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          time: '09:30',
+          title: 'Chiamare il centro prelievi',
+          notes: 'chiedere il digiuno',
+          typeName: 'Salute',
+          scopeLabel: 'Scadenza',
+          priorityLabel: 'Urgente',
+          statusLabel: 'Da fare',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'activity,2026-07-16,09:30,Salute,Urgente,Scadenza,,,,Chiamare il centro prelievi · chiedere il digiuno,,,,,,Da fare'
+    );
+  });
+
+  it('dates an undated task at midnight so it still belongs to its day', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [], [], [], [], [], [
+      {
+        date: '2026-07-16',
+        time: '00:00',
+        title: 'Sistemare la lavatrice',
+        notes: null,
+        typeName: null,
+        scopeLabel: 'Giornata',
+        priorityLabel: 'Media',
+        statusLabel: 'Completata',
+      },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'activity,2026-07-16,00:00,,Media,Giornata,,,,Sistemare la lavatrice,,,,,,Completata'
+    );
+  });
+
+  it('leaves quantity and unit empty when missing (criterio 4)', () => {
+    const csv = buildFoodCsv(
+      [
+        {
+          date: '2026-07-16',
+          mealType: 'DINNER' as const,
+          notes: null,
+          createdAt: new Date('2026-07-16T19:00:00Z'),
+          items: [{ foodName: 'minestrone', quantity: null, unit: null }],
+        },
+      ],
+      [],
+      0
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('meal_item,2026-07-16,19:00,,,cena,minestrone,,,,,,,,,');
+  });
+
+  it('records an intake with its moment in meal_type, so it lines up with the meal', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T07:05:00Z'),
+          treatmentName: 'Sertralina 50 mg',
+          doseLabel: '½ cp',
+          slotName: 'Colazione',
+          status: 'TAKEN' as const,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'intake,2026-07-16,07:05,Sertralina 50 mg,,Colazione,,,,½ cp,,,,,,preso'
+    );
+  });
+
+  it('writes one checkin row per scale, with its wording and direction', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T21:30:00Z'),
+          values: [
+            { key: 'tensione', name: 'Tensione', value: 4, maxValue: 10, isPositive: false },
+            { key: 'energia', name: 'Energia', value: 8, maxValue: 10, isPositive: true },
+          ],
+          note: 'giornata pesante',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // A symptom scale is flagged "negativo": lower is better
+    expect(lines[1]).toBe(
+      'checkin,2026-07-16,21:30,Tensione,negativo,,,,,presente ma gestibile,,,,4,10,'
+    );
+    // The single positive scale reads the other way round
+    expect(lines[2]).toBe('checkin,2026-07-16,21:30,Energia,positivo,,,,,molto buona,,,,8,10,');
+    // The note closes the check-in block
+    expect(lines[3]).toBe('checkin,2026-07-16,21:30,nota,,,,,,giornata pesante,,,,,,');
+  });
+
+  it('records a diary vote at the minute it was given', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T13:30:00Z'),
+          ratingName: 'Umore',
+          value: 7,
+          maxValue: 10,
+          note: 'giornata ok',
+          linkedText: null,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('rating,2026-07-16,13:30,Umore,,,,,,giornata ok,,,,7,10,');
+  });
+
+  it('exports every vote, including repeats of the same characteristic', () => {
+    const vote = (hour: string, value: number) => ({
+      date: '2026-07-16',
+      loggedAt: new Date(`2026-07-16T${hour}:00Z`),
+      ratingName: 'Umore',
+      value,
+      maxValue: 10,
+      note: null,
+      linkedText: null,
+    });
+    const csv = buildFoodCsv([], [], 0, [], [], [], [vote('09:00', 4), vote('19:30', 8)]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // Two votes on the same characteristic in one day stay two rows
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe('rating,2026-07-16,09:00,Umore,,,,,,,,,,4,10,');
+    expect(lines[2]).toBe('rating,2026-07-16,19:30,Umore,,,,,,,,,,8,10,');
+  });
+
+  it('carries the states picked in the row popup into the vote row', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T19:30:00Z'),
+          ratingName: 'Umore',
+          value: 8,
+          maxValue: 10,
+          note: 'serata tranquilla',
+          linkedText: 'Umore: Pace, Buon umore',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'rating,2026-07-16,19:30,Umore,,,,,,"serata tranquilla · Umore: Pace, Buon umore",,,,8,10,'
+    );
+  });
+
+  it('separates an episode from a mark, and puts its trigger in its own column', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          loggedAt: new Date('2026-07-16T18:20:00Z'),
+          ratingName: 'Picco di irritazione',
+          value: 6,
+          maxValue: 10,
+          note: null,
+          linkedText: null,
+          recordType: 'event' as const,
+          trigger: 'rientro a casa',
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe(
+      'event,2026-07-16,18:20,Picco di irritazione,rientro a casa,,,,,,,,,6,10,'
+    );
+  });
+
+  it('records a habit with its amount and whether it was done', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [], [], [], [], [
+      {
+        date: '2026-08-12',
+        loggedAt: new Date('2026-08-12T07:30:00Z'),
+        habitName: 'Meditazione',
+        statusLabel: 'fatto',
+        value: 20,
+        unit: 'min',
+        note: null,
+      },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('habit,2026-08-12,07:30,Meditazione,,,,20,min,,,,,,,fatto');
+  });
+
+  it('opens the day with the weekly weight, which belongs to the day not to an hour', () => {
+    const csv = buildFoodCsv([], [], 0, [], [], [], [], [
+      { date: '2026-07-16', weightKg: 78.4, note: null },
+    ]);
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    expect(lines[1]).toBe('weight,2026-07-16,00:00,peso,,,,78.4,kg,,,,,,,');
+  });
+
+  it('declares the therapy, the dose changes and the dates on the calendar', () => {
+    const csv = buildFoodCsv(
+      [],
+      [],
+      0,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          date: '2026-07-16',
+          name: 'Sertralina 50 mg',
+          kindLabel: 'Farmaco',
+          dose: '½ cp',
+          form: 'compressa',
+          slotNames: ['Colazione'],
+          detail: 'sertralina',
+          notes: 'dopo colazione',
+          isActive: true,
+        },
+      ],
+      [
+        {
+          date: '2026-07-23',
+          treatmentName: 'Sertralina 50 mg',
+          dose: '1 cp',
+          applied: false,
+        },
+      ],
+      [
+        {
+          date: '2026-08-05',
+          kindLabel: 'Esame',
+          title: 'Emocromo',
+          items: ['Valproatemia', 'Transaminasi'],
+          advisories: ['Niente allenamenti intensi nelle 72 h precedenti'],
+          notes: null,
+          isDone: false,
+        },
+      ]
+    );
+    const lines = csv.replace(BOM, '').trim().split('\n');
+    // The therapy opens the file: without it the rest has no subject
+    expect(lines[1]).toBe(
+      'treatment,2026-07-16,00:00,Sertralina 50 mg,attivo,Colazione,Farmaco,½ cp,compressa,sertralina · dopo colazione,,,,,,'
+    );
+    expect(lines[2]).toBe(
+      'dose_change,2026-07-23,00:00,Sertralina 50 mg,,,,,,1 cp,,,,,,programmata'
+    );
+    // Values and conditions travel with the appointment, or they are useless
+    expect(lines[3]).toContain('milestone,2026-08-05,00:00,Esame,da fare');
+    expect(lines[3]).toContain('valori: Valproatemia, Transaminasi');
+    expect(lines[3]).toContain('condizioni: Niente allenamenti intensi nelle 72 h precedenti');
+  });
+
+  it('uses the named steps of a scale instead of the generic wording', () => {
+    const label = describeScaleValue(2, 3, false, ['nessuna', 'poche', 'molte', 'continue']);
+    expect(label).toBe('molte');
+    // Out-of-range answers clamp instead of producing undefined
+    expect(describeScaleValue(9, 3, false, ['nessuna', 'poche'])).toBe('poche');
+  });
+});

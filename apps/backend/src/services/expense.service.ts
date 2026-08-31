@@ -1,18 +1,21 @@
 import { prisma } from '../lib/prisma.js';
-import type { ExpenseDTO, CreateExpenseDTO, UpdateExpenseDTO, ExpenseFilters, PaginatedResponse } from '@budget/shared';
+import type { ExpenseDTO, ExpenseWithPeriodDTO, CreateExpenseDTO, UpdateExpenseDTO, ExpenseFilters, PaginatedResponse } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import type { Category } from '@budget/shared';
+import { monthPeriodService } from './month-period.service.js';
+import { spendingCategoryService } from './spending-category.service.js';
 
 export class ExpenseService {
   /**
-   * Get expenses for a period with filters and pagination
+   * Get expenses for a period with filters and pagination (user-scoped)
    */
   async getByPeriodKey(
     periodKey: string,
+    userId: string,
     filters: ExpenseFilters = {}
   ): Promise<PaginatedResponse<ExpenseDTO>> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -64,11 +67,11 @@ export class ExpenseService {
   }
 
   /**
-   * Get all expenses for a period (no pagination, for calculations)
+   * Get all expenses for a period (no pagination, for calculations) (user-scoped)
    */
-  async getAllByPeriodKey(periodKey: string): Promise<ExpenseDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getAllByPeriodKey(periodKey: string, userId: string): Promise<ExpenseDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
       include: {
         expenses: {
           orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
@@ -84,11 +87,29 @@ export class ExpenseService {
   }
 
   /**
-   * Get recent expenses for a period
+   * Get all expenses for a user across all periods (no pagination, for exports)
    */
-  async getRecent(periodKey: string, limit: number = 5): Promise<ExpenseDTO[]> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getAllByUser(userId: string): Promise<ExpenseWithPeriodDTO[]> {
+    const expenses = await prisma.expense.findMany({
+      where: { monthPeriod: { userId } },
+      include: {
+        monthPeriod: { select: { periodKey: true } },
+      },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return expenses.map((expense) => ({
+      ...this.toDTO(expense),
+      periodKey: expense.monthPeriod.periodKey,
+    }));
+  }
+
+  /**
+   * Get recent expenses for a period (user-scoped)
+   */
+  async getRecent(periodKey: string, userId: string, limit: number = 5): Promise<ExpenseDTO[]> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -105,27 +126,35 @@ export class ExpenseService {
   }
 
   /**
-   * Get expense by ID
+   * Get expense by ID (user-scoped)
    */
-  async getById(id: string): Promise<ExpenseDTO | null> {
-    const expense = await prisma.expense.findUnique({
-      where: { id },
+  async getById(id: string, userId: string): Promise<ExpenseDTO | null> {
+    const expense = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     return expense ? this.toDTO(expense) : null;
   }
 
   /**
-   * Create a new expense
+   * Create a new expense (user-scoped)
+   * Auto-creates the month period if it doesn't exist
    */
-  async create(periodKey: string, data: CreateExpenseDTO): Promise<ExpenseDTO> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
-    });
+  async create(periodKey: string, userId: string, data: CreateExpenseDTO): Promise<ExpenseDTO> {
+    // Parse periodKey to get year and month
+    const [yearStr, monthStr] = periodKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
 
-    if (!period) {
-      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      throw new AppError(`Invalid period key format: ${periodKey}`, 400, 'INVALID_PERIOD_KEY');
     }
+
+    // Get or create period (handles race conditions)
+    const monthPeriod = await monthPeriodService.getOrCreate(userId, year, month);
 
     // Parse date properly to avoid timezone issues
     let parsedDate: Date;
@@ -137,14 +166,30 @@ export class ExpenseService {
       parsedDate = new Date(data.date);
     }
 
+    // Calculate final amount and label for tricount expenses
+    const finalAmount = data.tricountType ? data.amount / 2 : data.amount;
+    const tricountPrefix = data.tricountType
+      ? `Tricount ${data.tricountType === 'IO' ? 'Io' : 'Fra'}: `
+      : '';
+    const finalLabel = tricountPrefix + data.label;
+
+    // Auto-classify from the label (SAVINGS rows are transfers, not spending)
+    const spendingCategoryId =
+      data.category === 'SAVINGS'
+        ? null
+        : await spendingCategoryService.classifyForUser(userId, finalLabel);
+
     const expense = await prisma.expense.create({
       data: {
-        monthPeriodId: period.id,
+        monthPeriodId: monthPeriod.id,
         date: parsedDate,
         category: data.category,
-        label: data.label,
-        amount: data.amount,
+        label: finalLabel,
+        amount: finalAmount,
         notes: data.notes || null,
+        isFixed: data.isFixed ?? false,
+        tricountType: data.tricountType ?? null,
+        spendingCategoryId,
       },
     });
 
@@ -152,11 +197,14 @@ export class ExpenseService {
   }
 
   /**
-   * Update an expense
+   * Update an expense (user-scoped)
    */
-  async update(id: string, data: UpdateExpenseDTO): Promise<ExpenseDTO> {
-    const existing = await prisma.expense.findUnique({
-      where: { id },
+  async update(id: string, userId: string, data: UpdateExpenseDTO): Promise<ExpenseDTO> {
+    const existing = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -175,6 +223,41 @@ export class ExpenseService {
       }
     }
 
+    // Spending category: explicit override wins; otherwise re-classify when the
+    // label or budget category changes (manual overrides are never touched)
+    let spendingCategoryId: string | null | undefined;
+    let spendingCategoryManual: boolean | undefined;
+    const finalCategory = data.category ?? existing.category;
+    const finalLabel = data.label ?? existing.label;
+
+    if (data.spendingCategoryId !== undefined) {
+      if (data.spendingCategoryId === null) {
+        // Back to auto classification
+        spendingCategoryId =
+          finalCategory === 'SAVINGS'
+            ? null
+            : await spendingCategoryService.classifyForUser(userId, finalLabel);
+        spendingCategoryManual = false;
+      } else {
+        const category = await prisma.spendingCategory.findFirst({
+          where: { id: data.spendingCategoryId, userId },
+        });
+        if (!category) {
+          throw new AppError('Spending category not found', 404, 'NOT_FOUND');
+        }
+        spendingCategoryId = data.spendingCategoryId;
+        spendingCategoryManual = true;
+      }
+    } else if (
+      !existing.spendingCategoryManual &&
+      (data.label !== undefined || data.category !== undefined)
+    ) {
+      spendingCategoryId =
+        finalCategory === 'SAVINGS'
+          ? null
+          : await spendingCategoryService.classifyForUser(userId, finalLabel);
+    }
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
@@ -183,6 +266,10 @@ export class ExpenseService {
         label: data.label ?? undefined,
         amount: data.amount ?? undefined,
         notes: data.notes !== undefined ? data.notes : undefined,
+        isFixed: data.isFixed ?? undefined,
+        tricountType: data.tricountType !== undefined ? data.tricountType : undefined,
+        spendingCategoryId,
+        spendingCategoryManual,
       },
     });
 
@@ -190,11 +277,14 @@ export class ExpenseService {
   }
 
   /**
-   * Delete an expense
+   * Delete an expense (user-scoped)
    */
-  async delete(id: string): Promise<void> {
-    const existing = await prisma.expense.findUnique({
-      where: { id },
+  async delete(id: string, userId: string): Promise<void> {
+    const existing = await prisma.expense.findFirst({
+      where: {
+        id,
+        monthPeriod: { userId },
+      },
     });
 
     if (!existing) {
@@ -207,11 +297,11 @@ export class ExpenseService {
   }
 
   /**
-   * Get totals by category for a period
+   * Get totals by category for a period (user-scoped)
    */
-  async getTotalsByCategory(periodKey: string): Promise<Record<Category, number>> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getTotalsByCategory(periodKey: string, userId: string): Promise<Record<Category, number>> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -228,6 +318,7 @@ export class ExpenseService {
       NEEDS: totals.find((t: { category: string }) => t.category === 'NEEDS')?._sum.amount ?? 0,
       WANTS: totals.find((t: { category: string }) => t.category === 'WANTS')?._sum.amount ?? 0,
       SAVINGS: totals.find((t: { category: string }) => t.category === 'SAVINGS')?._sum.amount ?? 0,
+      EXTRA: totals.find((t: { category: string }) => t.category === 'EXTRA')?._sum.amount ?? 0,
     };
   }
 
@@ -239,6 +330,10 @@ export class ExpenseService {
     label: string;
     amount: number;
     notes: string | null;
+    isFixed: boolean;
+    tricountType: string | null;
+    spendingCategoryId: string | null;
+    spendingCategoryManual: boolean;
     createdAt: Date;
   }): ExpenseDTO {
     return {
@@ -249,6 +344,10 @@ export class ExpenseService {
       label: expense.label,
       amount: expense.amount,
       notes: expense.notes,
+      isFixed: expense.isFixed,
+      tricountType: expense.tricountType as 'IO' | 'FRA' | null,
+      spendingCategoryId: expense.spendingCategoryId,
+      spendingCategoryManual: expense.spendingCategoryManual,
       createdAt: expense.createdAt.toISOString(),
     };
   }

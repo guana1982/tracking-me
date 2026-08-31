@@ -1,0 +1,69 @@
+import type {
+  ActivityDayCountDTO,
+  ActivityDTO,
+  ActivityOverviewDTO,
+  ActivityTypeDTO,
+  CreateActivityDTO,
+  CreateActivityTypeDTO,
+  ReorderActivitiesDTO,
+  UpdateActivityDTO,
+  UpdateActivityTypeDTO,
+} from '@budget/shared';
+import { fetchApi } from './api';
+
+export const activitiesApi = {
+  getOverview: (date: string) =>
+    fetchApi<ActivityOverviewDTO>(`/activities/overview?date=${encodeURIComponent(date)}`),
+
+  getCounts: (from: string, to: string) =>
+    fetchApi<ActivityDayCountDTO[]>(
+      `/activities/counts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    ),
+
+  create: (data: CreateActivityDTO) =>
+    fetchApi<ActivityDTO>('/activities', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: UpdateActivityDTO) =>
+    fetchApi<ActivityDTO>(`/activities/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  reorder: (data: ReorderActivitiesDTO) =>
+    fetchApi<void>('/activities/reorder', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  resetOrder: (activityIds?: string[]) =>
+    fetchApi<void>('/activities/reorder/reset', {
+      method: 'POST',
+      body: JSON.stringify(activityIds ? { activityIds } : {}),
+    }),
+
+  remove: (id: string) =>
+    fetchApi<void>(`/activities/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  getTypes: () => fetchApi<ActivityTypeDTO[]>('/activities/types'),
+
+  installDefaultTypes: () =>
+    fetchApi<ActivityTypeDTO[]>('/activities/types/defaults', { method: 'POST' }),
+
+  createType: (data: CreateActivityTypeDTO) =>
+    fetchApi<ActivityTypeDTO>('/activities/types', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateType: (key: string, data: UpdateActivityTypeDTO) =>
+    fetchApi<ActivityTypeDTO>(`/activities/types/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  removeType: (key: string) =>
+    fetchApi<void>(`/activities/types/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+};
