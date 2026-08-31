@@ -10,6 +10,7 @@ import type {
   FoodOverviewDTO,
   FoodDayOverviewDTO,
   DayContributionDTO,
+  DayMomentDTO,
   FoodComparisonDTO,
   FoodComparisonConditionDTO,
   FoodComparisonGroupDTO,
@@ -67,6 +68,8 @@ interface DayData {
   // valence axis
   eventCount: number;
   sideEffectCount: number;
+  events: DayMomentDTO[];
+  sideEffects: DayMomentDTO[];
   skippedIntakes: number;
   doseChanges: string[];
   weightKg: number | null;
@@ -84,6 +87,8 @@ function emptyDay(): DayData {
     feelingScores: [],
     eventCount: 0,
     sideEffectCount: 0,
+    events: [],
+    sideEffects: [],
     skippedIntakes: 0,
     doseChanges: [],
     weightKg: null,
@@ -215,6 +220,11 @@ class FoodDashboardService {
         dinnerAfter21: day.dinnerAfter21,
         eventCount: day.eventCount,
         sideEffectCount: day.sideEffectCount,
+        // Chronological: the day reads in the order it was lived
+        events: [...day.events].sort((left, right) => left.time.localeCompare(right.time)),
+        sideEffects: [...day.sideEffects].sort((left, right) =>
+          left.time.localeCompare(right.time)
+        ),
         skippedIntakes: day.skippedIntakes,
         doseChanges: day.doseChanges,
         weightKg: day.weightKg,
@@ -518,7 +528,7 @@ class FoodDashboardService {
       if (log.derivedCategory === 'FEELING') day.feelingScores.push(sign);
     }
 
-    await this.foldRatings(userId, from, to, getDay);
+    await this.foldRatings(userId, from, to, getDay, tzOffset);
     await this.foldCheckIns(userId, from, to, getDay);
     await this.foldHabits(userId, from, to, getDay);
     await this.foldMarkers(userId, from, to, getDay);
@@ -534,7 +544,8 @@ class FoodDashboardService {
     userId: string,
     from: string,
     to: string,
-    getDay: (date: string) => DayData
+    getDay: (date: string) => DayData,
+    tzOffset: number
   ): Promise<void> {
     const entries = await prisma.ratingEntry.findMany({
       where: { userId, date: { gte: new Date(from), lte: new Date(to) } },
@@ -547,8 +558,25 @@ class FoodDashboardService {
       // An episode and a side effect are both things that happened, and both
       // are bad news by definition - only a mark can go either way
       const isMoment = entry.kind === 'EVENT' || entry.kind === 'SIDE_EFFECT';
-      if (entry.kind === 'EVENT') day.eventCount += 1;
-      if (entry.kind === 'SIDE_EFFECT') day.sideEffectCount += 1;
+      if (isMoment) {
+        // Collected before the track check on purpose: a row with your partner
+        // happened whether or not the characteristic was set to score, and a
+        // day that cannot name what happened in it explains nothing
+        const moment: DayMomentDTO = {
+          label: entry.ratingName,
+          detail: [entry.trigger, entry.note].filter(Boolean).join(' · ') || null,
+          time: minutesToHHmm(toLocalParts(entry.loggedAt, tzOffset).minutes),
+          intensity: entry.value,
+          maxValue: entry.maxValue,
+        };
+        if (entry.kind === 'EVENT') {
+          day.eventCount += 1;
+          day.events.push(moment);
+        } else {
+          day.sideEffectCount += 1;
+          day.sideEffects.push(moment);
+        }
+      }
 
       // The definition may have been deleted; a vote with no track left
       // simply stops counting rather than guessing where it belonged

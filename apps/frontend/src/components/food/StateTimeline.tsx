@@ -19,7 +19,7 @@ import { cn } from '../../lib/utils';
 import { todayLocal, addDaysLocal, BODY_LINE_COLOR, MOOD_LINE_COLOR } from '../../lib/foodUtils';
 import { useFoodOverview } from '../../hooks/useFoodQueries';
 import { TrackToggle, type FoodTrack } from './TrackToggle';
-import type { DayContributionDTO } from '@budget/shared';
+import type { DayContributionDTO, DayMomentDTO } from '@budget/shared';
 
 const BAND_COLORS = ['#fde68a', '#bae6fd', '#ddd6fe', '#bbf7d0', '#fecaca'];
 
@@ -119,17 +119,25 @@ function DayTooltip({ active, payload, label, data, showBody, showMood }: DayToo
     data.find((item) => item.shortDate === label);
   if (!row) return null;
 
+  // Episodes and side effects have their own block below: here they would be a
+  // number where the tooltip can afford the thing itself
   const facts = [
     row.workout !== null && 'allenamento',
     row.lateDinner !== null && 'cena dopo le 21',
-    row.eventCount > 0 && `${row.eventCount} ${row.eventCount === 1 ? 'episodio' : 'episodi'}`,
-    row.sideEffectCount > 0 &&
-      `${row.sideEffectCount} ${row.sideEffectCount === 1 ? 'effetto' : 'effetti'}`,
     row.skippedIntakes > 0 &&
       `${row.skippedIntakes} ${row.skippedIntakes === 1 ? 'dose saltata' : 'dosi saltate'}`,
     row.doseChange && `dose: ${row.doseChange}`,
     row.weightKg !== null && `peso ${String(row.weightKg).replace('.', ',')} kg`,
   ].filter((fact): fact is string => Boolean(fact));
+
+  // One list, two glyphs - the same ones the chart plots them with, so the
+  // marker on the curve and the line in the readout are visibly the same thing
+  const moments = [
+    ...row.eventList.map((moment) => ({ moment, glyph: '★', tone: 'text-amber-500' })),
+    ...row.sideEffectList.map((moment) => ({ moment, glyph: '●', tone: 'text-rose-500' })),
+  ].sort((left, right) => left.moment.time.localeCompare(right.moment.time));
+  const shownMoments = moments.slice(0, MAX_TOOLTIP_ROWS);
+  const hiddenMoments = moments.length - shownMoments.length;
 
   return (
     <div className="max-w-[16rem] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg">
@@ -168,6 +176,37 @@ function DayTooltip({ active, payload, label, data, showBody, showMood }: DayToo
         )}
       </div>
 
+      {moments.length > 0 && (
+        <div className="mt-2 border-t border-slate-100 pt-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Cos’è successo</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {shownMoments.map(({ moment, glyph, tone }, index) => (
+              <li
+                key={`${moment.time}-${moment.label}-${index}`}
+                className="flex items-baseline gap-1.5 text-[11px]"
+              >
+                <span className={cn('shrink-0', tone)} aria-hidden="true">
+                  {glyph}
+                </span>
+                <span className="shrink-0 tabular-nums text-slate-400">{moment.time}</span>
+                <span className="min-w-0 flex-1 text-slate-600">
+                  <span className="font-medium text-slate-700">{moment.label}</span>
+                  {moment.detail && <span className="text-slate-500"> — {moment.detail}</span>}
+                </span>
+                {moment.intensity !== null && (
+                  <span className="shrink-0 tabular-nums text-slate-400">
+                    {moment.intensity}/{moment.maxValue}
+                  </span>
+                )}
+              </li>
+            ))}
+            {hiddenMoments > 0 && (
+              <li className="text-[11px] text-slate-400">e altri {hiddenMoments}</li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {facts.length > 0 && (
         <div className="mt-2 border-t border-slate-100 pt-1.5">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Anche quel giorno</p>
@@ -186,6 +225,9 @@ interface DayRow {
   /** What each score is the average of, heaviest first */
   bodyBreakdown: DayContributionDTO[];
   moodBreakdown: DayContributionDTO[];
+  /** The episodes and side effects themselves, not just how many there were */
+  eventList: DayMomentDTO[];
+  sideEffectList: DayMomentDTO[];
   workout: number | null;
   lateDinner: number | null;
   events: number | null;
@@ -225,6 +267,9 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
     mood: day.moodState,
     bodyBreakdown: day.bodyBreakdown,
     moodBreakdown: day.moodBreakdown,
+    // Renamed on the way in: `events` is already the scatter series' dataKey
+    eventList: day.events,
+    sideEffectList: day.sideEffects,
     workout: day.workoutPresent ? 1.15 : null,
     lateDinner: day.dinnerAfter21 ? -1.15 : null,
     // Facts with no valence of their own, placed on their own rows so they

@@ -209,6 +209,21 @@ export interface DayContributionDTO {
   score: number; // [-1, +1], the instrument's mean for that day
 }
 
+/**
+ * An episode or a side effect as it was actually written down. A count says a
+ * day had two episodes; this says they were a row and a headache, which is the
+ * difference between knowing a day was bad and knowing why.
+ */
+export interface DayMomentDTO {
+  /** The kind of thing it was, in the user's own vocabulary */
+  label: string;
+  /** Trigger and note joined: what actually happened */
+  detail: string | null;
+  time: string; // HH:mm, local
+  intensity: number | null;
+  maxValue: number;
+}
+
 export interface FoodDayOverviewDTO {
   date: string; // YYYY-MM-DD
   mealCount: number;
@@ -230,6 +245,10 @@ export interface FoodDayOverviewDTO {
   // instead of being folded into the two scores
   eventCount: number;
   sideEffectCount: number;
+  // The same moments the counters count, with their text: shown wherever a day
+  // has to explain itself rather than just be tallied
+  events: DayMomentDTO[];
+  sideEffects: DayMomentDTO[];
   skippedIntakes: number;
   doseChanges: string[];
   weightKg: number | null;
