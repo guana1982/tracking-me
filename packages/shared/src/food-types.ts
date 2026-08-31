@@ -199,6 +199,16 @@ export interface RecalculateQuickLogsResultDTO {
 
 // ---------- Dashboard (andamento e correlazioni) ----------
 
+/**
+ * One instrument's mean for a day: what the day score is the average of.
+ * `label` is the user's own wording for a rating, a habit or a check-in scale,
+ * so it is display text and never a key.
+ */
+export interface DayContributionDTO {
+  label: string;
+  score: number; // [-1, +1], the instrument's mean for that day
+}
+
 export interface FoodDayOverviewDTO {
   date: string; // YYYY-MM-DD
   mealCount: number;
@@ -207,6 +217,10 @@ export interface FoodDayOverviewDTO {
   // (workout/sleep/feeling logs), moodState the psychological one (mood logs).
   dayState: number | null; // avg valence in [-1, +1]; null = no body logs that day
   moodState: number | null; // avg valence in [-1, +1]; null = no mood logs that day
+  // What each score is made of, heaviest first: a point on the curve is not
+  // readable until it can say which instrument put it there
+  bodyBreakdown: DayContributionDTO[];
+  moodBreakdown: DayContributionDTO[];
   moodCount: number; // mood logs attributed to the day
   workoutPresent: boolean;
   workoutValence: QuickLogValenceDTO | null;

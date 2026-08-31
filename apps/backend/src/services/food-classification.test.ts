@@ -132,23 +132,23 @@ describe('day-state helpers', () => {
     // Benessere 5/10 (-0.11), Sonno 8/10 (+0.56) and one negative note:
     // the note bends the day, it no longer flips it
     const day = new Map([
-      ['rating:benessere', [-0.11]],
-      ['rating:sonno', [0.56]],
-      ['log:WORKOUT', [scoreFromValence('NEGATIVE')]],
+      ['rating:benessere', { label: 'Benessere', scores: [-0.11] }],
+      ['rating:sonno', { label: 'Sonno', scores: [0.56] }],
+      ['log:WORKOUT', { label: 'Note allenamento', scores: [scoreFromValence('NEGATIVE')] }],
     ]);
     expect(average(groupMeans(day))).toBe(-0.02); // at full weight it was -0.18
   });
 
   it('averages each instrument before averaging the day, so nothing votes twice', () => {
     // Two votes on the same characteristic are one opinion said twice
-    const twice = new Map([['rating:benessere', [-0.11, -0.11]]]);
+    const twice = new Map([['rating:benessere', { label: 'Benessere', scores: [-0.11, -0.11] }]]);
     expect(groupMeans(twice)).toEqual([-0.11]);
 
     // Sonno 8/10 once, Benessere 5/10 twice: the doubled vote must not
     // outweigh the single one just by being repeated
     const day = new Map([
-      ['rating:sonno', [0.56]],
-      ['rating:benessere', [-0.11, -0.11]],
+      ['rating:sonno', { label: 'Sonno', scores: [0.56] }],
+      ['rating:benessere', { label: 'Benessere', scores: [-0.11, -0.11] }],
     ]);
     expect(average(groupMeans(day))).toBe(0.23); // not 0.11, as a flat mean gave
   });

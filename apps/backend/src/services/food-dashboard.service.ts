@@ -1,9 +1,15 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/error-handler.js';
-import { FOOD_CONFIG, extractSupplementNames, hasSupplementStopWord } from '@budget/shared';
+import {
+  FOOD_CONFIG,
+  QUICK_LOG_CATEGORY_LABELS,
+  extractSupplementNames,
+  hasSupplementStopWord,
+} from '@budget/shared';
 import type {
   FoodOverviewDTO,
   FoodDayOverviewDTO,
+  DayContributionDTO,
   FoodComparisonDTO,
   FoodComparisonConditionDTO,
   FoodComparisonGroupDTO,
@@ -39,8 +45,14 @@ import type {
 // (before SLEEP_ATTRIBUTION_HOUR) describe last night -> same day;
 // evening logs -> next day.
 
-/** Scores of one track, keyed by the instrument that produced them */
-type TrackGroups = Map<string, number[]>;
+/**
+ * Scores of one track, keyed by the instrument that produced them.
+ *
+ * The label travels with the scores because the day score is a two-level
+ * average and the number alone explains nothing: a day at -0.4 is a day where
+ * something was -0.4, and the chart is unreadable until it can say what.
+ */
+type TrackGroups = Map<string, { label: string; scores: number[] }>;
 
 interface DayData {
   mealCount: number;
@@ -78,25 +90,37 @@ function emptyDay(): DayData {
   };
 }
 
-function pushScore(groups: TrackGroups, source: string, score: number): void {
+function pushScore(groups: TrackGroups, source: string, label: string, score: number): void {
   const bucket = groups.get(source);
   if (bucket) {
-    bucket.push(score);
+    bucket.scores.push(score);
   } else {
-    groups.set(source, [score]);
+    groups.set(source, { label, scores: [score] });
   }
 }
 
 /** One mean per instrument: the inner level of the two-level average */
 export function groupMeans(groups: TrackGroups): number[] {
   return [...groups.values()]
-    .map((scores) => average(scores))
+    .map((group) => average(group.scores))
     .filter((mean): mean is number => mean !== null);
+}
+
+/**
+ * The same means, each still carrying its name: exactly what the day score is
+ * the average of. Ordered by weight, so the reason a day sits where it sits is
+ * the first line of the list.
+ */
+function groupBreakdown(groups: TrackGroups): DayContributionDTO[] {
+  return [...groups.values()]
+    .map((group) => ({ label: group.label, score: average(group.scores) }))
+    .filter((entry): entry is DayContributionDTO => entry.score !== null)
+    .sort((left, right) => Math.abs(right.score) - Math.abs(left.score));
 }
 
 /** Raw entries of a track, for the counters that tally moments, not opinions */
 function flatScores(groups: TrackGroups): number[] {
-  return [...groups.values()].flat();
+  return [...groups.values()].flatMap((group) => group.scores);
 }
 
 /** A 1..max vote onto [-1, +1]; a single-step scale has no gradient to give */
@@ -182,6 +206,8 @@ class FoodDashboardService {
         hasMeals: day.mealCount > 0,
         dayState: average(groupMeans(day.stateGroups)),
         moodState: average(groupMeans(day.moodGroups)),
+        bodyBreakdown: groupBreakdown(day.stateGroups),
+        moodBreakdown: groupBreakdown(day.moodGroups),
         moodCount: flatScores(day.moodGroups).length,
         workoutPresent: day.workoutScores.length > 0,
         workoutValence: valenceFromScores(day.workoutScores),
@@ -479,10 +505,13 @@ class FoodDashboardService {
       // Mood lives on its own track and never enters the physical day state.
       // Grouped per category: three workout notes are one workout opinion
       const source = `log:${log.derivedCategory ?? 'FEELING'}`;
+      // Named "nota <categoria>": a rating can be called Sonno too, and the
+      // two must not read as one line in the tooltip
+      const label = `Note ${QUICK_LOG_CATEGORY_LABELS[log.derivedCategory ?? 'FEELING']}`;
       if (log.derivedCategory === 'MOOD') {
-        pushScore(day.moodGroups, source, score);
+        pushScore(day.moodGroups, source, label, score);
       } else {
-        pushScore(day.stateGroups, source, score);
+        pushScore(day.stateGroups, source, label, score);
       }
       if (log.derivedCategory === 'WORKOUT') day.workoutScores.push(sign);
       if (log.derivedCategory === 'SLEEP') day.sleepScores.push(sign);
@@ -545,6 +574,13 @@ class FoodDashboardService {
       pushScore(
         track === 'MOOD' ? day.moodGroups : day.stateGroups,
         `rating:${entry.ratingKey}`,
+        // An episode and a side effect are named after what happened, so the
+        // line reads as the reason it is there rather than as a vote
+        entry.kind === 'EVENT'
+          ? `Episodio: ${entry.ratingName}`
+          : entry.kind === 'SIDE_EFFECT'
+            ? `Effetto: ${entry.ratingName}`
+            : entry.ratingName,
         score
       );
     }
@@ -571,7 +607,13 @@ class FoodDashboardService {
       const day = getDay(date);
 
       for (const raw of entry.valuesJson as unknown[]) {
-        const value = raw as { key?: unknown; value?: unknown; maxValue?: unknown; isPositive?: unknown };
+        const value = raw as {
+          key?: unknown;
+          name?: unknown;
+          value?: unknown;
+          maxValue?: unknown;
+          isPositive?: unknown;
+        };
         if (typeof value.key !== 'string' || typeof value.value !== 'number') continue;
         const track = trackOf.get(value.key);
         if (track !== 'BODY' && track !== 'MOOD') continue;
@@ -582,7 +624,13 @@ class FoodDashboardService {
         const score = scoreFromScale(value.value, max, value.isPositive === true);
         // One entry per scale per day already, but grouped anyway so a scale
         // is an instrument like every other
-        pushScore(track === 'MOOD' ? day.moodGroups : day.stateGroups, `scale:${value.key}`, score);
+        const name = typeof value.name === 'string' && value.name ? value.name : value.key;
+        pushScore(
+          track === 'MOOD' ? day.moodGroups : day.stateGroups,
+          `scale:${value.key}`,
+          `Check-in: ${name}`,
+          score
+        );
       }
     }
   }
@@ -615,6 +663,7 @@ class FoodDashboardService {
       pushScore(
         track === 'MOOD' ? day.moodGroups : day.stateGroups,
         `habit:${entry.habitKey}`,
+        `${entry.habitName}${entry.status === 'DONE' ? '' : ' (non fatta)'}`,
         score
       );
     }

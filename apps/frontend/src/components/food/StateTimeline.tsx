@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { it } from 'date-fns/locale';
 import {
   ComposedChart,
   Line,
@@ -17,14 +19,173 @@ import { cn } from '../../lib/utils';
 import { todayLocal, addDaysLocal, BODY_LINE_COLOR, MOOD_LINE_COLOR } from '../../lib/foodUtils';
 import { useFoodOverview } from '../../hooks/useFoodQueries';
 import { TrackToggle, type FoodTrack } from './TrackToggle';
+import type { DayContributionDTO } from '@budget/shared';
 
 const BAND_COLORS = ['#fde68a', '#bae6fd', '#ddd6fe', '#bbf7d0', '#fecaca'];
+
+/** Past this many instruments a track is summarised: a tooltip is not a table */
+const MAX_TOOLTIP_ROWS = 5;
+
+/** Signed, with the Italian decimal comma the rest of the diary uses */
+function formatScore(score: number): string {
+  const rounded = Math.round(score * 100) / 100;
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '';
+  return `${sign}${Math.abs(rounded).toFixed(2).replace('.', ',')}`;
+}
+
+function scoreColor(score: number): string {
+  if (score > 0) return 'text-emerald-600';
+  if (score < 0) return 'text-rose-600';
+  return 'text-slate-400';
+}
+
+interface TrackReadoutProps {
+  label: string;
+  /** A stroke of the series colour: at tooltip density a filled box is too much ink */
+  stroke: ReactNode;
+  score: number | null;
+  contributions: DayContributionDTO[];
+}
+
+/**
+ * One track's line in the tooltip: the score, then the instruments it is the
+ * average of. The number leads and the name follows - the reader already knows
+ * which series they are pointing at, and came for the value.
+ */
+function TrackReadout({ label, stroke, score, contributions }: TrackReadoutProps) {
+  const shown = contributions.slice(0, MAX_TOOLTIP_ROWS);
+  const hidden = contributions.length - shown.length;
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-1.5">
+        {stroke}
+        <span className="text-[11px] font-medium text-slate-500">{label}</span>
+        <span
+          className={cn(
+            'ml-auto text-xs font-semibold tabular-nums',
+            score === null ? 'text-slate-300' : scoreColor(score)
+          )}
+        >
+          {score === null ? 'non rilevato' : formatScore(score)}
+        </span>
+      </div>
+      {shown.length > 0 && (
+        <ul className="mt-1 space-y-0.5 pl-4">
+          {shown.map((entry) => (
+            <li key={entry.label} className="flex items-baseline gap-2 text-[11px]">
+              <span className="min-w-0 flex-1 truncate text-slate-500">{entry.label}</span>
+              <span className={cn('shrink-0 tabular-nums font-medium', scoreColor(entry.score))}>
+                {formatScore(entry.score)}
+              </span>
+            </li>
+          ))}
+          {hidden > 0 && (
+            <li className="text-[11px] text-slate-400">
+              e altri {hidden} {hidden === 1 ? 'elemento' : 'elementi'}
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+interface DayTooltipProps {
+  // Injected by recharts
+  active?: boolean;
+  payload?: { payload?: DayRow }[];
+  label?: string;
+  data: DayRow[];
+  showBody: boolean;
+  showMood: boolean;
+}
+
+/**
+ * Why the curve sits where it sits.
+ *
+ * The point on its own is an average with nothing to say for itself: a day at
+ * −0.4 could be one bad night or four bad things at once, and those are not the
+ * same day. So the readout breaks each track into the instruments that made it,
+ * heaviest first, and then lists the facts of the day that carry no valence and
+ * therefore never entered the score - they explain a lot and measure nothing.
+ */
+function DayTooltip({ active, payload, label, data, showBody, showMood }: DayTooltipProps) {
+  if (!active) return null;
+  // The payload carries the row when a series has a value there; on a day where
+  // both curves are interrupted it does not, and the label is the way back in
+  const row =
+    payload?.find((item) => item.payload)?.payload ??
+    data.find((item) => item.shortDate === label);
+  if (!row) return null;
+
+  const facts = [
+    row.workout !== null && 'allenamento',
+    row.lateDinner !== null && 'cena dopo le 21',
+    row.eventCount > 0 && `${row.eventCount} ${row.eventCount === 1 ? 'episodio' : 'episodi'}`,
+    row.sideEffectCount > 0 &&
+      `${row.sideEffectCount} ${row.sideEffectCount === 1 ? 'effetto' : 'effetti'}`,
+    row.skippedIntakes > 0 &&
+      `${row.skippedIntakes} ${row.skippedIntakes === 1 ? 'dose saltata' : 'dosi saltate'}`,
+    row.doseChange && `dose: ${row.doseChange}`,
+    row.weightKg !== null && `peso ${String(row.weightKg).replace('.', ',')} kg`,
+  ].filter((fact): fact is string => Boolean(fact));
+
+  return (
+    <div className="max-w-[16rem] rounded-xl border border-slate-200 bg-white p-2.5 shadow-lg">
+      <p className="mb-1.5 text-[11px] font-semibold capitalize text-slate-900">
+        {format(parseISO(row.date), 'EEEE d MMMM', { locale: it })}
+      </p>
+
+      <div className="space-y-2">
+        {showBody && (
+          <TrackReadout
+            label="Condizione fisica"
+            stroke={
+              <span
+                className="mt-1 w-3 h-0.5 shrink-0 rounded-full"
+                style={{ backgroundColor: BODY_LINE_COLOR }}
+              />
+            }
+            score={row.state}
+            contributions={row.bodyBreakdown}
+          />
+        )}
+        {showMood && (
+          <TrackReadout
+            label="Umore"
+            stroke={
+              <span
+                className="mt-1 w-3 h-0.5 shrink-0"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(90deg, ${MOOD_LINE_COLOR} 0 4px, transparent 4px 6px)`,
+                }}
+              />
+            }
+            score={row.mood}
+            contributions={row.moodBreakdown}
+          />
+        )}
+      </div>
+
+      {facts.length > 0 && (
+        <div className="mt-2 border-t border-slate-100 pt-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">Anche quel giorno</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">{facts.join(' · ')}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface DayRow {
   date: string;
   shortDate: string;
   state: number | null;
   mood: number | null;
+  /** What each score is the average of, heaviest first */
+  bodyBreakdown: DayContributionDTO[];
+  moodBreakdown: DayContributionDTO[];
   workout: number | null;
   lateDinner: number | null;
   events: number | null;
@@ -62,6 +223,8 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
     shortDate: day.date.slice(8) + '/' + day.date.slice(5, 7),
     state: day.dayState,
     mood: day.moodState,
+    bodyBreakdown: day.bodyBreakdown,
+    moodBreakdown: day.moodBreakdown,
     workout: day.workoutPresent ? 1.15 : null,
     lateDinner: day.dinnerAfter21 ? -1.15 : null,
     // Facts with no valence of their own, placed on their own rows so they
@@ -170,31 +333,9 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
                 )
               )}
               <Tooltip
-                formatter={(value: number, name: string, item: { payload?: DayRow }) => {
-                  if (name === 'state') return [value, 'Condizione fisica'];
-                  if (name === 'mood') return [value, 'Umore'];
-                  if (name === 'workout') return ['sì', 'Allenamento'];
-                  if (name === 'lateDinner') return ['sì', 'Cena dopo le 21'];
-                  if (name === 'events') return [item.payload?.eventCount ?? 0, 'Episodi'];
-                  if (name === 'skipped') {
-                    return [item.payload?.skippedIntakes ?? 0, 'Dosi saltate'];
-                  }
-                  if (name === 'sideEffects') {
-                    return [item.payload?.sideEffectCount ?? 0, 'Effetti collaterali'];
-                  }
-                  return [value, name];
-                }}
-                labelFormatter={(label: string) => {
-                  const day = data.find((item) => item.shortDate === label);
-                  const extras = [
-                    day?.doseChange ? `dose: ${day.doseChange}` : null,
-                    day?.weightKg !== null && day?.weightKg !== undefined
-                      ? `peso ${day.weightKg} kg`
-                      : null,
-                  ].filter(Boolean);
-                  return `Giorno ${label}${extras.length > 0 ? ` · ${extras.join(' · ')}` : ''}`;
-                }}
-                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                // The crosshair finds the day: nobody aims at a 2px line
+                cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }}
+                content={<DayTooltip data={data} showBody={showBody} showMood={showMood} />}
               />
               {showBody && (
                 <Line
@@ -230,7 +371,8 @@ export function StateTimeline({ track, onTrackChange }: StateTimelineProps) {
           </ResponsiveContainer>
 
           <p className="mt-2 text-[11px] text-slate-400">
-            Clicca un punto del grafico per aprire quel giorno nel diario.
+            Passa sopra a un giorno per vedere da cosa è composto il punteggio; clicca per aprire
+            quel giorno nel diario.
           </p>
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
