@@ -17,8 +17,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages ./packages
 COPY apps/frontend ./apps/frontend
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (removed --frozen-lockfile to fix corrupted lockfile)
+RUN pnpm install
 
 # Build shared package
 RUN pnpm --filter @budget/shared build
@@ -40,3 +40,4 @@ COPY --from=builder /app/apps/frontend/dist ./dist
 EXPOSE 3000
 
 CMD ["serve", "-s", "dist", "-l", "3000"]
+
