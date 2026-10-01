@@ -3,6 +3,7 @@ import { dashboardService } from '../services/dashboard.service.js';
 import { kpiService } from '../services/kpi.service.js';
 import { periodKeySchema } from '@budget/shared';
 import { getCurrentPeriodKey } from '../lib/utils.js';
+import { getMonthlyExpenseTotalsWithoutSavings } from '../services/monthly-expense-totals.service.js';
 
 export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // Get dashboard summary for current month
@@ -34,6 +35,11 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request) => {
       const { periodKey } = request.params;
       const history = await dashboardService.getSavingsHistory(periodKey, request.authUser!.id);
+      const monthlyExpenseTotals = await getMonthlyExpenseTotalsWithoutSavings(request.authUser!.id);
+      history.months = history.months.map((month) => ({
+        ...month,
+        totalExpenses: monthlyExpenseTotals.get(month.periodKey) ?? 0,
+      }));
       return { success: true, data: history };
     },
   });
