@@ -4,6 +4,7 @@ import { AppError } from '../lib/error-handler.js';
 import type { Category } from '@budget/shared';
 import { monthPeriodService } from './month-period.service.js';
 import { spendingCategoryService } from './spending-category.service.js';
+import { amountForTricountTransition } from './expense-amount.js';
 
 export class ExpenseService {
   /**
@@ -259,13 +260,21 @@ export class ExpenseService {
           : await spendingCategoryService.classifyForUser(userId, finalLabel);
     }
 
+    const updatedAmount = data.tricountType !== undefined
+      ? amountForTricountTransition(
+          data.amount ?? existing.amount,
+          existing.tricountType as 'IO' | 'FRA' | null,
+          data.tricountType
+        )
+      : data.amount;
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
         date: parsedDate,
         category: data.category ?? undefined,
         label: data.label ?? undefined,
-        amount: data.amount ?? undefined,
+        amount: updatedAmount ?? undefined,
         notes: data.notes !== undefined ? data.notes : undefined,
         isFixed: data.isFixed ?? undefined,
         tricountType: data.tricountType !== undefined ? data.tricountType : undefined,
