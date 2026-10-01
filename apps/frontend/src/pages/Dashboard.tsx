@@ -7,7 +7,7 @@ import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
-import { SpendingBreakdownCard } from '../components/SpendingBreakdownCard';
+import { InteractiveSpendingBreakdownCard } from '../components/InteractiveSpendingBreakdownCard';
 import { KpiPanel } from '../components/KpiPanel';
 import { SinkingFundsCard } from '../components/SinkingFundsCard';
 import { WealthGoalsCard } from '../components/WealthGoalsCard';
@@ -264,7 +264,7 @@ export function Dashboard() {
       {/* Spending breakdown accordion (collapsed by default): per-category
           classification of the month, global-history modal, per-category expense lists */}
       <div className="flex-shrink-0">
-        <SpendingBreakdownCard periodKey={periodKey} />
+        <InteractiveSpendingBreakdownCard periodKey={periodKey} />
       </div>
 
       {/* Sinking funds: monthly accruals for irregular expenses */}
