@@ -62,6 +62,7 @@ export const createExpenseSchema = z.object({
   notes: z.string().max(500).trim().optional(),
   isFixed: z.boolean().optional().default(false),
   tricountType: tricountTypeSchema.nullable().optional(),
+  importSource: z.literal('BANK_FILE').optional(),
 });
 
 export const updateExpenseSchema = z.object({

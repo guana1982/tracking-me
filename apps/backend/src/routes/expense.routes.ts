@@ -135,6 +135,7 @@ export const expenseRoutes: FastifyPluginAsync = async (fastify) => {
             notes: { type: 'string', maxLength: 500 },
             isFixed: { type: 'boolean' },
             tricountType: { type: ['string', 'null'], enum: ['IO', 'FRA', null] },
+            importSource: { type: 'string', enum: ['BANK_FILE'] },
           },
           required: ['date', 'category', 'label', 'amount'],
         },
