@@ -17,6 +17,7 @@ import {
   History,
   X,
 } from 'lucide-react';
+import { AnnualCategoryTrendModal } from './AnnualCategoryTrendModal';
 
 // Selected category for the expenses modal: scope decides whether the list
 // covers the current period or the whole history
@@ -31,9 +32,11 @@ interface SelectedCategory {
 function BreakdownBars({
   items,
   onSelect,
+  onSelectTrend,
 }: {
   items: SpendingBreakdownItemDTO[];
   onSelect: (item: SpendingBreakdownItemDTO) => void;
+  onSelectTrend?: (item: SpendingBreakdownItemDTO) => void;
 }) {
   const maxTotal = items.length > 0 ? items[0].total : 0;
 
@@ -62,7 +65,17 @@ function BreakdownBars({
           >
             {item.name}
           </button>
-          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+          <button
+            type="button"
+            onClick={() => onSelectTrend?.(item)}
+            disabled={!onSelectTrend}
+            className={cn(
+              'flex-1 h-2 bg-slate-100 rounded-full overflow-hidden text-left',
+              onSelectTrend && 'cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400'
+            )}
+            title={onSelectTrend ? `Vedi l'andamento annuale di “${item.name}”` : undefined}
+            aria-label={onSelectTrend ? `Vedi l'andamento annuale di ${item.name}` : undefined}
+          >
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
@@ -70,7 +83,7 @@ function BreakdownBars({
                 backgroundColor: item.color,
               }}
             />
-          </div>
+          </button>
           <span className="w-20 text-right font-semibold text-slate-700 flex-shrink-0">
             {formatCurrency(item.total)}
           </span>
@@ -235,13 +248,15 @@ function GlobalBreakdownModal({
 
 // "Dove sono andati i soldi": collapsible per-category spending breakdown.
 // Collapsed by default; the header still shows the period total at a glance.
-export function SpendingBreakdownCard({ periodKey }: { periodKey: string }) {
+export function InteractiveSpendingBreakdownCard({ periodKey }: { periodKey: string }) {
   const { data, isLoading } = useSpendingBreakdown(periodKey);
   const reclassify = useReclassifyExpenses();
 
   const [expanded, setExpanded] = useState(false);
   const [showGlobal, setShowGlobal] = useState(false);
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
+  const [annualTrend, setAnnualTrend] = useState<SpendingBreakdownItemDTO | null>(null);
+  const [annualTrendMonth, setAnnualTrendMonth] = useState<string | null>(null);
 
   const openCategory = (scope: 'period' | 'global') => (item: SpendingBreakdownItemDTO) =>
     setSelected({ scope, categoryId: item.categoryId, name: item.name, color: item.color });
@@ -306,7 +321,11 @@ export function SpendingBreakdownCard({ periodKey }: { periodKey: string }) {
               <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             </div>
           ) : (
-            <BreakdownBars items={data?.items ?? []} onSelect={openCategory('period')} />
+            <BreakdownBars
+              items={data?.items ?? []}
+              onSelect={openCategory('period')}
+              onSelectTrend={setAnnualTrend}
+            />
           )}
         </div>
       )}
@@ -323,6 +342,29 @@ export function SpendingBreakdownCard({ periodKey }: { periodKey: string }) {
           selected={selected}
           periodKey={periodKey}
           onClose={() => setSelected(null)}
+        />
+      )}
+      {annualTrend && (
+        <AnnualCategoryTrendModal
+          selected={annualTrend}
+          year={Number(periodKey.slice(0, 4))}
+          onClose={() => {
+            setAnnualTrend(null);
+            setAnnualTrendMonth(null);
+          }}
+          onSelectMonth={setAnnualTrendMonth}
+        />
+      )}
+      {annualTrend && annualTrendMonth && (
+        <CategoryExpensesModal
+          selected={{
+            scope: 'period',
+            categoryId: annualTrend.categoryId,
+            name: annualTrend.name,
+            color: annualTrend.color,
+          }}
+          periodKey={annualTrendMonth}
+          onClose={() => setAnnualTrendMonth(null)}
         />
       )}
     </div>
