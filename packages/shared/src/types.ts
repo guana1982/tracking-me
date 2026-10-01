@@ -459,7 +459,7 @@ export interface MonthlySavingsDTO {
   month: number;
   year: number;
   savings: number; // actual savings amount for that month
-  totalExpenses: number; // NEEDS + WANTS + EXTRA; SAVINGS transfers excluded
+  totalExpenses: number; // all expenses recorded in the month, without classification
 }
 
 export interface SavingsHistoryDTO {

@@ -8,6 +8,7 @@ import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
 import { Pencil, Lock } from 'lucide-react';
+import { useAllExpensesGlobal } from '../hooks/useQueries';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -25,6 +26,7 @@ const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'S
 export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const { data: allExpenses } = useAllExpensesGlobal(compact && showStats);
 
   // Parse periodKey to get month label
   const [year, month] = periodKey.split('-');
@@ -81,12 +83,17 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => ({
-      name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
-      risparmio: m.savings,
-      speseTotali: m.totalExpenses,
-      periodKey: m.periodKey,
-    })) ?? [];
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => {
+      const expensesWithoutSavings = (allExpenses ?? [])
+        .filter((expense) => expense.periodKey === m.periodKey && expense.category !== 'SAVINGS')
+        .reduce((sum, expense) => sum + expense.amount, 0);
+      return {
+        name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
+        risparmio: m.savings,
+        speseTotali: Math.round(expensesWithoutSavings * 100) / 100,
+        periodKey: m.periodKey,
+      };
+    }) ?? [];
 
     // Average over complete months only (in-progress and future periods excluded),
     // same convention as the Cash Flow page's "Risparmio medio / mese"
