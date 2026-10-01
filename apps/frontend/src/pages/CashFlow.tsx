@@ -1471,6 +1471,7 @@ export function CashFlow() {
                       ))}
                     </Pie>
                     <Tooltip
+                      wrapperStyle={{ zIndex: 10 }}
                       content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null;
                         const point = payload[0]?.payload as AllocationColumnSlice | undefined;
