@@ -36,6 +36,7 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggingExpenseId, setDraggingExpenseId] = useState<string | null>(null);
+  const [importTooltip, setImportTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
   const deleteExpense = useDeleteExpense(periodKey);
@@ -494,7 +495,17 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                             !isClosed && 'cursor-pointer hover:text-slate-600'
                           )}
                           onClick={() => startEditing(expense, 'label')}
-                          title={isClosed ? undefined : 'Clicca per modificare'}
+                          onMouseEnter={(event) => {
+                            if (expense.importSource !== 'BANK_FILE') return;
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setImportTooltip({
+                              label: expense.label,
+                              x: rect.left + rect.width / 2,
+                              y: rect.bottom + 8,
+                            });
+                          }}
+                          onMouseLeave={() => setImportTooltip(null)}
+                          title={expense.importSource === 'BANK_FILE' || isClosed ? undefined : 'Clicca per modificare'}
                         >
                           {expense.label}
                         </p>
@@ -711,6 +722,19 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       </div>
 
       {/* Spending-category picker popover, anchored to the clicked badge */}
+      {importTooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-[60] max-w-sm -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl"
+          style={{
+            left: Math.max(180, Math.min(importTooltip.x, window.innerWidth - 180)),
+            top: Math.min(importTooltip.y, window.innerHeight - 100),
+          }}
+        >
+          {importTooltip.label}
+        </div>
+      )}
+
       {picker && (() => {
         const pickerExpense = expenses.find((e) => e.id === picker.expenseId);
         if (!pickerExpense) return null;
