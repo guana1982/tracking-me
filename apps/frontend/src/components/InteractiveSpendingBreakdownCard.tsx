@@ -16,16 +16,14 @@ import {
   ChevronRight,
   History,
   X,
-  BarChart3,
 } from 'lucide-react';
 import { AnnualCategoryTrendModal } from './AnnualCategoryTrendModal';
-import { AnnualSpendingTrendModal } from './AnnualSpendingTrendModal';
 
 // Selected category for the expenses modal: scope decides whether the list
 // covers the current period or the whole history
 interface SelectedCategory {
   scope: 'period' | 'global';
-  categoryId: string | null | 'ALL';
+  categoryId: string | null;
   name: string;
   color: string;
 }
@@ -114,7 +112,7 @@ function CategoryExpensesModal({
   const expenses = (data ?? []).filter(
     (expense) =>
       expense.category !== 'SAVINGS' &&
-      (selected.categoryId === 'ALL' || (expense.spendingCategoryId ?? null) === selected.categoryId)
+      (expense.spendingCategoryId ?? null) === selected.categoryId
   );
   const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
@@ -259,8 +257,6 @@ export function InteractiveSpendingBreakdownCard({ periodKey }: { periodKey: str
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
   const [annualTrend, setAnnualTrend] = useState<SpendingBreakdownItemDTO | null>(null);
   const [annualTrendMonth, setAnnualTrendMonth] = useState<string | null>(null);
-  const [showAnnualTotal, setShowAnnualTotal] = useState(false);
-  const [annualTotalMonth, setAnnualTotalMonth] = useState<string | null>(null);
 
   const openCategory = (scope: 'period' | 'global') => (item: SpendingBreakdownItemDTO) =>
     setSelected({ scope, categoryId: item.categoryId, name: item.name, color: item.color });
@@ -290,16 +286,6 @@ export function InteractiveSpendingBreakdownCard({ periodKey }: { periodKey: str
               {formatCurrency(data.total)} totali
             </span>
           )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowAnnualTotal(true)}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100"
-          title="Mostra il totale delle spese per ogni mese dell'anno"
-        >
-          <BarChart3 className="h-3.5 w-3.5" />
-          Totale mensile
         </button>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -379,23 +365,6 @@ export function InteractiveSpendingBreakdownCard({ periodKey }: { periodKey: str
           }}
           periodKey={annualTrendMonth}
           onClose={() => setAnnualTrendMonth(null)}
-        />
-      )}
-      {showAnnualTotal && (
-        <AnnualSpendingTrendModal
-          year={Number(periodKey.slice(0, 4))}
-          onClose={() => {
-            setShowAnnualTotal(false);
-            setAnnualTotalMonth(null);
-          }}
-          onSelectMonth={setAnnualTotalMonth}
-        />
-      )}
-      {showAnnualTotal && annualTotalMonth && (
-        <CategoryExpensesModal
-          selected={{ scope: 'period', categoryId: 'ALL', name: 'Totale spese', color: '#4f46e5' }}
-          periodKey={annualTotalMonth}
-          onClose={() => setAnnualTotalMonth(null)}
         />
       )}
     </div>
