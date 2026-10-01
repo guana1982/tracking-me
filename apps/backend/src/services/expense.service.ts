@@ -190,6 +190,7 @@ export class ExpenseService {
         isFixed: data.isFixed ?? false,
         tricountType: data.tricountType ?? null,
         spendingCategoryId,
+        importSource: data.importSource ?? null,
       },
     });
 
@@ -334,6 +335,7 @@ export class ExpenseService {
     tricountType: string | null;
     spendingCategoryId: string | null;
     spendingCategoryManual: boolean;
+    importSource: string | null;
     createdAt: Date;
   }): ExpenseDTO {
     return {
@@ -348,6 +350,7 @@ export class ExpenseService {
       tricountType: expense.tricountType as 'IO' | 'FRA' | null,
       spendingCategoryId: expense.spendingCategoryId,
       spendingCategoryManual: expense.spendingCategoryManual,
+      importSource: expense.importSource === 'BANK_FILE' ? 'BANK_FILE' : null,
       createdAt: expense.createdAt.toISOString(),
     };
   }
