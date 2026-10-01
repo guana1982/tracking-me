@@ -81,9 +81,10 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; periodKey: string }) => ({
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => ({
       name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
       risparmio: m.savings,
+      speseTotali: m.totalExpenses,
       periodKey: m.periodKey,
     })) ?? [];
 
@@ -231,9 +232,11 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
             </div>
 
-            {/* Bar chart - full width, vertically centered in remaining card space */}
-            <div className="flex-1 flex items-center min-h-0">
-              <div className="h-28 w-full">
+            {/* Monthly savings and total-expenses histograms */}
+            <div className="flex flex-1 flex-col justify-center gap-4 min-h-0">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">Risparmio netto mensile</p>
+                <div className="h-28 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={barData}
@@ -285,6 +288,38 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">Spese totali mensili</p>
+                <div className="h-28 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={barData}
+                      margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                      onClick={(data) => {
+                        if (data?.activePayload?.[0]?.payload?.periodKey) {
+                          setPeriodKey(data.activePayload[0].payload.periodKey);
+                        }
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
+                      <Tooltip content={<BarChartTooltip />} />
+                      <Bar dataKey="speseTotali" radius={[3, 3, 0, 0]} cursor="pointer">
+                        {barData.map((entry, index) => (
+                          <Cell
+                            key={`total-cell-${index}`}
+                            fill={entry.periodKey === periodKey ? '#4f46e5' : '#a5b4fc'}
+                            opacity={entry.periodKey === periodKey ? 1 : 0.75}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>

@@ -147,11 +147,18 @@ export class DashboardService {
         .filter((e) => e.category === 'EXTRA')
         .reduce((sum, e) => sum + e.amount, 0);
 
+      // The chart represents money actually spent. SAVINGS entries are transfers
+      // and are already represented by the savings histogram above it.
+      const totalExpenses = period.expenses
+        .filter((expense) => expense.category !== 'SAVINGS')
+        .reduce((sum, expense) => sum + expense.amount, 0);
+
       return {
         periodKey: period.periodKey,
         month: period.month,
         year: period.year,
         savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
+        totalExpenses: roundCurrency(totalExpenses),
       };
     });
 
