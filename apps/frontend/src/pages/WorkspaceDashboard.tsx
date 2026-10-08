@@ -180,6 +180,10 @@ export function WorkspaceDashboard() {
   const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
   const extraExpenses = recentExpenses.filter((e) => e.category === 'EXTRA');
 
+  // On xl each column scrolls on its own; a closed month blocks clicks on the
+  // content but must keep the columns themselves scrollable.
+  const frozenScrollColumn = isClosed && 'xl:pointer-events-auto xl:[&>*]:pointer-events-none';
+
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 md:h-full md:flex md:flex-col">
       {/* Closed month banner - the only interactive element while the month is frozen */}
@@ -246,10 +250,10 @@ export function WorkspaceDashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,0.8fr)_minmax(560px,2.2fr)_minmax(320px,1fr)] xl:items-start">
+      <div className="grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(250px,0.8fr)_minmax(560px,2.2fr)_minmax(320px,1fr)]">
         {/* Left rail: budget donut and savings pace gauge. */}
         {showCharts && (
-          <aside className="space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
+          <aside className={cn('space-y-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pr-1', frozenScrollColumn)}>
             <BudgetChart
               categories={categories}
               totalIncome={totalIncome}
@@ -265,7 +269,7 @@ export function WorkspaceDashboard() {
         )}
 
         {/* Main workspace: the expense tables get most of the horizontal room. */}
-        <main className={cn('min-w-0 space-y-4', !showCharts && 'xl:col-span-2')}>
+        <main className={cn('min-w-0 space-y-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:px-1', !showCharts && 'xl:col-span-2', frozenScrollColumn)}>
           {/* Reallocation actions stay close to the tables they affect. */}
           {canShowReallocationButton && (
             <button
@@ -338,7 +342,7 @@ export function WorkspaceDashboard() {
         </main>
 
         {/* Right rail: historical charts and long-term planning widgets. */}
-        <aside className="space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pl-1">
+        <aside className={cn('space-y-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pl-1', frozenScrollColumn)}>
           {showCharts && (
             <BudgetChart
               categories={categories}
