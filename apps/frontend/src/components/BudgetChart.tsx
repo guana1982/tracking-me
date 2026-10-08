@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts';
-import { getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
+import { cn, getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
@@ -18,11 +18,12 @@ interface BudgetChartProps {
   savingsHistory?: SavingsHistoryDTO | null;
   isClosed?: boolean;
   middleSlot?: ReactNode;
+  visiblePanel?: 'all' | 'overview' | 'history';
 }
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
 
@@ -81,9 +82,10 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; periodKey: string }) => ({
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => ({
       name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
       risparmio: m.savings,
+      speseTotali: m.totalExpenses,
       periodKey: m.periodKey,
     })) ?? [];
 
@@ -98,21 +100,33 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
       : null;
 
     return (
-      <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+      <div className={cn(
+        'grid grid-cols-1 gap-4',
+        visiblePanel === 'all' && (middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2')
+      )}>
         {/* Card 1: Budget overview */}
-        <div className="card py-4 px-5 flex flex-col">
+        {(visiblePanel === 'all' || visiblePanel === 'overview') && <div className={cn(
+          'card flex flex-col',
+          visiblePanel === 'overview' ? 'px-4 py-3 [&_p]:text-[10px] [&_span]:text-[10px]' : 'py-4 px-5'
+        )}>
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
-          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className={cn(
+            'flex-1 flex flex-col gap-4',
+            visiblePanel !== 'overview' && 'sm:flex-row sm:items-center sm:gap-6'
+          )}>
             {/* Donut chart - larger */}
-            <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
+            <div className={cn(
+              'relative flex-shrink-0 mx-auto sm:mx-0',
+              visiblePanel === 'overview' ? 'h-32 w-32' : 'h-36 w-36'
+            )}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data}
                     cx="50%"
                     cy="50%"
-                    innerRadius={42}
-                    outerRadius={68}
+                    innerRadius={visiblePanel === 'overview' ? 34 : 42}
+                    outerRadius={visiblePanel === 'overview' ? 54 : 68}
                     paddingAngle={2}
                     dataKey="value"
                   >
@@ -154,7 +168,10 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
 
               {/* Stats: Entrate, Speso, Rimanente */}
-              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+              <div className={cn(
+                'flex justify-center gap-4 pt-2 border-t border-slate-100',
+                visiblePanel === 'overview' ? 'flex-wrap' : 'sm:justify-start sm:gap-6'
+              )}>
                 <div className="text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1">
                     <p className="text-xs text-slate-500">Entrate</p>
@@ -193,13 +210,13 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Card 2: Middle slot (e.g. savings gauge) */}
-        {middleSlot}
+        {visiblePanel === 'all' && middleSlot}
 
         {/* Card 3: Savings overview */}
-        {savingsHistory && barData.length > 0 && (
+        {(visiblePanel === 'all' || visiblePanel === 'history') && savingsHistory && barData.length > 0 && (
           <div className="card py-4 px-5 flex flex-col">
             {/* Savings header with labels */}
             <div className="flex justify-between items-start mb-3">
@@ -231,9 +248,11 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
             </div>
 
-            {/* Bar chart - full width, vertically centered in remaining card space */}
-            <div className="flex-1 flex items-center min-h-0">
-              <div className="h-28 w-full">
+            {/* Monthly savings and total-expenses histograms */}
+            <div className="flex flex-1 flex-col justify-center gap-4 min-h-0">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">Risparmio netto mensile</p>
+                <div className="h-28 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={barData}
@@ -285,6 +304,38 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">Spese totali mensili</p>
+                <div className="h-28 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={barData}
+                      margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                      onClick={(data) => {
+                        if (data?.activePayload?.[0]?.payload?.periodKey) {
+                          setPeriodKey(data.activePayload[0].payload.periodKey);
+                        }
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
+                      <Tooltip content={<BarChartTooltip />} />
+                      <Bar dataKey="speseTotali" radius={[3, 3, 0, 0]} cursor="pointer">
+                        {barData.map((entry, index) => (
+                          <Cell
+                            key={`total-cell-${index}`}
+                            fill={entry.periodKey === periodKey ? '#4f46e5' : '#a5b4fc'}
+                            opacity={entry.periodKey === periodKey ? 1 : 0.75}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>
