@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts';
-import { getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
+import { cn, getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
@@ -18,11 +18,12 @@ interface BudgetChartProps {
   savingsHistory?: SavingsHistoryDTO | null;
   isClosed?: boolean;
   middleSlot?: ReactNode;
+  visiblePanel?: 'all' | 'overview' | 'history';
 }
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot }: BudgetChartProps) {
+export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
 
@@ -99,11 +100,17 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
       : null;
 
     return (
-      <div className={`grid grid-cols-1 gap-4 ${middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+      <div className={cn(
+        'grid grid-cols-1 gap-4',
+        visiblePanel === 'all' && (middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2')
+      )}>
         {/* Card 1: Budget overview */}
-        <div className="card py-4 px-5 flex flex-col">
+        {(visiblePanel === 'all' || visiblePanel === 'overview') && <div className="card py-4 px-5 flex flex-col">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
-          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className={cn(
+            'flex-1 flex flex-col gap-4',
+            visiblePanel !== 'overview' && 'sm:flex-row sm:items-center sm:gap-6'
+          )}>
             {/* Donut chart - larger */}
             <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -155,7 +162,10 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
 
               {/* Stats: Entrate, Speso, Rimanente */}
-              <div className="flex justify-center sm:justify-start gap-6 pt-2 border-t border-slate-100">
+              <div className={cn(
+                'flex justify-center gap-4 pt-2 border-t border-slate-100',
+                visiblePanel === 'overview' ? 'flex-wrap' : 'sm:justify-start sm:gap-6'
+              )}>
                 <div className="text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1">
                     <p className="text-xs text-slate-500">Entrate</p>
@@ -194,13 +204,13 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Card 2: Middle slot (e.g. savings gauge) */}
-        {middleSlot}
+        {visiblePanel === 'all' && middleSlot}
 
         {/* Card 3: Savings overview */}
-        {savingsHistory && barData.length > 0 && (
+        {(visiblePanel === 'all' || visiblePanel === 'history') && savingsHistory && barData.length > 0 && (
           <div className="card py-4 px-5 flex flex-col">
             {/* Savings header with labels */}
             <div className="flex justify-between items-start mb-3">
