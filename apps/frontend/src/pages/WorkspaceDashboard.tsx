@@ -4,17 +4,17 @@ import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useR
 import { CategoryCard } from '../components/CategoryCard';
 import { ReallocationChoiceModal } from '../components/ReallocationChoiceModal';
 import { ExtraCard } from '../components/ExtraCard';
-import { BudgetChart } from '../components/BudgetChart';
+import { CompactBudgetChart } from '../components/CompactBudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
 import { ExpensesList } from '../components/RecentExpenses';
-import { InteractiveSpendingBreakdownCard } from '../components/InteractiveSpendingBreakdownCard';
+import { SingleColumnSpendingBreakdownCard } from '../components/SingleColumnSpendingBreakdownCard';
 import { KpiPanel } from '../components/KpiPanel';
 import { SinkingFundsCard } from '../components/SinkingFundsCard';
 import { WealthGoalsCard } from '../components/WealthGoalsCard';
 import { Loader2, RefreshCw, Lock, Unlock, ArrowRightCircle, ChevronDown, ChevronRight, LayoutDashboard, Check } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 
-export function Dashboard() {
+export function WorkspaceDashboard() {
   const { periodKey } = usePeriodStore();
   const { data, isLoading, error } = useDashboard(periodKey);
   const { data: savingsHistory } = useSavingsHistory(periodKey);
@@ -35,6 +35,7 @@ export function Dashboard() {
   // Charts block accordion (donut + gauge + savings chart): open by default,
   // collapsible to leave more room for the expense tables below
   const [showCharts, setShowCharts] = useState(true);
+  const [showSecondaryExpenses, setShowSecondaryExpenses] = useState(false);
 
   // Reallocation choice popup (savings vs. carry surplus to next month)
   const [showReallocModal, setShowReallocModal] = useState(false);
@@ -223,12 +224,12 @@ export function Dashboard() {
         <KpiPanel periodKey={periodKey} />
       </div>
 
-      {/* Charts accordion (open by default): donut + stats, savings gauge, savings chart */}
+      {/* Dashboard workspace: fixed analytical sidebars and a wider expense workspace. */}
       <div className="flex-shrink-0">
         <button
           onClick={() => setShowCharts((prev) => !prev)}
           className="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm text-left hover:bg-slate-50 transition-colors"
-          title={showCharts ? 'Nascondi i grafici per lavorare meglio con le tabelle' : 'Mostra i grafici del mese'}
+          title={showCharts ? 'Nascondi la panoramica laterale' : 'Mostra la panoramica laterale'}
         >
           {showCharts ? (
             <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -245,144 +246,116 @@ export function Dashboard() {
         </button>
       </div>
 
-      {/* Chart with Stats - Full width responsive */}
-      {showCharts && (
-        <div className="flex-shrink-0">
-          <BudgetChart
-            categories={categories}
-            totalIncome={totalIncome}
-            extraSpent={data.extraSpent}
-            compact
-            showStats
-            savingsHistory={savingsHistory}
-            isClosed={isClosed}
-            middleSlot={<SavingsGauge pace={savingsPace} />}
-          />
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,0.8fr)_minmax(560px,2.2fr)_minmax(320px,1fr)] xl:items-start">
+        {/* Left rail: budget donut and savings pace gauge. */}
+        {showCharts && (
+          <aside className="space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
+            <CompactBudgetChart
+              categories={categories}
+              totalIncome={totalIncome}
+              extraSpent={data.extraSpent}
+              compact
+              showStats
+              savingsHistory={savingsHistory}
+              isClosed={isClosed}
+              visiblePanel="overview"
+            />
+            <SavingsGauge pace={savingsPace} compact />
+          </aside>
+        )}
 
-      {/* Spending breakdown accordion (collapsed by default): per-category
-          classification of the month, global-history modal, per-category expense lists */}
-      <div className="flex-shrink-0">
-        <InteractiveSpendingBreakdownCard periodKey={periodKey} />
-      </div>
-
-      {/* Sinking funds: monthly accruals for irregular expenses */}
-      <div className="flex-shrink-0">
-        <SinkingFundsCard />
-      </div>
-
-      {/* Wealth goals: net-worth targets with run-rate projections */}
-      <div className="flex-shrink-0">
-        <WealthGoalsCard />
-      </div>
-
-      {/* Reallocation button - opens the choice popup (savings vs. next month); frozen while the month is closed */}
-      {canShowReallocationButton && (
-        <div className="flex-shrink-0">
-          <button
-            onClick={() => setShowReallocModal(true)}
-            className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all ${
-              (hasReallocation || forwardActive)
-                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300'
-                : 'bg-sky-600 text-white hover:bg-sky-700'
-            }`}
-          >
-            {(hasReallocation || forwardActive) ? (
-              <Check className="w-4 h-4" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
+        {/* Main workspace: the expense tables get most of the horizontal room. */}
+        <main className={cn('min-w-0 space-y-4', !showCharts && 'xl:col-span-2')}>
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowSecondaryExpenses((current) => !current)}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-slate-50"
+            >
+              {showSecondaryExpenses ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+              <span className="text-sm font-semibold text-slate-700">Risparmi ed Extra &amp; Vacanze</span>
+              <span className="ml-auto text-xs text-slate-400">{savingsExpenses.length + extraExpenses.length} voci</span>
+            </button>
+            {showSecondaryExpenses && (
+              <div className="grid grid-cols-1 gap-4 border-t border-slate-200 bg-slate-50/50 p-4 md:grid-cols-2">
+                <div className="space-y-4">
+                  <CategoryCard summary={categories.find((c) => c.category === 'SAVINGS')!} />
+                  <ExpensesList expenses={savingsExpenses} periodKey={periodKey} title="Risparmi" category="SAVINGS" emptyMessage="Nessun risparmio" reallocations={reallocations} isClosed={isClosed} />
+                </div>
+                <div className="space-y-4">
+                  <ExtraCard spent={data.extraSpent} count={extraExpenses.length} />
+                  <ExpensesList expenses={extraExpenses} periodKey={periodKey} title="Extra & Vacanze" category="EXTRA" emptyMessage="Nessuna spesa extra" isClosed={isClosed} />
+                </div>
+              </div>
             )}
-            {forwardActive
-              ? `Surplus spostato a ${nextMonthLabel} · gestisci`
-              : hasReallocation
-              ? `${formatCurrency(savingsReallocatedAmount)} nei risparmi · gestisci`
-              : `Rialloca il surplus (${formatCurrency(surplusAmount)})`}
-          </button>
-        </div>
-      )}
+          </section>
 
-      {/* Carry-over button - carries all pending over-budget deficits to next month */}
-      {carryoverPreview?.isAfterCutoff && carryoverPreview.available && (
-        <div className="flex-shrink-0">
-          <button
-            onClick={() => createCarryover.mutate(undefined)}
-            disabled={createCarryover.isPending}
-            title="Registra gli sforamenti come spese fisse del mese successivo, riducendone il budget disponibile"
-            className="w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {createCarryover.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ArrowRightCircle className="w-4 h-4" />
-            )}
-            Riporta {formatCurrency(carryoverPreview.pendingTotal)} di sforamento a {nextPeriodLabel}
-          </button>
-        </div>
-      )}
+          {/* Reallocation actions stay close to the tables they affect. */}
+          {canShowReallocationButton && (
+            <button
+              onClick={() => setShowReallocModal(true)}
+              className={`w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all ${
+                (hasReallocation || forwardActive)
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300'
+                  : 'bg-sky-600 text-white hover:bg-sky-700'
+              }`}
+            >
+              {(hasReallocation || forwardActive) ? <Check className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+              {forwardActive
+                ? `Surplus spostato a ${nextMonthLabel} · gestisci`
+                : hasReallocation
+                ? `${formatCurrency(savingsReallocatedAmount)} nei risparmi · gestisci`
+                : `Rialloca il surplus (${formatCurrency(surplusAmount)})`}
+            </button>
+          )}
 
-      {/* Category Cards + Expense Lists - Aligned in columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:flex-1 md:min-h-0">
-        {/* Necessità Column */}
-        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
-          <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} carryover={cardCarryover('NEEDS')} />
+          {carryoverPreview?.isAfterCutoff && carryoverPreview.available && (
+            <button
+              onClick={() => createCarryover.mutate(undefined)}
+              disabled={createCarryover.isPending}
+              title="Registra gli sforamenti come spese fisse del mese successivo, riducendone il budget disponibile"
+              className="w-full py-2.5 px-4 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {createCarryover.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightCircle className="w-4 h-4" />}
+              Riporta {formatCurrency(carryoverPreview.pendingTotal)} di sforamento a {nextPeriodLabel}
+            </button>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col">
+              <div className="flex-shrink-0">
+                <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} carryover={cardCarryover('NEEDS')} />
+              </div>
+              <ExpensesList expenses={needsExpenses} periodKey={periodKey} title="Spese Necessarie" category="NEEDS" emptyMessage="Nessuna spesa necessaria" isClosed={isClosed} />
+            </div>
+            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col">
+              <div className="flex-shrink-0">
+                <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} carryover={cardCarryover('WANTS')} />
+              </div>
+              <ExpensesList expenses={wantsExpenses} periodKey={periodKey} title="Spese Svago" category="WANTS" emptyMessage="Nessuna spesa svago" isClosed={isClosed} />
+            </div>
           </div>
-          <ExpensesList
-            expenses={needsExpenses}
-            periodKey={periodKey}
-            title="Spese Necessarie"
-            category="NEEDS"
-            emptyMessage="Nessuna spesa necessaria"
-            isClosed={isClosed}
-          />
-        </div>
 
-        {/* Svago Column */}
-        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
-          <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} carryover={cardCarryover('WANTS')} />
-          </div>
-          <ExpensesList
-            expenses={wantsExpenses}
-            periodKey={periodKey}
-            title="Spese Svago"
-            category="WANTS"
-            emptyMessage="Nessuna spesa svago"
-            isClosed={isClosed}
-          />
-        </div>
+        </main>
 
-        {/* Risparmi Column */}
-        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
-          <div className="flex-shrink-0">
-            <CategoryCard summary={categories.find((c) => c.category === 'SAVINGS')!} />
-          </div>
-          <ExpensesList
-            expenses={savingsExpenses}
-            periodKey={periodKey}
-            title="Risparmi"
-            category="SAVINGS"
-            emptyMessage="Nessun risparmio"
-            reallocations={reallocations}
-            isClosed={isClosed}
-          />
-        </div>
-
-        {/* Extra & Vacanze Column - tracked outside the 65/25/10 budget */}
-        <div className="space-y-4 md:flex md:flex-col md:min-h-0">
-          <div className="flex-shrink-0">
-            <ExtraCard spent={data.extraSpent} count={extraExpenses.length} />
-          </div>
-          <ExpensesList
-            expenses={extraExpenses}
-            periodKey={periodKey}
-            title="Extra & Vacanze"
-            category="EXTRA"
-            emptyMessage="Nessuna spesa extra"
-            isClosed={isClosed}
-          />
-        </div>
+        {/* Right rail: historical charts and long-term planning widgets. */}
+        <aside className="space-y-4 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pl-1">
+          {showCharts && (
+            <CompactBudgetChart
+              categories={categories}
+              totalIncome={totalIncome}
+              extraSpent={data.extraSpent}
+              compact
+              showStats
+              savingsHistory={savingsHistory}
+              isClosed={isClosed}
+              visiblePanel="history"
+            />
+          )}
+          <SingleColumnSpendingBreakdownCard periodKey={periodKey} />
+          <SinkingFundsCard />
+          <WealthGoalsCard />
+        </aside>
       </div>
 
       {/* Close Month Button - visible after cutoff day; unlock happens from the banner above */}
