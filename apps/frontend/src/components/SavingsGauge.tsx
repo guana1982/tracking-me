@@ -7,6 +7,7 @@ const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'S
 
 interface SavingsGaugeProps {
   pace?: SavingsPaceDTO | null;
+  compact?: boolean;
 }
 
 const ZONES = [
@@ -164,7 +165,7 @@ function SavingsStepTracker({ pace }: { pace: SavingsPaceDTO }) {
   );
 }
 
-export function SavingsGauge({ pace }: SavingsGaugeProps) {
+export function SavingsGauge({ pace, compact = true }: SavingsGaugeProps) {
   const [showInfo, setShowInfo] = useState(false);
   const hasBudget = !!pace && pace.budgetTarget > 0;
   const pct = hasBudget ? pace!.performancePct : 50;
@@ -190,7 +191,7 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
   const bestRatePct = pace?.bestMonth ? Math.round(pace.bestMonth.savingsRate * 100) : null;
 
   return (
-    <div className="card py-4 px-5 flex flex-col">
+    <div className={`card flex flex-col ${compact ? 'px-4 py-3 [&_p]:text-[10px]' : 'py-4 px-5'}`}>
       <div className="flex items-center gap-1.5 mb-1">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
           Ritmo risparmio
@@ -214,7 +215,7 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
       {hasBudget ? (
         <>
           <div className="flex-1 flex flex-col items-center justify-center">
-            <p className="text-2xl font-bold text-slate-900 leading-none mb-1">
+            <p className={`${compact ? 'text-lg' : 'text-2xl'} font-bold text-slate-900 leading-none mb-1`}>
               {pct.toLocaleString('it-IT', {
                 minimumFractionDigits: 1,
                 maximumFractionDigits: 1,
@@ -222,7 +223,7 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
             </p>
             <svg
               viewBox={`0 0 ${W} ${H}`}
-              className="w-full h-auto max-w-[240px]"
+              className={`w-full h-auto ${compact ? 'max-w-[128px]' : 'max-w-[240px]'}`}
               role="img"
               aria-label={`Performance risparmio ${pct.toLocaleString('it-IT', {
                 minimumFractionDigits: 1,
@@ -265,12 +266,12 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
             </svg>
           </div>
 
-          <div className="flex justify-center gap-3 mt-1 flex-wrap">
+          <div className={`flex justify-center mt-1 flex-wrap ${compact ? 'gap-2' : 'gap-3'}`}>
             {ZONES.map((z) => (
               <div key={z.label} className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: z.color }} />
                 <span
-                  className={`text-xs ${z.label === activeZone.label ? 'font-semibold text-slate-800' : 'text-slate-500'}`}
+                  className={`${compact ? 'text-[10px]' : 'text-xs'} ${z.label === activeZone.label ? 'font-semibold text-slate-800' : 'text-slate-500'}`}
                 >
                   {z.label}
                 </span>
@@ -427,4 +428,3 @@ export function SavingsGauge({ pace }: SavingsGaugeProps) {
     </div>
   );
 }
-

@@ -112,3 +112,16 @@ input[type='number'] {
     font-size: 14px;
   }
 }
+
+/* In the dashboard workspace, keep the secondary expense accordion at the top
+   without coupling this presentation rule to the route component. */
+@media (min-width: 1280px) {
+  main.min-w-0.space-y-4 {
+    display: flex;
+    flex-direction: column;
+  }
+
+  main.min-w-0.space-y-4 > section {
+    order: -1;
+  }
+}

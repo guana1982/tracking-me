@@ -131,6 +131,7 @@ export interface ExpenseDTO {
   tricountType: TricountType | null;
   spendingCategoryId: string | null; // fine-grained classification (Spesa, Bollette, ...)
   spendingCategoryManual: boolean; // true when the user overrode the auto classification
+  importSource: 'BANK_FILE' | null;
   createdAt: string;
 }
 
@@ -147,6 +148,7 @@ export interface CreateExpenseDTO {
   notes?: string;
   isFixed?: boolean;
   tricountType?: TricountType | null;
+  importSource?: 'BANK_FILE';
 }
 
 export interface UpdateExpenseDTO {
@@ -457,6 +459,7 @@ export interface MonthlySavingsDTO {
   month: number;
   year: number;
   savings: number; // actual savings amount for that month
+  totalExpenses: number; // all expenses recorded in the month, without classification
 }
 
 export interface SavingsHistoryDTO {
