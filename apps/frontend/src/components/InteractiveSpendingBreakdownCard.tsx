@@ -33,10 +33,12 @@ function BreakdownBars({
   items,
   onSelect,
   onSelectTrend,
+  singleColumn = false,
 }: {
   items: SpendingBreakdownItemDTO[];
   onSelect: (item: SpendingBreakdownItemDTO) => void;
   onSelectTrend?: (item: SpendingBreakdownItemDTO) => void;
+  singleColumn?: boolean;
 }) {
   const maxTotal = items.length > 0 ? items[0].total : 0;
 
@@ -45,7 +47,7 @@ function BreakdownBars({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+    <div className={cn('grid grid-cols-1 gap-x-6 gap-y-1.5', !singleColumn && 'md:grid-cols-2')}>
       {items.map((item) => (
         <div
           key={item.categoryId ?? 'unclassified'}
@@ -238,7 +240,7 @@ function GlobalBreakdownModal({
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
           ) : (
-            <BreakdownBars items={data?.items ?? []} onSelect={onSelectCategory} />
+            <BreakdownBars items={data?.items ?? []} onSelect={onSelectCategory} singleColumn />
           )}
         </div>
       </div>
