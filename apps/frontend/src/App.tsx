@@ -1,7 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Dashboard } from './pages/Dashboard';
+import { RefinedWorkspaceDashboard } from './pages/RefinedWorkspaceDashboard';
 import { Expenses } from './pages/Expenses';
 import { CashFlow } from './pages/CashFlow';
 import { Portfolio } from './pages/Portfolio';
@@ -31,7 +31,7 @@ function App() {
       >
         {/* Mobile: straight to the diary; desktop: the budget dashboard */}
         <Route index element={<HomeGate />} />
-        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="dashboard" element={<RefinedWorkspaceDashboard />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="cash-flow" element={<CashFlow />} />
         <Route path="portfolio" element={<Portfolio />} />
