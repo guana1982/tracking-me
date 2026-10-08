@@ -23,7 +23,7 @@ interface BudgetChartProps {
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
-export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
+export function CompactBudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
 
@@ -105,22 +105,28 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
         visiblePanel === 'all' && (middleSlot ? 'md:grid-cols-3' : 'md:grid-cols-2')
       )}>
         {/* Card 1: Budget overview */}
-        {(visiblePanel === 'all' || visiblePanel === 'overview') && <div className="card py-4 px-5 flex flex-col">
+        {(visiblePanel === 'all' || visiblePanel === 'overview') && <div className={cn(
+          'card flex flex-col',
+          visiblePanel === 'overview' ? 'px-4 py-3 [&_p]:text-[10px] [&_span]:text-[10px]' : 'py-4 px-5'
+        )}>
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">{currentMonthLabel}</p>
           <div className={cn(
             'flex-1 flex flex-col gap-4',
             visiblePanel !== 'overview' && 'sm:flex-row sm:items-center sm:gap-6'
           )}>
             {/* Donut chart - larger */}
-            <div className="w-36 h-36 relative flex-shrink-0 mx-auto sm:mx-0">
+            <div className={cn(
+              'relative flex-shrink-0 mx-auto sm:mx-0',
+              visiblePanel === 'overview' ? 'h-32 w-32' : 'h-36 w-36'
+            )}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data}
                     cx="50%"
                     cy="50%"
-                    innerRadius={42}
-                    outerRadius={68}
+                    innerRadius={visiblePanel === 'overview' ? 34 : 42}
+                    outerRadius={visiblePanel === 'overview' ? 54 : 68}
                     paddingAngle={2}
                     dataKey="value"
                   >
