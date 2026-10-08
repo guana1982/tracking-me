@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 import { generatePeriodKey, getCurrentPeriodKey } from '../lib/utils.js';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import type { MonthPeriodDTO, CreateMonthPeriodDTO, MonthListItemDTO } from '@budget/shared';
@@ -6,10 +7,11 @@ import { AppError } from '../lib/error-handler.js';
 
 export class MonthPeriodService {
   /**
-   * Get all month periods ordered by date descending
+   * Get all month periods for a user ordered by date descending
    */
-  async getAll(): Promise<MonthListItemDTO[]> {
+  async getAll(userId: string): Promise<MonthListItemDTO[]> {
     const periods = await prisma.monthPeriod.findMany({
+      where: { userId },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
       include: {
         incomes: true,
@@ -27,11 +29,11 @@ export class MonthPeriodService {
   }
 
   /**
-   * Get a month period by period key (YYYY-MM)
+   * Get a month period by period key (YYYY-MM) for a user
    */
-  async getByPeriodKey(periodKey: string): Promise<MonthPeriodDTO | null> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async getByPeriodKey(periodKey: string, userId: string): Promise<MonthPeriodDTO | null> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) return null;
@@ -40,30 +42,62 @@ export class MonthPeriodService {
   }
 
   /**
-   * Get or create the current month period
+   * Get or create the current month period for a user
    */
-  async getOrCreateCurrent(): Promise<MonthPeriodDTO> {
-    const periodKey = getCurrentPeriodKey();
-    const existing = await this.getByPeriodKey(periodKey);
-
-    if (existing) return existing;
-
+  async getOrCreateCurrent(userId: string): Promise<MonthPeriodDTO> {
     const now = new Date();
-    return this.create({
-      year: now.getFullYear(),
-      month: now.getMonth() + 1,
-    });
+    return this.getOrCreate(userId, now.getFullYear(), now.getMonth() + 1);
   }
 
   /**
-   * Create a new month period with default budget rule
+   * Get or create a month period for a user (handles race conditions)
    */
-  async create(data: CreateMonthPeriodDTO): Promise<MonthPeriodDTO> {
+  async getOrCreate(userId: string, year: number, month: number): Promise<MonthPeriodDTO> {
+    const periodKey = generatePeriodKey(year, month);
+
+    // First, try to find existing
+    const existing = await this.getByPeriodKey(periodKey, userId);
+    if (existing) return existing;
+
+    // Try to create, handling potential race conditions
+    try {
+      const period = await prisma.monthPeriod.create({
+        data: {
+          userId,
+          year,
+          month,
+          periodKey,
+          budgetRule: {
+            create: {
+              needsPct: DEFAULT_BUDGET_RULE.needsPct,
+              wantsPct: DEFAULT_BUDGET_RULE.wantsPct,
+              savingsPct: DEFAULT_BUDGET_RULE.savingsPct,
+              cutoffDay: DEFAULT_BUDGET_RULE.cutoffDay,
+              autoReallocateNeedsRemainder: DEFAULT_BUDGET_RULE.autoReallocateNeedsRemainder,
+            },
+          },
+        },
+      });
+      return this.toDTO(period);
+    } catch (error) {
+      // If unique constraint violation, another request created it - fetch and return
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const created = await this.getByPeriodKey(periodKey, userId);
+        if (created) return created;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new month period with default budget rule for a user
+   */
+  async create(userId: string, data: CreateMonthPeriodDTO): Promise<MonthPeriodDTO> {
     const periodKey = generatePeriodKey(data.year, data.month);
 
-    // Check if already exists
-    const existing = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+    // Check if already exists for this user
+    const existing = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (existing) {
@@ -73,6 +107,7 @@ export class MonthPeriodService {
     // Create period with default budget rule
     const period = await prisma.monthPeriod.create({
       data: {
+        userId,
         year: data.year,
         month: data.month,
         periodKey,
@@ -92,11 +127,11 @@ export class MonthPeriodService {
   }
 
   /**
-   * Delete a month period
+   * Delete a month period for a user
    */
-  async delete(periodKey: string): Promise<void> {
-    const period = await prisma.monthPeriod.findUnique({
-      where: { periodKey },
+  async delete(periodKey: string, userId: string): Promise<void> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
     });
 
     if (!period) {
@@ -104,16 +139,74 @@ export class MonthPeriodService {
     }
 
     await prisma.monthPeriod.delete({
-      where: { periodKey },
+      where: { id: period.id },
     });
   }
 
-  private toDTO(period: { id: string; year: number; month: number; periodKey: string; createdAt: Date }): MonthPeriodDTO {
+  /**
+   * Close a month period (no more edits allowed).
+   * Idempotent: closing an already-closed month is a no-op, not an error.
+   */
+  async closeMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
+    });
+
+    if (!period) {
+      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    }
+
+    if (period.isClosed) {
+      return this.toDTO(period);
+    }
+
+    const updated = await prisma.monthPeriod.update({
+      where: { id: period.id },
+      data: {
+        isClosed: true,
+        closedAt: new Date(),
+      },
+    });
+
+    return this.toDTO(updated);
+  }
+
+  /**
+   * Reopen a closed month period.
+   * Idempotent: reopening a month that is not closed is a no-op, not an error.
+   */
+  async reopenMonth(periodKey: string, userId: string): Promise<MonthPeriodDTO> {
+    const period = await prisma.monthPeriod.findFirst({
+      where: { periodKey, userId },
+    });
+
+    if (!period) {
+      throw new AppError(`Month period ${periodKey} not found`, 404, 'NOT_FOUND');
+    }
+
+    if (!period.isClosed) {
+      return this.toDTO(period);
+    }
+
+    const updated = await prisma.monthPeriod.update({
+      where: { id: period.id },
+      data: {
+        isClosed: false,
+        closedAt: null,
+      },
+    });
+
+    return this.toDTO(updated);
+  }
+
+  private toDTO(period: { id: string; year: number; month: number; periodKey: string; isClosed: boolean; closedAt: Date | null; createdAt: Date }): MonthPeriodDTO {
     return {
       id: period.id,
       year: period.year,
       month: period.month,
       periodKey: period.periodKey,
+      isClosed: period.isClosed,
+      closedAt: period.closedAt?.toISOString() ?? null,
       createdAt: period.createdAt.toISOString(),
     };
   }

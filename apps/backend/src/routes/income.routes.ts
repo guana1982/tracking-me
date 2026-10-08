@@ -30,7 +30,7 @@ export const incomeRoutes: FastifyPluginAsync = async (fastify) => {
       const { periodKey } = request.params;
       periodKeySchema.parse(periodKey);
 
-      const incomes = await incomeService.getByPeriodKey(periodKey);
+      const incomes = await incomeService.getByPeriodKey(periodKey, request.authUser!.id);
       return { success: true, data: incomes };
     },
   });
@@ -66,7 +66,7 @@ export const incomeRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const { id } = request.params;
-      const income = await incomeService.getById(id);
+      const income = await incomeService.getById(id, request.authUser!.id);
 
       if (!income) {
         reply.status(404);
@@ -112,7 +112,7 @@ export const incomeRoutes: FastifyPluginAsync = async (fastify) => {
       periodKeySchema.parse(periodKey);
 
       const data = createIncomeSchema.parse(request.body);
-      const income = await incomeService.create(periodKey, data);
+      const income = await incomeService.create(periodKey, request.authUser!.id, data);
 
       reply.status(201);
       return { success: true, data: income };
@@ -151,7 +151,7 @@ export const incomeRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request, reply) => {
       const { id } = request.params;
       const data = updateIncomeSchema.parse(request.body);
-      const income = await incomeService.update(id, data);
+      const income = await incomeService.update(id, request.authUser!.id, data);
 
       return { success: true, data: income };
     },
@@ -180,7 +180,7 @@ export const incomeRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       const { id } = request.params;
-      await incomeService.delete(id);
+      await incomeService.delete(id, request.authUser!.id);
       return { success: true };
     },
   });

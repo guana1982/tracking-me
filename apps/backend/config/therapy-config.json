@@ -1,0 +1,61 @@
+{
+  "_readme": [
+    "Configurazione del modulo terapia. Modificabile senza toccare il codice.",
+    "sideEffects.byIngredient: la chiave viene cercata (minuscola, senza accenti)",
+    "dentro nome, principio attivo e forma di ogni farmaco attivo; se compare,",
+    "le voci associate vengono proposte come scale del check-in.",
+    "sideEffects.common: proposte sempre, per qualunque farmaco attivo.",
+    "examAdvisories: promemoria condizionali proposti quando si crea un esame."
+  ],
+  "sideEffects": {
+    "common": [
+      "Sonnolenza diurna",
+      "Intontimento al risveglio",
+      "Nausea o disturbi gastrici",
+      "Vertigini"
+    ],
+    "byIngredient": {
+      "sertralina": [
+        "Nausea o disturbi gastrici",
+        "Sudorazione eccessiva",
+        "Tremore alle mani",
+        "Effetti sulla sfera sessuale",
+        "Insonnia iniziale"
+      ],
+      "valproato": [
+        "Aumento dell'appetito",
+        "Tremore alle mani",
+        "Caduta di capelli",
+        "Sonnolenza diurna"
+      ],
+      "depakin": [
+        "Aumento dell'appetito",
+        "Tremore alle mani",
+        "Caduta di capelli",
+        "Sonnolenza diurna"
+      ],
+      "aloperidolo": [
+        "Rigidità muscolare",
+        "Irrequietezza motoria (acatisia)",
+        "Intontimento al risveglio",
+        "Bocca secca"
+      ],
+      "serenase": [
+        "Rigidità muscolare",
+        "Irrequietezza motoria (acatisia)",
+        "Intontimento al risveglio",
+        "Bocca secca"
+      ],
+      "quetiapina": ["Sonnolenza diurna", "Aumento dell'appetito", "Bocca secca"],
+      "litio": ["Tremore alle mani", "Sete intensa", "Nausea o disturbi gastrici"],
+      "creatina": ["Ritenzione idrica", "Disturbi gastrici"]
+    }
+  },
+  "examAdvisories": [
+    "Niente allenamenti intensi nelle 72 h precedenti (falsa positività CPK)",
+    "Sospendere la creatina 3–5 giorni prima (falsa positività creatinina/CPK)",
+    "Dichiarare al prelievo: integrazione con creatina, allenamento con i pesi",
+    "Prelievo a digiuno da almeno 8 ore",
+    "Portare l'elenco dei farmaci in corso con le dosi"
+  ]
+}

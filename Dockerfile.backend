@@ -3,8 +3,11 @@ FROM node:18-slim
 # Install OpenSSL for Prisma (Debian-based)
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm - pinned to the version in package.json's "packageManager".
+# Unpinned, this line installed whatever npm published most recently, and a
+# newer pnpm refuses to self-switch to the pinned one against a lockfile it
+# did not write (ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE)
+RUN npm install -g pnpm@8.15.0
 
 WORKDIR /app
 

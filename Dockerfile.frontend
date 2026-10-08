@@ -1,7 +1,12 @@
 FROM node:18-alpine AS builder
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm - pinned to the version in package.json's "packageManager".
+# Unpinned, this line installed whatever npm published most recently: pnpm 10
+# then read "packageManager": "pnpm@8.15.0", tried to download and self-switch
+# to pnpm 8, and refused because that binary is not in a lockfile written by
+# pnpm 8 (ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE). Nothing in the repo had
+# changed - the build simply was not reproducible.
+RUN npm install -g pnpm@8.15.0
 
 WORKDIR /app
 

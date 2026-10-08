@@ -8,9 +8,14 @@ import {
   useUpdateBudgetRule,
 } from '../hooks/useQueries';
 import { formatCurrency, cn } from '../lib/utils';
-import { Loader2, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, AlertCircle, UtensilsCrossed } from 'lucide-react';
+import { SpendingCategoriesManager } from '../components/SpendingCategoriesManager';
+import { MealTypeManager } from '../components/food/MealTypeManager';
+import { MealUnitManager } from '../components/food/MealUnitManager';
 
 export function Settings() {
+  const [isMealTypeManagerOpen, setIsMealTypeManagerOpen] = useState(false);
+  const [isMealUnitManagerOpen, setIsMealUnitManagerOpen] = useState(false);
   const { periodKey } = usePeriodStore();
   const { data: dashboard, isLoading: dashboardLoading } = useDashboard(periodKey);
   const { data: incomes, isLoading: incomesLoading } = useIncomes(periodKey);
@@ -108,7 +113,7 @@ export function Settings() {
   }
 
   return (
-    <div className="space-y-8 sm:ml-16 max-w-2xl">
+    <div className="space-y-6 xl:space-y-8 sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-900">Impostazioni</h1>
 
       {/* Budget Rule Section */}
@@ -322,6 +327,48 @@ export function Settings() {
           </div>
         </form>
       </section>
+
+      {/* Spending categories & keyword rules */}
+      <SpendingCategoriesManager />
+
+      <section className="card">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <UtensilsCrossed className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-900">Diario alimentare</h2>
+            </div>
+            <p className="text-sm text-slate-500 mt-2">
+              Aggiungi, rinomina o disattiva le voci disponibili nel menu “Tipo pasto”.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsMealTypeManagerOpen(true)}
+            className="btn btn-secondary text-sm shrink-0"
+          >
+            Gestisci tipi
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsMealUnitManagerOpen(true)}
+          className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          Gestisci unità degli alimenti
+        </button>
+      </section>
+
+      <MealTypeManager
+        isOpen={isMealTypeManagerOpen}
+        onClose={() => setIsMealTypeManagerOpen(false)}
+        onCreated={() => setIsMealTypeManagerOpen(false)}
+      />
+      <MealUnitManager
+        isOpen={isMealUnitManagerOpen}
+        onClose={() => setIsMealUnitManagerOpen(false)}
+        onCreated={() => setIsMealUnitManagerOpen(false)}
+      />
     </div>
   );
 }

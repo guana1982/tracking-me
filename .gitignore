@@ -40,3 +40,7 @@ apps/backend/prisma/*.db-journal
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# Vite config build artifacts
+vite.config.js
+vite.config.d.ts

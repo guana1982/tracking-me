@@ -1,5 +1,5 @@
 import { DEFAULT_BUDGET_RULE, WARNING_THRESHOLDS } from '@budget/shared';
-import type { CategorySummary, Category } from '@budget/shared';
+import type { CategorySummary, BudgetCategory } from '@budget/shared';
 
 /**
  * Generate period key from year and month (YYYY-MM format)
@@ -21,7 +21,21 @@ export function parsePeriodKey(periodKey: string): { year: number; month: number
  */
 export function getCurrentPeriodKey(): string {
   const now = new Date();
-  return generatePeriodKey(now.getFullYear(), now.getMonth() + 1);
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const effectiveCutoffDay = adjustCutoffDayForWeekend(
+    currentYear,
+    currentMonth,
+    DEFAULT_BUDGET_RULE.cutoffDay
+  );
+
+  if (now.getDate() > effectiveCutoffDay) {
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+    return generatePeriodKey(nextYear, nextMonth);
+  }
+
+  return generatePeriodKey(currentYear, currentMonth);
 }
 
 /**
@@ -53,7 +67,7 @@ export function getSpendingStatus(percentage: number): 'ok' | 'warning' | 'dange
  * Build category summary
  */
 export function buildCategorySummary(
-  category: Category,
+  category: BudgetCategory,
   targetAmount: number,
   actualAmount: number
 ): CategorySummary {
@@ -66,15 +80,36 @@ export function buildCategorySummary(
     actualAmount: Math.round(actualAmount * 100) / 100,
     remaining: Math.round(remaining * 100) / 100,
     percentage: Math.round(percentage * 100) / 100,
-    status: getSpendingStatus(percentage),
+    // For SAVINGS higher is better: exceeding the target is a win, never a warning
+    status: category === 'SAVINGS' ? 'ok' : getSpendingStatus(percentage),
   };
 }
 
 /**
  * Check if we're past the cutoff day for reallocation
+ * - For current month: check if today >= cutoffDay
+ * - For past months: always true (can reallocate)
+ * - For future months: always false (can't reallocate yet)
  */
-export function isPastCutoffDay(cutoffDay: number): boolean {
-  const today = new Date().getDate();
+export function isPastCutoffDay(cutoffDay: number, periodKey: string): boolean {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const today = now.getDate();
+
+  const { year: periodYear, month: periodMonth } = parsePeriodKey(periodKey);
+
+  // Future month - can't reallocate yet
+  if (periodYear > currentYear || (periodYear === currentYear && periodMonth > currentMonth)) {
+    return false;
+  }
+
+  // Past month - can always reallocate
+  if (periodYear < currentYear || (periodYear === currentYear && periodMonth < currentMonth)) {
+    return true;
+  }
+
+  // Current month - check if past cutoff day
   return today >= cutoffDay;
 }
 
@@ -83,4 +118,19 @@ export function isPastCutoffDay(cutoffDay: number): boolean {
  */
 export function roundCurrency(amount: number): number {
   return Math.round(amount * 100) / 100;
+}
+
+/**
+ * Adjust a nominal payday (e.g. cutoffDay from BudgetRule) for weekends.
+ * Payday logic: if the nominal day falls on Saturday → previous Friday;
+ * on Sunday → previous Friday. Otherwise keep the nominal day.
+ * Always clamped to [1, daysInMonth].
+ */
+export function adjustCutoffDayForWeekend(year: number, month: number, nominalDay: number): number {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const clamped = Math.min(Math.max(1, nominalDay), daysInMonth);
+  const dow = new Date(year, month - 1, clamped).getDay();
+  if (dow === 0) return Math.max(1, clamped - 2); // Sunday → Friday
+  if (dow === 6) return Math.max(1, clamped - 1); // Saturday → Friday
+  return clamped;
 }
