@@ -180,9 +180,12 @@ export function WorkspaceDashboard() {
   const savingsExpenses = recentExpenses.filter((e) => e.category === 'SAVINGS');
   const extraExpenses = recentExpenses.filter((e) => e.category === 'EXTRA');
 
-  // On xl each column scrolls on its own; a closed month blocks clicks on the
-  // content but must keep the columns themselves scrollable.
-  const frozenScrollColumn = isClosed && 'xl:pointer-events-auto xl:[&>*]:pointer-events-none';
+  // On xl each column (and each expense table inside it) scrolls on its own; a
+  // closed month blocks clicks on the content but must keep them scrollable.
+  const frozenScrollColumn = isClosed && cn(
+    'xl:pointer-events-auto xl:[&>*]:pointer-events-none',
+    'xl:[&_.overflow-y-auto]:pointer-events-auto xl:[&_.overflow-y-auto>*]:pointer-events-none'
+  );
 
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 md:h-full md:flex md:flex-col">
@@ -301,14 +304,14 @@ export function WorkspaceDashboard() {
             </button>
           )}
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:min-h-[24rem] xl:flex-1 xl:grid-rows-[minmax(0,1fr)]">
+            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col xl:min-h-0">
               <div className="flex-shrink-0">
                 <CategoryCard summary={categories.find((c) => c.category === 'NEEDS')!} reallocation={cardReallocation('NEEDS')} carryover={cardCarryover('NEEDS')} />
               </div>
               <ExpensesList expenses={needsExpenses} periodKey={periodKey} title="Spese Necessarie" category="NEEDS" emptyMessage="Nessuna spesa necessaria" isClosed={isClosed} />
             </div>
-            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col">
+            <div className="space-y-4 md:flex md:min-h-[32rem] md:flex-col xl:min-h-0">
               <div className="flex-shrink-0">
                 <CategoryCard summary={categories.find((c) => c.category === 'WANTS')!} reallocation={cardReallocation('WANTS')} carryover={cardCarryover('WANTS')} />
               </div>
