@@ -12,6 +12,16 @@
     order: -1;
   }
 
+  /* Reordering breaks space-y margins (the accordion is last in the DOM), so
+     use a flex gap to keep it spaced from the tables below. */
+  main.min-w-0.space-y-4 {
+    gap: 1rem;
+  }
+
+  main.min-w-0.space-y-4 > :not([hidden]) {
+    margin-top: 0;
+  }
+
   /* A consistent visual system for the monthly overview and savings pace. */
   aside:has(+ main.min-w-0.space-y-4) > :first-child > .card,
   aside:has(+ main.min-w-0.space-y-4) > .card:nth-child(2) {
@@ -33,6 +43,8 @@
   aside:has(+ main.min-w-0.space-y-4) > :first-child > .card [class~='w-36'] {
     width: 9rem;
     height: 9rem;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   aside:has(+ main.min-w-0.space-y-4) > .card:nth-child(2) svg[role='img'] {
