@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { formatCurrency, formatDate, getCategoryColor, cn } from '../lib/utils';
 import type { ExpenseDTO, Category, ReallocationDTO } from '@budget/shared';
-import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat, Check } from 'lucide-react';
+import { Plus, Trash2, Receipt, RefreshCw, Lock, Calendar, Users, Search, Repeat, Check, FileSpreadsheet } from 'lucide-react';
 import { useUpdateExpense, useDeleteExpense, useSpendingCategories } from '../hooks/useQueries';
 import { QuickAddModal } from './QuickAddModal';
 import { FixedExpensesModal } from './FixedExpensesModal';
+import { BankImportModal } from './BankImportModal';
 
 const EXPENSE_ID_DRAG_MIME = 'application/x-budget-expense-id';
 const EXPENSE_CATEGORY_DRAG_MIME = 'application/x-budget-expense-category';
@@ -31,9 +32,11 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
   const [editing, setEditing] = useState<EditingField | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFixedModalOpen, setIsFixedModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggingExpenseId, setDraggingExpenseId] = useState<string | null>(null);
+  const [importTooltip, setImportTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const updateExpense = useUpdateExpense(periodKey);
   const deleteExpense = useDeleteExpense(periodKey);
@@ -307,6 +310,15 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
               <Repeat className="w-4 h-4" />
             </button>
           )}
+          {supportsFixedTemplates && (
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className={cn('p-1.5 rounded-lg transition-all', 'bg-white/80 shadow-sm hover:shadow', colors.text, 'hover:scale-105 active:scale-95')}
+              title="Importa spese da CSV o XLS"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setIsAddModalOpen(true)}
             className={cn(
@@ -383,12 +395,8 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
           defaultCategory={category}
         />
         {(category === 'NEEDS' || category === 'WANTS') && (
-          <FixedExpensesModal
-            isOpen={isFixedModalOpen}
-            onClose={() => setIsFixedModalOpen(false)}
-            periodKey={periodKey}
-            category={category}
-          />
+          <><FixedExpensesModal isOpen={isFixedModalOpen} onClose={() => setIsFixedModalOpen(false)} periodKey={periodKey} category={category} />
+          <BankImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} periodKey={periodKey} category={category} /></>
         )}
       </div>
     );
@@ -487,13 +495,28 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
                             !isClosed && 'cursor-pointer hover:text-slate-600'
                           )}
                           onClick={() => startEditing(expense, 'label')}
-                          title={isClosed ? undefined : 'Clicca per modificare'}
+                          onMouseEnter={(event) => {
+                            if (expense.importSource !== 'BANK_FILE') return;
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setImportTooltip({
+                              label: expense.label,
+                              x: rect.left + rect.width / 2,
+                              y: rect.bottom + 8,
+                            });
+                          }}
+                          onMouseLeave={() => setImportTooltip(null)}
+                          title={expense.importSource === 'BANK_FILE' || isClosed ? undefined : 'Clicca per modificare'}
                         >
                           {expense.label}
                         </p>
                         {expense.isFixed && (
                           <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 rounded">
                             Fisso
+                          </span>
+                        )}
+                        {expense.importSource === 'BANK_FILE' && (
+                          <span className="flex flex-shrink-0 items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Spesa importata da file bancario">
+                            <FileSpreadsheet className="h-3 w-3" /> Importata
                           </span>
                         )}
                         {expense.tricountType && (
@@ -699,6 +722,19 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
       </div>
 
       {/* Spending-category picker popover, anchored to the clicked badge */}
+      {importTooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-[60] max-w-sm -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl"
+          style={{
+            left: Math.max(180, Math.min(importTooltip.x, window.innerWidth - 180)),
+            top: Math.min(importTooltip.y, window.innerHeight - 100),
+          }}
+        >
+          {importTooltip.label}
+        </div>
+      )}
+
       {picker && (() => {
         const pickerExpense = expenses.find((e) => e.id === picker.expenseId);
         if (!pickerExpense) return null;
@@ -761,12 +797,8 @@ export function ExpensesList({ expenses, periodKey, title, category, emptyMessag
         defaultCategory={category}
       />
       {(category === 'NEEDS' || category === 'WANTS') && (
-        <FixedExpensesModal
-          isOpen={isFixedModalOpen}
-          onClose={() => setIsFixedModalOpen(false)}
-          periodKey={periodKey}
-          category={category}
-        />
+        <><FixedExpensesModal isOpen={isFixedModalOpen} onClose={() => setIsFixedModalOpen(false)} periodKey={periodKey} category={category} />
+        <BankImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} periodKey={periodKey} category={category} /></>
       )}
     </div>
   );

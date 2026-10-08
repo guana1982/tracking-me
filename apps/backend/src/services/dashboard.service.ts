@@ -147,11 +147,14 @@ export class DashboardService {
         .filter((e) => e.category === 'EXTRA')
         .reduce((sum, e) => sum + e.amount, 0);
 
+      const totalExpenses = period.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
       return {
         periodKey: period.periodKey,
         month: period.month,
         year: period.year,
         savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
+        totalExpenses: roundCurrency(totalExpenses),
       };
     });
 
