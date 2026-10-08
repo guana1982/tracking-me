@@ -249,12 +249,12 @@ function GlobalBreakdownModal({
 }
 
 // "Dove sono andati i soldi": collapsible per-category spending breakdown.
-// Collapsed by default; the header still shows the period total at a glance.
+// Expanded by default; the header still shows the period total at a glance.
 export function InteractiveSpendingBreakdownCard({ periodKey }: { periodKey: string }) {
   const { data, isLoading } = useSpendingBreakdown(periodKey);
   const reclassify = useReclassifyExpenses();
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [showGlobal, setShowGlobal] = useState(false);
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
   const [annualTrend, setAnnualTrend] = useState<SpendingBreakdownItemDTO | null>(null);
