@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { usePeriodStore } from '../hooks/usePeriod';
-import { useDashboard, useSavingsHistory, useSavingsPace, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, useSurplusForwardPreview, useCreateSurplusForward, useDeleteSurplusForward, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
+import { useDashboard, useSavingsHistory, useSavingsPace, useCumulativeSpend, useReallocations, useReallocationPreview, useCreateReallocation, useDeleteReallocation, useCarryoverPreview, useCreateCarryover, useSurplusForwardPreview, useCreateSurplusForward, useDeleteSurplusForward, usePeriod, useCloseMonth, useReopenMonth } from '../hooks/useQueries';
 import { CategoryCard } from '../components/CategoryCard';
 import { ReallocationChoiceModal } from '../components/ReallocationChoiceModal';
 import { ExtraCard } from '../components/ExtraCard';
 import { BudgetChart } from '../components/BudgetChart';
 import { SavingsGauge } from '../components/SavingsGauge';
+import { CumulativeSpendChart } from '../components/CumulativeSpendChart';
 import { ExpensesList } from '../components/RecentExpenses';
 import { InteractiveSpendingBreakdownCard } from '../components/InteractiveSpendingBreakdownCard';
 import { KpiPanel } from '../components/KpiPanel';
@@ -19,6 +20,7 @@ export function WorkspaceDashboard() {
   const { data, isLoading, error } = useDashboard(periodKey);
   const { data: savingsHistory } = useSavingsHistory(periodKey);
   const { data: savingsPace } = useSavingsPace(periodKey);
+  const { data: cumulativeSpend } = useCumulativeSpend(periodKey);
   const { data: reallocations } = useReallocations(periodKey);
   const { data: reallocationPreview } = useReallocationPreview(periodKey);
   const { data: carryoverPreview } = useCarryoverPreview(periodKey);
@@ -254,7 +256,7 @@ export function WorkspaceDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(250px,0.8fr)_minmax(560px,2.2fr)_minmax(320px,1fr)]">
-        {/* Left rail: budget donut and savings pace gauge. */}
+        {/* Left rail: budget donut, savings pace gauge and cumulative spend curve. */}
         {showCharts && (
           <aside className={cn('space-y-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pr-1', frozenScrollColumn)}>
             <BudgetChart
@@ -268,6 +270,7 @@ export function WorkspaceDashboard() {
               visiblePanel="overview"
             />
             <SavingsGauge pace={savingsPace} />
+            <CumulativeSpendChart data={cumulativeSpend} />
           </aside>
         )}
 

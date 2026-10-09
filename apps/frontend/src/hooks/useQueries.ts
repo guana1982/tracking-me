@@ -46,6 +46,7 @@ export const queryKeys = {
   dashboard: (periodKey: string) => ['dashboard', periodKey] as const,
   savingsHistory: (periodKey: string) => ['savingsHistory', periodKey] as const,
   savingsPace: (periodKey: string) => ['savingsPace', periodKey] as const,
+  cumulativeSpend: (periodKey: string) => ['cumulativeSpend', periodKey] as const,
   periods: ['periods'] as const,
   period: (periodKey: string) => ['period', periodKey] as const,
   budgetRule: (periodKey: string) => ['budgetRule', periodKey] as const,
@@ -96,6 +97,14 @@ export function useSavingsPace(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.savingsPace(periodKey),
     queryFn: () => dashboardApi.getSavingsPace(periodKey),
+  });
+}
+
+// Cumulative daily spend vs. year-to-date average
+export function useCumulativeSpend(periodKey: string) {
+  return useQuery({
+    queryKey: queryKeys.cumulativeSpend(periodKey),
+    queryFn: () => dashboardApi.getCumulativeSpend(periodKey),
   });
 }
 
@@ -307,6 +316,7 @@ export function useCreateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -324,6 +334,7 @@ export function useUpdateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -340,6 +351,7 @@ export function useDeleteExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -519,6 +531,7 @@ export function useApplyFixedExpenseTemplates(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: ['expenses', periodKey] });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.fixedExpenses() });
     },
   });
