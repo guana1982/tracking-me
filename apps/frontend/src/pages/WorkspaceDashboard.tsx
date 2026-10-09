@@ -269,8 +269,8 @@ export function WorkspaceDashboard() {
               isClosed={isClosed}
               visiblePanel="overview"
             />
-            <SavingsGauge pace={savingsPace} />
             <CumulativeSpendChart data={cumulativeSpend} />
+            <SavingsGauge pace={savingsPace} />
           </aside>
         )}
 
