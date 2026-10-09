@@ -317,6 +317,8 @@ export function useCreateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
+      // Monthly totals histogram spans every month, so refresh all cached histories
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -335,6 +337,8 @@ export function useUpdateExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
+      // Monthly totals histogram spans every month, so refresh all cached histories
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -352,6 +356,8 @@ export function useDeleteExpense(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
+      // Monthly totals histogram spans every month, so refresh all cached histories
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.spendingBreakdown(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.sinkingFunds });
@@ -532,6 +538,8 @@ export function useApplyFixedExpenseTemplates(periodKey: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.cumulativeSpend(periodKey) });
+      // Monthly totals histogram spans every month, so refresh all cached histories
+      queryClient.invalidateQueries({ queryKey: ['savingsHistory'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.fixedExpenses() });
     },
   });
