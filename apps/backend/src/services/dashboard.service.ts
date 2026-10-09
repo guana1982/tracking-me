@@ -319,7 +319,8 @@ export class DashboardService {
    * the month before the selected one). Day 1 is the first day of the cycle.
    * Fixed expenses are counted on day 1 (like the run-rate projection, which
    * treats them as already committed); variable expenses land on the day of
-   * their date, clamped into the cycle. SAVINGS and EXTRA are excluded.
+   * their date, clamped into the cycle. NEEDS, WANTS and EXTRA count as
+   * outflows; SAVINGS transfers are money set aside, not spent, so they are excluded.
    */
   async getCumulativeSpend(currentPeriodKey: string, userId: string): Promise<CumulativeSpendDTO> {
     const periods = await prisma.monthPeriod.findMany({
@@ -342,7 +343,7 @@ export class DashboardService {
     ) => {
       const daily = new Array<number>(lastDay).fill(0);
       for (const e of expenses) {
-        if (e.category === 'SAVINGS' || e.category === 'EXTRA') continue;
+        if (e.category === 'SAVINGS') continue;
         const day = e.isFixed ? 1 : this.daysBetween(start, e.date) + 1;
         daily[Math.min(Math.max(day, 1), lastDay) - 1] += e.amount;
       }
@@ -380,7 +381,7 @@ export class DashboardService {
       : [];
 
     const fixedSpend = currentExpenses
-      .filter((e) => e.isFixed && e.category !== 'SAVINGS' && e.category !== 'EXTRA')
+      .filter((e) => e.isFixed && e.category !== 'SAVINGS')
       .reduce((sum, e) => sum + e.amount, 0);
 
     return {

@@ -134,6 +134,7 @@ export function CumulativeSpendChart({ data }: CumulativeSpendChartProps) {
           '. Non ci sono ancora mesi completi quest\'anno con cui confrontarlo.'
         )}
         {data.fixedSpend > 0 && ' Le spese fisse contano dal primo giorno, quindi la curva sale subito.'}
+        {' Contano Necessità, Svago ed Extra & Vacanze; i versamenti nei Risparmi non sono uscite e restano fuori.'}
       </p>
     </div>
   );

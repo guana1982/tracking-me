@@ -41,7 +41,10 @@ describe('getCumulativeSpend', () => {
     expect(result.daysElapsed).toBe(29);
     expect(result.current[0]).toBe(40);
     expect(result.current[1]).toBe(50);
-    expect(result.current[28]).toBe(50);
+    // EXTRA counts as an outflow (Apr 2 = day 6), SAVINGS does not
+    expect(result.current[4]).toBe(50);
+    expect(result.current[5]).toBe(55);
+    expect(result.current[28]).toBe(55);
     expect(result.fixedSpend).toBe(40);
     // March has no spend and December 2024 is another year: only Jan and Feb are averaged
     expect(result.comparisonPeriodKeys).toEqual(['2025-01', '2025-02']);
