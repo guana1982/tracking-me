@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO } from '@budget/shared';
+import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO, CumulativeSpendDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
@@ -310,6 +310,88 @@ export class DashboardService {
         : null,
       bestSpendAtSameProgress,
       hasComparison: best !== null,
+    };
+  }
+
+  /**
+   * Cumulative NEEDS+WANTS spend day by day across the pay-cycle, compared with
+   * the average curve of the completed months of the same year (January up to
+   * the month before the selected one). Day 1 is the first day of the cycle.
+   * Fixed expenses are counted on day 1 (like the run-rate projection, which
+   * treats them as already committed); variable expenses land on the day of
+   * their date, clamped into the cycle. SAVINGS and EXTRA are excluded.
+   */
+  async getCumulativeSpend(currentPeriodKey: string, userId: string): Promise<CumulativeSpendDTO> {
+    const periods = await prisma.monthPeriod.findMany({
+      where: { userId },
+      include: { expenses: true, budgetRule: true },
+      orderBy: [{ year: 'asc' }, { month: 'asc' }],
+    });
+    const months = periods.map((period) => ({ period }));
+
+    const cycleOf = (year: number, month: number, cutoffDay: number) => {
+      const start = this.computeCycleStart(year, month, this.findPrevPeriodCutoff(months, year, month));
+      const end = this.computeCycleEnd(year, month, cutoffDay);
+      return { start, length: this.daysBetween(start, end) + 1 };
+    };
+
+    const cumulative = (
+      expenses: { category: string; amount: number; isFixed: boolean; date: Date }[],
+      start: Date,
+      lastDay: number
+    ) => {
+      const daily = new Array<number>(lastDay).fill(0);
+      for (const e of expenses) {
+        if (e.category === 'SAVINGS' || e.category === 'EXTRA') continue;
+        const day = e.isFixed ? 1 : this.daysBetween(start, e.date) + 1;
+        daily[Math.min(Math.max(day, 1), lastDay) - 1] += e.amount;
+      }
+      let running = 0;
+      return daily.map((amount) => roundCurrency((running += amount)));
+    };
+
+    const [currYear, currMonth] = currentPeriodKey.split('-').map(Number);
+    const current = periods.find((p) => p.periodKey === currentPeriodKey);
+    const cutoffDay = current?.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+    const { start, length } = cycleOf(currYear, currMonth, cutoffDay);
+
+    const now = new Date();
+    const isLiveCurrent = currentPeriodKey === this.getPeriodKeyForDate(now, cutoffDay);
+    const daysElapsed = isLiveCurrent
+      ? Math.min(Math.max(1, this.daysBetween(start, now) + 1), length)
+      : length;
+
+    const currentExpenses = current?.expenses ?? [];
+    const comparison = periods
+      .filter((p) => p.year === currYear && p.month < currMonth)
+      .map((p) => {
+        const cycle = cycleOf(p.year, p.month, p.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay);
+        return { periodKey: p.periodKey, curve: cumulative(p.expenses, cycle.start, cycle.length) };
+      })
+      .filter((m) => m.curve[m.curve.length - 1] > 0);
+
+    // Cycles differ in length by a few days: a shorter month keeps its final total
+    const average = comparison.length > 0
+      ? Array.from({ length }, (_, i) =>
+          roundCurrency(
+            comparison.reduce((sum, m) => sum + m.curve[Math.min(i, m.curve.length - 1)], 0) / comparison.length
+          )
+        )
+      : [];
+
+    const fixedSpend = currentExpenses
+      .filter((e) => e.isFixed && e.category !== 'SAVINGS' && e.category !== 'EXTRA')
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    return {
+      periodKey: currentPeriodKey,
+      cycleStart: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
+      cycleLengthDays: length,
+      daysElapsed,
+      current: cumulative(currentExpenses, start, daysElapsed),
+      average,
+      comparisonPeriodKeys: comparison.map((m) => m.periodKey),
+      fixedSpend: roundCurrency(fixedSpend),
     };
   }
 

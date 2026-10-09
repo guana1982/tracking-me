@@ -501,6 +501,18 @@ export interface SavingsPaceDTO {
   hasComparison: boolean;            // false when no usable historical month is available
 }
 
+// Cumulative spend curve for a pay-cycle vs. the average of completed months of the same year
+export interface CumulativeSpendDTO {
+  periodKey: string;
+  cycleStart: string;                // YYYY-MM-DD, first day of the pay-cycle (day 1 on the chart)
+  cycleLengthDays: number;           // days in the current pay-cycle
+  daysElapsed: number;               // 1-based; equals cycleLengthDays for past cycles
+  current: number[];                 // cumulative NEEDS+WANTS per cycle day, length = daysElapsed
+  average: number[];                 // mean cumulative NEEDS+WANTS of comparison months, length = cycleLengthDays (empty if none)
+  comparisonPeriodKeys: string[];    // completed months (from January of the same year) averaged into `average`
+  fixedSpend: number;                // fixed expenses, counted on day 1
+}
+
 // Month list item for navigation
 export interface MonthListItemDTO {
   periodKey: string;

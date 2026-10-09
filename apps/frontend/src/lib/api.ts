@@ -3,6 +3,7 @@ import type {
   DashboardSummaryDTO,
   SavingsHistoryDTO,
   SavingsPaceDTO,
+  CumulativeSpendDTO,
   MonthListItemDTO,
   MonthPeriodDTO,
   BudgetRuleDTO,
@@ -146,6 +147,9 @@ export const dashboardApi = {
 
   getSavingsPace: (periodKey: string) =>
     fetchApi<SavingsPaceDTO>(`/dashboard/savings-pace/${periodKey}`),
+
+  getCumulativeSpend: (periodKey: string) =>
+    fetchApi<CumulativeSpendDTO>(`/dashboard/cumulative-spend/${periodKey}`),
 
   getKpis: (periodKey: string) =>
     fetchApi<KpiPanelDTO>(`/dashboard/kpis/${periodKey}`),

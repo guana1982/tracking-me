@@ -65,6 +65,27 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   });
 
+  // Get cumulative spend curve vs. average of completed months of the same year
+  fastify.get<{ Params: { periodKey: string } }>('/cumulative-spend/:periodKey', {
+    schema: {
+      tags: ['Dashboard'],
+      summary: 'Get cumulative daily spend for a pay-cycle vs. the year-to-date monthly average',
+      params: {
+        type: 'object',
+        properties: {
+          periodKey: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
+        },
+        required: ['periodKey'],
+      },
+    },
+    handler: async (request) => {
+      const { periodKey } = request.params;
+      periodKeySchema.parse(periodKey);
+      const data = await dashboardService.getCumulativeSpend(periodKey, request.authUser!.id);
+      return { success: true, data };
+    },
+  });
+
   // Get CFO-style KPI panel for a period
   fastify.get<{ Params: { periodKey: string } }>('/kpis/:periodKey', {
     schema: {
