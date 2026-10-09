@@ -507,8 +507,8 @@ export interface CumulativeSpendDTO {
   cycleStart: string;                // YYYY-MM-DD, first day of the pay-cycle (day 1 on the chart)
   cycleLengthDays: number;           // days in the current pay-cycle
   daysElapsed: number;               // 1-based; equals cycleLengthDays for past cycles
-  current: number[];                 // cumulative NEEDS+WANTS per cycle day, length = daysElapsed
-  average: number[];                 // mean cumulative NEEDS+WANTS of comparison months, length = cycleLengthDays (empty if none)
+  current: number[];                 // cumulative NEEDS+WANTS+EXTRA per cycle day (SAVINGS excluded), length = daysElapsed
+  average: number[];                 // mean cumulative NEEDS+WANTS+EXTRA of comparison months, length = cycleLengthDays (empty if none)
   comparisonPeriodKeys: string[];    // completed months (from January of the same year) averaged into `average`
   fixedSpend: number;                // fixed expenses, counted on day 1
 }
