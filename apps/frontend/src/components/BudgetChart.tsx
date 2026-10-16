@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts';
-import { cn, getCategoryColor, getCategoryLabel, formatCurrency, getCurrentPeriodKey } from '../lib/utils';
+import { cn, getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
@@ -89,15 +89,11 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
       periodKey: m.periodKey,
     })) ?? [];
 
-    // Average over complete months only (in-progress and future periods excluded),
-    // same convention as the Cash Flow page's "Risparmio medio / mese"
-    const liveCurrentKey = getCurrentPeriodKey();
-    const completedMonths = savingsHistory?.months.filter(
-      (m: { periodKey: string }) => m.periodKey < liveCurrentKey
-    ) ?? [];
-    const avgMonthlySavings = completedMonths.length > 0
-      ? completedMonths.reduce((sum: number, m: { savings: number }) => sum + m.savings, 0) / completedMonths.length
-      : null;
+    // Computed by the backend over completed cycles, using the user's own payday
+    const avgMonthlySavings = savingsHistory?.averageMonthlySavings ?? null;
+    const completedMonthsCount = savingsHistory?.months.filter(
+      (m: { periodKey: string }) => m.periodKey < savingsHistory.livePeriodKey
+    ).length ?? 0;
 
     return (
       <div className={cn(
@@ -215,7 +211,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
             {/* Savings header with labels */}
             <div className="flex justify-between items-start mb-3">
               <div>
-                <p className="text-xs text-slate-500">Risparmi mese</p>
+                <p className="text-xs text-slate-500">Accantonato mese</p>
                 <p className="text-lg font-bold text-sky-600">
                   {formatCurrency(savingsHistory.currentMonthSavings)}
                 </p>
@@ -227,7 +223,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                 </p>
               </div>
               {avgMonthlySavings !== null && (
-                <div className="text-center" title={`Media dei risparmi netti sui ${completedMonths.length} mesi completi (mese in corso escluso)`}>
+                <div className="text-center" title={`Media dell'accantonato netto sui ${completedMonthsCount} mesi completi (mese in corso escluso)`}>
                   <p className="text-xs text-slate-500">Media / mese</p>
                   <p className={`text-lg font-bold ${avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(avgMonthlySavings)}
@@ -235,7 +231,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                 </div>
               )}
               <div className="text-right">
-                <p className="text-xs text-slate-500">Totale risparmi</p>
+                <p className="text-xs text-slate-500">Accantonato netto</p>
                 <p className="text-lg font-bold text-sky-700">
                   {formatCurrency(savingsHistory.cumulativeTotal)}
                 </p>
@@ -245,7 +241,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
             {/* Monthly savings and total-expenses histograms */}
             <div className="flex flex-1 flex-col justify-center gap-4 min-h-0">
               <div>
-                <p className="mb-1 text-[11px] font-medium text-slate-500">Risparmio netto mensile</p>
+                <p className="mb-1 text-[11px] font-medium text-slate-500">Accantonato netto mensile</p>
                 <div className="h-28 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                 <BarChart

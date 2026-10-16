@@ -467,6 +467,10 @@ export interface SavingsHistoryDTO {
   currentMonthSavings: number;
   previousMonthsTotal: number;
   cumulativeTotal: number;
+  // Pay-cycle in progress today, using the user's own payday (cutoffDay)
+  livePeriodKey: string;
+  // Mean savings over completed periods (before livePeriodKey); null if none
+  averageMonthlySavings: number | null;
 }
 
 // Savings pace — answers "at the current run-rate, will I stay within budget by payday?"

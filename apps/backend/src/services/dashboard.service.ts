@@ -128,9 +128,19 @@ export class DashboardService {
       include: {
         expenses: true,
         reallocations: true,
+        budgetRule: true,
       },
       orderBy: [{ year: 'asc' }, { month: 'asc' }],
     });
+
+    // Today's payday is set by the rule of the calendar month we're in, so a
+    // custom cutoffDay moves the boundary between in-progress and completed cycles
+    const now = new Date();
+    const todayMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nominalCutoffDay =
+      periods.find((p) => p.periodKey === todayMonthKey)?.budgetRule?.cutoffDay ??
+      DEFAULT_BUDGET_RULE.cutoffDay;
+    const livePeriodKey = this.getPeriodKeyForDate(now, nominalCutoffDay);
 
     const months = periods.map((period) => {
       const savingsExpenses = period.expenses
@@ -171,11 +181,20 @@ export class DashboardService {
       months.reduce((sum, m) => sum + m.savings, 0)
     );
 
+    // Average over complete cycles only (in-progress and future periods excluded),
+    // same convention as the Cash Flow page's "Risparmio medio / mese"
+    const completedMonths = months.filter((m) => m.periodKey < livePeriodKey);
+    const averageMonthlySavings = completedMonths.length > 0
+      ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.savings, 0) / completedMonths.length)
+      : null;
+
     return {
       months,
       currentMonthSavings,
       previousMonthsTotal,
       cumulativeTotal,
+      livePeriodKey,
+      averageMonthlySavings,
     };
   }
 
