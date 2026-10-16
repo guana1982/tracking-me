@@ -1,14 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
-} from 'recharts';
-import { RealBalanceChart } from './RealBalanceChart';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { cn, getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
 import { Pencil, Lock } from 'lucide-react';
+import { SavingsHistoryCard } from './SavingsHistoryCard';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -25,7 +22,7 @@ interface BudgetChartProps {
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
 export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
-  const { periodKey, setPeriodKey } = usePeriodStore();
+  const { periodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
 
   // Parse periodKey to get month label
@@ -66,36 +63,9 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
     return null;
   };
 
-  const BarChartTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200">
-          <p className="text-xs font-medium text-slate-900">{label}</p>
-          <p className={`text-xs ${payload[0].value < 0 ? 'text-red-600' : 'text-sky-600'}`}>
-            {formatCurrency(payload[0].value)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => ({
-      name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
-      risparmio: m.savings,
-      speseTotali: m.totalExpenses,
-      periodKey: m.periodKey,
-    })) ?? [];
-
-    // Computed by the backend over completed cycles, using the user's own payday
-    const avgMonthlySavings = savingsHistory?.averageMonthlySavings ?? null;
-    const completedMonthsCount = savingsHistory?.months.filter(
-      (m: { periodKey: string }) => m.periodKey < savingsHistory.livePeriodKey
-    ).length ?? 0;
-
     return (
       <div className={cn(
         'grid grid-cols-1 gap-4',
@@ -207,131 +177,8 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
         {visiblePanel === 'all' && middleSlot}
 
         {/* Card 3: Savings overview */}
-        {(visiblePanel === 'all' || visiblePanel === 'history') && savingsHistory && barData.length > 0 && (
-          <div className="card py-4 px-5 flex flex-col">
-            {/* Savings header with labels */}
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-xs text-slate-500">Accantonato mese</p>
-                <p className="text-lg font-bold text-sky-600">
-                  {formatCurrency(savingsHistory.currentMonthSavings)}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Mesi precedenti</p>
-                <p className="text-lg font-bold text-slate-700">
-                  {formatCurrency(savingsHistory.previousMonthsTotal)}
-                </p>
-              </div>
-              {avgMonthlySavings !== null && (
-                <div className="text-center" title={`Media dell'accantonato netto sui ${completedMonthsCount} mesi completi (mese in corso escluso)`}>
-                  <p className="text-xs text-slate-500">Media / mese</p>
-                  <p className={`text-lg font-bold ${avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {formatCurrency(avgMonthlySavings)}
-                  </p>
-                </div>
-              )}
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Accantonato netto</p>
-                <p className="text-lg font-bold text-sky-700">
-                  {formatCurrency(savingsHistory.cumulativeTotal)}
-                </p>
-              </div>
-            </div>
-
-            {/* Monthly savings and total-expenses histograms */}
-            <div className="flex flex-1 flex-col justify-center gap-4 min-h-0">
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-slate-500">Accantonato netto mensile</p>
-                <div className="h-28 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={barData}
-                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                  onClick={(data) => {
-                    if (data?.activePayload?.[0]?.payload?.periodKey) {
-                      setPeriodKey(data.activePayload[0].payload.periodKey);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${v}`}
-                  />
-                  <Tooltip content={<BarChartTooltip />} />
-                  {avgMonthlySavings !== null && (
-                    <ReferenceLine
-                      y={avgMonthlySavings}
-                      stroke="#059669"
-                      strokeDasharray="4 4"
-                      label={{ value: 'media', position: 'insideTopRight', fontSize: 9, fill: '#059669' }}
-                    />
-                  )}
-                  <Bar
-                    dataKey="risparmio"
-                    radius={[3, 3, 0, 0]}
-                    cursor="pointer"
-                  >
-                    {barData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          entry.risparmio < 0
-                            ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
-                            : entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'
-                        }
-                        opacity={entry.periodKey === periodKey ? 1 : 0.7}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-                </div>
-              </div>
-
-              <RealBalanceChart history={savingsHistory} periodKey={periodKey} onSelectPeriod={setPeriodKey} />
-
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-slate-500">Spese totali mensili</p>
-                <div className="h-28 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={barData}
-                      margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                      onClick={(data) => {
-                        if (data?.activePayload?.[0]?.payload?.periodKey) {
-                          setPeriodKey(data.activePayload[0].payload.periodKey);
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
-                      <Tooltip content={<BarChartTooltip />} />
-                      <Bar dataKey="speseTotali" radius={[3, 3, 0, 0]} cursor="pointer">
-                        {barData.map((entry, index) => (
-                          <Cell
-                            key={`total-cell-${index}`}
-                            fill={entry.periodKey === periodKey ? '#4f46e5' : '#a5b4fc'}
-                            opacity={entry.periodKey === periodKey ? 1 : 0.75}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
+        {(visiblePanel === 'all' || visiblePanel === 'history') && savingsHistory && (
+          <SavingsHistoryCard history={savingsHistory} />
         )}
 
         <IncomeModal
