@@ -460,6 +460,10 @@ export interface MonthlySavingsDTO {
   year: number;
   savings: number; // actual savings amount for that month
   totalExpenses: number; // all expenses recorded in the month, without classification
+  income: number; // real income of the month (surplus carried forward excluded)
+  // Income minus real outflows (NEEDS + WANTS + EXTRA, carry-over lines excluded).
+  // SAVINGS transfers are not outflows: the money is still owned
+  realBalance: number;
 }
 
 export interface SavingsHistoryDTO {
@@ -467,6 +471,12 @@ export interface SavingsHistoryDTO {
   currentMonthSavings: number;
   previousMonthsTotal: number;
   cumulativeTotal: number;
+  // Pay-cycle in progress today, using the user's own payday (cutoffDay)
+  livePeriodKey: string;
+  // Mean savings over completed periods (before livePeriodKey); null if none
+  averageMonthlySavings: number | null;
+  // Mean realBalance over the same completed periods; null if none
+  averageRealBalance: number | null;
 }
 
 // Savings pace — answers "at the current run-rate, will I stay within budget by payday?"

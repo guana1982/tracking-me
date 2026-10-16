@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO, CumulativeSpendDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
-import { adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
+import { CARRYOVER_NOTE_PREFIX, adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
 import { monthPeriodService } from './month-period.service.js';
 import { budgetRuleService } from './budget-rule.service.js';
 import { expenseService } from './expense.service.js';
@@ -128,9 +128,20 @@ export class DashboardService {
       include: {
         expenses: true,
         reallocations: true,
+        incomes: true,
+        budgetRule: true,
       },
       orderBy: [{ year: 'asc' }, { month: 'asc' }],
     });
+
+    // Today's payday is set by the rule of the calendar month we're in, so a
+    // custom cutoffDay moves the boundary between in-progress and completed cycles
+    const now = new Date();
+    const todayMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nominalCutoffDay =
+      periods.find((p) => p.periodKey === todayMonthKey)?.budgetRule?.cutoffDay ??
+      DEFAULT_BUDGET_RULE.cutoffDay;
+    const livePeriodKey = this.getPeriodKeyForDate(now, nominalCutoffDay);
 
     const months = periods.map((period) => {
       const savingsExpenses = period.expenses
@@ -149,12 +160,24 @@ export class DashboardService {
 
       const totalExpenses = period.expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+      // Real balance: what the month actually added to (or took from) wealth.
+      // Surplus carried forward is last month's money and carry-over lines repeat
+      // last month's overspend, so both are bookkeeping and stay out
+      const income = period.incomes
+        .filter((i) => !i.sourcePeriodKey)
+        .reduce((sum, i) => sum + i.amount, 0);
+      const realOutflows = period.expenses
+        .filter((e) => e.category !== 'SAVINGS' && !e.notes?.startsWith(CARRYOVER_NOTE_PREFIX))
+        .reduce((sum, e) => sum + e.amount, 0);
+
       return {
         periodKey: period.periodKey,
         month: period.month,
         year: period.year,
         savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
         totalExpenses: roundCurrency(totalExpenses),
+        income: roundCurrency(income),
+        realBalance: roundCurrency(income - realOutflows),
       };
     });
 
@@ -171,11 +194,24 @@ export class DashboardService {
       months.reduce((sum, m) => sum + m.savings, 0)
     );
 
+    // Average over complete cycles only (in-progress and future periods excluded),
+    // same convention as the Cash Flow page's "Risparmio medio / mese"
+    const completedMonths = months.filter((m) => m.periodKey < livePeriodKey);
+    const averageMonthlySavings = completedMonths.length > 0
+      ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.savings, 0) / completedMonths.length)
+      : null;
+    const averageRealBalance = completedMonths.length > 0
+      ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.realBalance, 0) / completedMonths.length)
+      : null;
+
     return {
       months,
       currentMonthSavings,
       previousMonthsTotal,
       cumulativeTotal,
+      livePeriodKey,
+      averageMonthlySavings,
+      averageRealBalance,
     };
   }
 

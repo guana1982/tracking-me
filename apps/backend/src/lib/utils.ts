@@ -134,3 +134,7 @@ export function adjustCutoffDayForWeekend(year: number, month: number, nominalDa
   if (dow === 6) return Math.max(1, clamped - 1); // Saturday → Friday
   return clamped;
 }
+
+// Notes prefix of carry-over expenses ("[Riporto YYYY-MM] ..."): they repeat a
+// previous month's overspend in the next budget, they are not new outflows
+export const CARRYOVER_NOTE_PREFIX = '[Riporto ';
