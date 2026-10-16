@@ -8,25 +8,30 @@ interface PeriodState {
   // new pay-cycle has started since the last visit and drop the stale selection
   lastKnownCurrent: string;
   setPeriodKey: (key: string) => void;
+  // Called with the live period computed by the backend from the user's payday;
+  // the local default-payday guess is only a placeholder until then
+  syncLivePeriod: (live: string) => void;
 }
 
 export const usePeriodStore = create<PeriodState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       periodKey: getCurrentPeriodKey(),
       lastKnownCurrent: getCurrentPeriodKey(),
-      setPeriodKey: (key: string) =>
-        set({ periodKey: key, lastKnownCurrent: getCurrentPeriodKey() }),
+      setPeriodKey: (key: string) => set({ periodKey: key }),
+      syncLivePeriod: (live: string) => {
+        if (get().lastKnownCurrent !== live) {
+          // New cycle since last visit (or first real answer): open on current period
+          set({ periodKey: live, lastKnownCurrent: live });
+        }
+      },
     }),
     {
       name: 'budget-period',
+      partialize: (state) => ({ periodKey: state.periodKey, lastKnownCurrent: state.lastKnownCurrent }),
       merge: (persisted, current) => {
         const saved = persisted as Partial<PeriodState> | undefined;
-        const live = getCurrentPeriodKey();
-        if (!saved?.periodKey || saved.lastKnownCurrent !== live) {
-          // New cycle since last visit (or nothing saved): open on current period
-          return { ...current, periodKey: live, lastKnownCurrent: live };
-        }
+        if (!saved?.periodKey || !saved.lastKnownCurrent) return current;
         return { ...current, ...saved };
       },
     }

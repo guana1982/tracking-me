@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO, CumulativeSpendDTO } from '@budget/shared';
+import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO, CumulativeSpendDTO, LivePeriodDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { CARRYOVER_NOTE_PREFIX, adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
@@ -119,6 +119,21 @@ export class DashboardService {
   }
 
   /**
+   * Pay-cycle in progress today for a user. Today's payday is set by the rule of
+   * the calendar month we're in, so a custom cutoffDay moves the boundary.
+   */
+  async getLivePeriod(userId: string): Promise<LivePeriodDTO> {
+    const now = new Date();
+    const todayMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const period = await prisma.monthPeriod.findFirst({
+      where: { userId, periodKey: todayMonthKey },
+      include: { budgetRule: true },
+    });
+    const cutoffDay = period?.budgetRule?.cutoffDay ?? DEFAULT_BUDGET_RULE.cutoffDay;
+    return { livePeriodKey: this.getPeriodKeyForDate(now, cutoffDay), cutoffDay };
+  }
+
+  /**
    * Get savings history across all months for a user
    */
   async getSavingsHistory(currentPeriodKey: string, userId: string): Promise<SavingsHistoryDTO> {
@@ -148,7 +163,7 @@ export class DashboardService {
         .filter((e) => e.category === 'SAVINGS')
         .reduce((sum, e) => sum + e.amount, 0);
 
-      const reallocatedToSavings = period.reallocations
+      const reallocatedRecorded = period.reallocations
         .filter((r) => r.toCategory === 'SAVINGS')
         .reduce((sum, r) => sum + r.amount, 0);
 
@@ -172,6 +187,15 @@ export class DashboardService {
         (e) => e.category !== 'SAVINGS' && !e.notes?.startsWith(CARRYOVER_NOTE_PREFIX)
       );
       const realOutflows = realOutflowLines.reduce((sum, e) => sum + e.amount, 0);
+
+      // A reallocation is a budget remainder (budget - spent), so it can exceed
+      // what really came in. Cap it, read-only, at what is actually left after
+      // ordinary spend and savings transfers
+      const ordinarySpend = period.expenses
+        .filter((e) => e.category !== 'SAVINGS' && e.category !== 'EXTRA')
+        .reduce((sum, e) => sum + e.amount, 0);
+      const realLeftover = income - ordinarySpend - savingsExpenses;
+      const reallocatedToSavings = Math.max(0, Math.min(reallocatedRecorded, realLeftover));
 
       // In-progress cycle: extrapolate variable outflows to payday at today's
       // pace (same model as getSavingsPace); fixed ones are already all booked
@@ -204,6 +228,10 @@ export class DashboardService {
         month: period.month,
         year: period.year,
         savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
+        savingsTransfers: roundCurrency(savingsExpenses),
+        reallocatedToSavings: roundCurrency(reallocatedToSavings),
+        reallocatedRecorded: roundCurrency(reallocatedRecorded),
+        extraSpent: roundCurrency(extraSpent),
         totalExpenses: roundCurrency(totalExpenses),
         income: roundCurrency(income),
         realBalance: roundCurrency(income - realOutflows),

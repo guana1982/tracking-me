@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from 'fastify';
 import { dashboardService } from '../services/dashboard.service.js';
 import { kpiService } from '../services/kpi.service.js';
 import { periodKeySchema } from '@budget/shared';
-import { getCurrentPeriodKey } from '../lib/utils.js';
 import { getMonthlyExpenseTotalsWithoutSavings } from '../services/monthly-expense-totals.service.js';
 
 export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
@@ -13,9 +12,21 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       summary: 'Get dashboard summary for current month',
     },
     handler: async (request) => {
-      const periodKey = getCurrentPeriodKey();
+      const { livePeriodKey: periodKey } = await dashboardService.getLivePeriod(request.authUser!.id);
       const summary = await dashboardService.getSummary(periodKey, request.authUser!.id);
       return { success: true, data: summary };
+    },
+  });
+
+  // Pay-cycle in progress today, using the user's payday from the budget rules
+  fastify.get('/live-period', {
+    schema: {
+      tags: ['Dashboard'],
+      summary: "Get the current pay-cycle period key using the user's payday",
+    },
+    handler: async (request) => {
+      const live = await dashboardService.getLivePeriod(request.authUser!.id);
+      return { success: true, data: live };
     },
   });
 
