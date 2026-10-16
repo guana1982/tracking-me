@@ -8,7 +8,8 @@ import { cn, getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/u
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { IncomeModal } from './IncomeModal';
-import { Pencil, Lock } from 'lucide-react';
+import { Pencil, Lock, Maximize2 } from 'lucide-react';
+import { SavingsExpandedModal } from './SavingsExpandedModal';
 
 interface BudgetChartProps {
   categories: CategorySummary[];
@@ -27,6 +28,7 @@ const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'S
 export function CompactBudgetChart({ categories, totalIncome, extraSpent = 0, compact = false, showStats = false, savingsHistory, isClosed = false, middleSlot, visiblePanel = 'all' }: BudgetChartProps) {
   const { periodKey, setPeriodKey } = usePeriodStore();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [isSavingsExpanded, setIsSavingsExpanded] = useState(false);
 
   // Parse periodKey to get month label
   const [year, month] = periodKey.split('-');
@@ -95,6 +97,145 @@ export function CompactBudgetChart({ categories, totalIncome, extraSpent = 0, co
     const completedMonthsCount = savingsHistory?.months.filter(
       (m: { periodKey: string }) => m.periodKey < savingsHistory.livePeriodKey
     ).length ?? 0;
+
+    // Savings card: shown in the rail and, enlarged, inside the modal.
+    const renderSavingsCard = (history: SavingsHistoryDTO, expanded: boolean) => (
+      <div className={cn('flex flex-col', expanded ? 'p-6' : 'card py-4 px-5')}>
+        {/* Savings header with labels */}
+        <div className={cn('flex justify-between items-start', expanded ? 'mb-6 gap-6' : 'mb-3')}>
+          <div>
+            <p className={cn('text-slate-500', expanded ? 'text-sm' : 'text-xs')}>Accantonato mese</p>
+            <p className={cn(expanded ? 'text-3xl' : 'text-lg', 'font-bold', 'text-sky-600')}>
+              {formatCurrency(history.currentMonthSavings)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className={cn('text-slate-500', expanded ? 'text-sm' : 'text-xs')}>Mesi precedenti</p>
+            <p className={cn(expanded ? 'text-3xl' : 'text-lg', 'font-bold', 'text-slate-700')}>
+              {formatCurrency(history.previousMonthsTotal)}
+            </p>
+          </div>
+          {avgMonthlySavings !== null && (
+            <div className="text-center" title={`Media dell'accantonato netto sui ${completedMonthsCount} mesi completi (mese in corso escluso)`}>
+              <p className={cn('text-slate-500', expanded ? 'text-sm' : 'text-xs')}>Media / mese</p>
+              <p className={cn(expanded ? 'text-3xl' : 'text-lg', 'font-bold', avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+                {formatCurrency(avgMonthlySavings)}
+              </p>
+            </div>
+          )}
+          <div className="text-right">
+            <p className={cn('text-slate-500', expanded ? 'text-sm' : 'text-xs')}>Accantonato netto</p>
+            <p className={cn(expanded ? 'text-3xl' : 'text-lg', 'font-bold', 'text-sky-700')}>
+              {formatCurrency(history.cumulativeTotal)}
+            </p>
+          </div>
+          {!expanded && (
+            <button
+              type="button"
+              onClick={() => setIsSavingsExpanded(true)}
+              className="-mr-2 -mt-1 flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              title="Ingrandisci"
+              aria-label="Ingrandisci risparmi"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Monthly savings and total-expenses histograms */}
+        <div className={cn('flex flex-1 flex-col justify-center min-h-0', expanded ? 'gap-8' : 'gap-4')}>
+          <div>
+            <p className={cn('mb-1 font-medium text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}>Accantonato netto mensile</p>
+            <div className={cn('w-full', expanded ? 'h-56' : 'h-28')}>
+            <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={barData}
+              margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+              onClick={(data) => {
+                if (data?.activePayload?.[0]?.payload?.periodKey) {
+                  setPeriodKey(data.activePayload[0].payload.periodKey);
+                }
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${v}`}
+              />
+              <Tooltip content={<BarChartTooltip />} />
+              {avgMonthlySavings !== null && (
+                <ReferenceLine
+                  y={avgMonthlySavings}
+                  stroke="#059669"
+                  strokeDasharray="4 4"
+                  label={{ value: 'media', position: 'insideTopRight', fontSize: expanded ? 11 : 9, fill: '#059669' }}
+                />
+              )}
+              <Bar
+                dataKey="risparmio"
+                radius={[3, 3, 0, 0]}
+                cursor="pointer"
+              >
+                {barData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={
+                      entry.risparmio < 0
+                        ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
+                        : entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'
+                    }
+                    opacity={entry.periodKey === periodKey ? 1 : 0.7}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+            </div>
+          </div>
+
+          <RealBalanceChart history={history} periodKey={periodKey} onSelectPeriod={setPeriodKey} expanded={expanded} />
+
+          <div>
+            <p className={cn('mb-1 font-medium text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}>Spese totali mensili</p>
+            <div className={cn('w-full', expanded ? 'h-56' : 'h-28')}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={barData}
+                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  onClick={(data) => {
+                    if (data?.activePayload?.[0]?.payload?.periodKey) {
+                      setPeriodKey(data.activePayload[0].payload.periodKey);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
+                  <Tooltip content={<BarChartTooltip />} />
+                  <Bar dataKey="speseTotali" radius={[3, 3, 0, 0]} cursor="pointer">
+                    {barData.map((entry, index) => (
+                      <Cell
+                        key={`total-cell-${index}`}
+                        fill={entry.periodKey === periodKey ? '#4f46e5' : '#a5b4fc'}
+                        opacity={entry.periodKey === periodKey ? 1 : 0.75}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
 
     return (
       <div className={cn(
@@ -214,130 +355,14 @@ export function CompactBudgetChart({ categories, totalIncome, extraSpent = 0, co
 
         {/* Card 3: Savings overview */}
         {(visiblePanel === 'all' || visiblePanel === 'history') && savingsHistory && barData.length > 0 && (
-          <div className="card py-4 px-5 flex flex-col">
-            {/* Savings header with labels */}
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-xs text-slate-500">Accantonato mese</p>
-                <p className="text-lg font-bold text-sky-600">
-                  {formatCurrency(savingsHistory.currentMonthSavings)}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Mesi precedenti</p>
-                <p className="text-lg font-bold text-slate-700">
-                  {formatCurrency(savingsHistory.previousMonthsTotal)}
-                </p>
-              </div>
-              {avgMonthlySavings !== null && (
-                <div className="text-center" title={`Media dell'accantonato netto sui ${completedMonthsCount} mesi completi (mese in corso escluso)`}>
-                  <p className="text-xs text-slate-500">Media / mese</p>
-                  <p className={`text-lg font-bold ${avgMonthlySavings >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {formatCurrency(avgMonthlySavings)}
-                  </p>
-                </div>
-              )}
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Accantonato netto</p>
-                <p className="text-lg font-bold text-sky-700">
-                  {formatCurrency(savingsHistory.cumulativeTotal)}
-                </p>
-              </div>
-            </div>
-
-            {/* Monthly savings and total-expenses histograms */}
-            <div className="flex flex-1 flex-col justify-center gap-4 min-h-0">
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-slate-500">Accantonato netto mensile</p>
-                <div className="h-28 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={barData}
-                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                  onClick={(data) => {
-                    if (data?.activePayload?.[0]?.payload?.periodKey) {
-                      setPeriodKey(data.activePayload[0].payload.periodKey);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: '#64748b' }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${v}`}
-                  />
-                  <Tooltip content={<BarChartTooltip />} />
-                  {avgMonthlySavings !== null && (
-                    <ReferenceLine
-                      y={avgMonthlySavings}
-                      stroke="#059669"
-                      strokeDasharray="4 4"
-                      label={{ value: 'media', position: 'insideTopRight', fontSize: 9, fill: '#059669' }}
-                    />
-                  )}
-                  <Bar
-                    dataKey="risparmio"
-                    radius={[3, 3, 0, 0]}
-                    cursor="pointer"
-                  >
-                    {barData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          entry.risparmio < 0
-                            ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
-                            : entry.periodKey === periodKey ? '#0284c7' : '#bae6fd'
-                        }
-                        opacity={entry.periodKey === periodKey ? 1 : 0.7}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-                </div>
-              </div>
-
-              <RealBalanceChart history={savingsHistory} periodKey={periodKey} onSelectPeriod={setPeriodKey} />
-
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-slate-500">Spese totali mensili</p>
-                <div className="h-28 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={barData}
-                      margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                      onClick={(data) => {
-                        if (data?.activePayload?.[0]?.payload?.periodKey) {
-                          setPeriodKey(data.activePayload[0].payload.periodKey);
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
-                      <Tooltip content={<BarChartTooltip />} />
-                      <Bar dataKey="speseTotali" radius={[3, 3, 0, 0]} cursor="pointer">
-                        {barData.map((entry, index) => (
-                          <Cell
-                            key={`total-cell-${index}`}
-                            fill={entry.periodKey === periodKey ? '#4f46e5' : '#a5b4fc'}
-                            opacity={entry.periodKey === periodKey ? 1 : 0.75}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
+          <>
+            {renderSavingsCard(savingsHistory, false)}
+            {isSavingsExpanded && (
+              <SavingsExpandedModal onClose={() => setIsSavingsExpanded(false)}>
+                {renderSavingsCard(savingsHistory, true)}
+              </SavingsExpandedModal>
+            )}
+          </>
         )}
 
         <IncomeModal
