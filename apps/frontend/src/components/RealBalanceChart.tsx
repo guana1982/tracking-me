@@ -11,6 +11,8 @@ interface RealBalanceChartProps {
   history: SavingsHistoryDTO;
   periodKey: string;
   onSelectPeriod: (periodKey: string) => void;
+  /** Larger chart and labels, used by the expanded savings modal. */
+  expanded?: boolean;
 }
 
 interface RealBalanceRow {
@@ -27,7 +29,7 @@ interface RealBalanceRow {
  * out of average and cumulative; the toggle drops extraordinary income to show
  * the structural balance (what the salary alone leaves).
  */
-export function RealBalanceChart({ history, periodKey, onSelectPeriod }: RealBalanceChartProps) {
+export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded = false }: RealBalanceChartProps) {
   const [structural, setStructural] = useState(false);
   const { livePeriodKey } = history;
   const liveYear = livePeriodKey.slice(0, 4);
@@ -128,7 +130,7 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod }: RealBal
           </span>
         )}
       </div>
-      <div className="h-28 w-full">
+      <div className={cn('w-full', expanded ? 'h-56' : 'h-28')}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={rows}
@@ -146,8 +148,8 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod }: RealBal
               </pattern>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
+            <XAxis dataKey="name" tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: expanded ? 12 : 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
             <Tooltip content={renderTooltip} />
             <ReferenceLine y={0} stroke="#cbd5e1" />
             {average !== null && (
