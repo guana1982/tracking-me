@@ -160,6 +160,9 @@ model Income {
   // Set when this income is a surplus carried forward from that period's
   // positive reallocation (YYYY-MM of the source month). Null for real income.
   sourcePeriodKey String?
+  // One-off income (tredicesima, quattordicesima, tax refunds...): excluded from
+  // the structural real balance, which measures what the salary alone leaves
+  isExtraordinary Boolean @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

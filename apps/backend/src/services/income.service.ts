@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import type { IncomeDTO, CreateIncomeDTO, UpdateIncomeDTO } from '@budget/shared';
+import { EXTRAORDINARY_INCOME_PATTERN } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
 import { monthPeriodService } from './month-period.service.js';
 
@@ -61,6 +62,7 @@ export class IncomeService {
         label: data.label,
         amount: data.amount,
         sourcePeriodKey: data.sourcePeriodKey ?? null,
+        isExtraordinary: data.isExtraordinary ?? EXTRAORDINARY_INCOME_PATTERN.test(data.label),
       },
     });
 
@@ -87,6 +89,7 @@ export class IncomeService {
       data: {
         label: data.label ?? undefined,
         amount: data.amount ?? undefined,
+        isExtraordinary: data.isExtraordinary ?? undefined,
       },
     });
 
@@ -119,6 +122,7 @@ export class IncomeService {
     label: string;
     amount: number;
     sourcePeriodKey: string | null;
+    isExtraordinary: boolean;
     createdAt: Date;
   }): IncomeDTO {
     return {
@@ -127,6 +131,7 @@ export class IncomeService {
       label: income.label,
       amount: income.amount,
       sourcePeriodKey: income.sourcePeriodKey,
+      isExtraordinary: income.isExtraordinary,
       createdAt: income.createdAt.toISOString(),
     };
   }

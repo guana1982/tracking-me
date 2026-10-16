@@ -28,3 +28,7 @@ export const LOCALE = 'it-IT';
 
 // Date format
 export const MONTH_FORMAT = 'yyyy-MM';
+
+// Income labels that are one-off by nature: new incomes matching this are flagged
+// extraordinary by default (the user can still toggle the flag)
+export const EXTRAORDINARY_INCOME_PATTERN = /tredicesima|quattordicesima|rimborso|irpef|\b730\b/i;

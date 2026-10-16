@@ -103,12 +103,16 @@ export interface IncomeDTO {
   // When set (YYYY-MM), this income is a surplus carried forward from that
   // period's positive reallocation, not real earned income.
   sourcePeriodKey?: string | null;
+  // One-off income, left out of the structural real balance
+  isExtraordinary: boolean;
   createdAt: string;
 }
 
 export interface CreateIncomeDTO {
   label: string;
   amount: number;
+  // Defaults to a label match on EXTRAORDINARY_INCOME_PATTERN when omitted
+  isExtraordinary?: boolean;
   // Internal use only (surplus forward): not accepted from the public API.
   sourcePeriodKey?: string | null;
 }
@@ -116,6 +120,7 @@ export interface CreateIncomeDTO {
 export interface UpdateIncomeDTO {
   label?: string;
   amount?: number;
+  isExtraordinary?: boolean;
 }
 
 // Expense DTOs
@@ -464,6 +469,12 @@ export interface MonthlySavingsDTO {
   // Income minus real outflows (NEEDS + WANTS + EXTRA, carry-over lines excluded).
   // SAVINGS transfers are not outflows: the money is still owned
   realBalance: number;
+  // Part of income flagged extraordinary: realBalance - extraordinaryIncome is
+  // the structural balance (what the salary alone leaves)
+  extraordinaryIncome: number;
+  // Live (in-progress) cycle only: realBalance extrapolated to payday, fixed
+  // outflows as they are and variable ones at the current daily pace. Null otherwise
+  projectedRealBalance: number | null;
 }
 
 export interface SavingsHistoryDTO {
@@ -477,6 +488,8 @@ export interface SavingsHistoryDTO {
   averageMonthlySavings: number | null;
   // Mean realBalance over the same completed periods; null if none
   averageRealBalance: number | null;
+  // Mean structural balance (realBalance - extraordinaryIncome), same periods
+  averageStructuralBalance: number | null;
 }
 
 // Savings pace — answers "at the current run-rate, will I stay within budget by payday?"
