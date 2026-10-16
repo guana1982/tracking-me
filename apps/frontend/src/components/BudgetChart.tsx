@@ -3,6 +3,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts';
+import { RealBalanceChart } from './RealBalanceChart';
 import { cn, getCategoryColor, getCategoryLabel, formatCurrency } from '../lib/utils';
 import type { CategorySummary, SavingsHistoryDTO } from '@budget/shared';
 import { usePeriodStore } from '../hooks/usePeriod';
@@ -82,17 +83,15 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
   const remaining = totalIncome - totalSpent;
 
   if (compact && showStats) {
-    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; realBalance: number; periodKey: string }) => ({
+    const barData = savingsHistory?.months.map((m: { month: number; year: number; savings: number; totalExpenses: number; periodKey: string }) => ({
       name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
       risparmio: m.savings,
       speseTotali: m.totalExpenses,
-      saldoReale: m.realBalance,
       periodKey: m.periodKey,
     })) ?? [];
 
     // Computed by the backend over completed cycles, using the user's own payday
     const avgMonthlySavings = savingsHistory?.averageMonthlySavings ?? null;
-    const avgRealBalance = savingsHistory?.averageRealBalance ?? null;
     const completedMonthsCount = savingsHistory?.months.filter(
       (m: { periodKey: string }) => m.periodKey < savingsHistory.livePeriodKey
     ).length ?? 0;
@@ -299,63 +298,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                 </div>
               </div>
 
-              <div>
-                <div className="mb-1 flex items-baseline justify-between">
-                  <p
-                    className="text-[11px] font-medium text-slate-500"
-                    title="Entrate del mese meno tutte le uscite reali (Necessità, Svago, Extra). I bonifici in Risparmi non sono uscite; riporti e avanzi portati avanti sono esclusi."
-                  >
-                    Saldo reale mensile
-                  </p>
-                  {avgRealBalance !== null && (
-                    <p className="text-[11px] text-slate-500">
-                      media{' '}
-                      <span className={`font-semibold ${avgRealBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(avgRealBalance)}
-                      </span>
-                    </p>
-                  )}
-                </div>
-                <div className="h-28 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={barData}
-                      margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                      onClick={(data) => {
-                        if (data?.activePayload?.[0]?.payload?.periodKey) {
-                          setPeriodKey(data.activePayload[0].payload.periodKey);
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
-                      <Tooltip content={<BarChartTooltip />} />
-                      {avgRealBalance !== null && (
-                        <ReferenceLine
-                          y={avgRealBalance}
-                          stroke="#059669"
-                          strokeDasharray="4 4"
-                          label={{ value: 'media', position: 'insideTopRight', fontSize: 9, fill: '#059669' }}
-                        />
-                      )}
-                      <Bar dataKey="saldoReale" radius={[3, 3, 0, 0]} cursor="pointer">
-                        {barData.map((entry, index) => (
-                          <Cell
-                            key={`real-cell-${index}`}
-                            fill={
-                              entry.saldoReale < 0
-                                ? entry.periodKey === periodKey ? '#dc2626' : '#fca5a5'
-                                : entry.periodKey === periodKey ? '#059669' : '#a7f3d0'
-                            }
-                            opacity={entry.periodKey === periodKey ? 1 : 0.75}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              <RealBalanceChart history={savingsHistory} periodKey={periodKey} onSelectPeriod={setPeriodKey} />
 
               <div>
                 <p className="mb-1 text-[11px] font-medium text-slate-500">Spese totali mensili</p>

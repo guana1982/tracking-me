@@ -46,11 +46,13 @@ export const updateBudgetRuleSchema = z
 export const createIncomeSchema = z.object({
   label: z.string().min(1).max(100).trim(),
   amount: z.number().positive().multipleOf(0.01), // Allow cents
+  isExtraordinary: z.boolean().optional(),
 });
 
 export const updateIncomeSchema = z.object({
   label: z.string().min(1).max(100).trim().optional(),
   amount: z.number().positive().multipleOf(0.01).optional(),
+  isExtraordinary: z.boolean().optional(),
 });
 
 // Expense schemas

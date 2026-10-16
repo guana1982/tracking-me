@@ -82,3 +82,43 @@ describe('getSavingsHistory real balance', () => {
     expect(result.averageRealBalance).toBe(0);
   });
 });
+
+describe('getSavingsHistory structural balance and projection', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('separates extraordinary income and projects the in-progress cycle to payday', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00'));
+    periods.splice(0, periods.length,
+      {
+        ...period(2026, 9, 0),
+        incomes: [
+          { amount: 2000, sourcePeriodKey: null, isExtraordinary: false },
+          { amount: 1000, sourcePeriodKey: null, isExtraordinary: true },
+        ],
+        expenses: [{ category: 'NEEDS', amount: 2400 }],
+      },
+      {
+        ...period(2026, 10, 0),
+        incomes: [{ amount: 2000, sourcePeriodKey: null, isExtraordinary: false }],
+        expenses: [
+          { category: 'NEEDS', amount: 800, isFixed: true },
+          { category: 'WANTS', amount: 420, isFixed: false },
+        ],
+      },
+    );
+
+    const result = await dashboardService.getSavingsHistory('2026-10', 'user');
+
+    expect(result.months[0].realBalance).toBe(600);
+    expect(result.months[0].extraordinaryIncome).toBe(1000);
+    expect(result.months[0].projectedRealBalance).toBeNull();
+    expect(result.averageRealBalance).toBe(600);
+    expect(result.averageStructuralBalance).toBe(-400);
+    // Cycle Sep 26 → Oct 27 (32 days), 21 days elapsed: 2000 - 800 - 420 / 21 * 32
+    expect(result.months[1].realBalance).toBe(780);
+    expect(result.months[1].projectedRealBalance).toBe(560);
+  });
+});

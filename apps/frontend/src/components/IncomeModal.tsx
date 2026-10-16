@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Plus, Trash2, Loader2, Pencil, Landmark, ArrowRightCircle } from 'lucide-react';
+import { X, Plus, Trash2, Loader2, Pencil, Landmark, ArrowRightCircle, Sparkles } from 'lucide-react';
 import { cn, formatCurrency, formatPeriodKey } from '../lib/utils';
 import { useIncomes, useCreateIncome, useUpdateIncome, useDeleteIncome } from '../hooks/useQueries';
 import type { IncomeDTO } from '@budget/shared';
@@ -202,6 +202,23 @@ export function IncomeModal({ periodKey, isOpen, onClose }: IncomeModalProps) {
                         <ArrowRightCircle className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">Surplus riportato</span>
                       </span>
+                    )}
+                    {!income.sourcePeriodKey && !(editing?.id === income.id && editing.field === 'label') && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateIncome.mutate({ id: income.id, data: { isExtraordinary: !income.isExtraordinary } })
+                        }
+                        disabled={updateIncome.isPending}
+                        className={cn(
+                          'mt-0.5 flex items-center gap-1 text-[10px] font-medium transition-colors disabled:opacity-50',
+                          income.isExtraordinary ? 'text-amber-600 hover:text-amber-700' : 'text-slate-300 hover:text-slate-500'
+                        )}
+                        title="Le entrate straordinarie (tredicesima, rimborsi...) sono escluse dal saldo strutturale"
+                      >
+                        <Sparkles className="w-3 h-3 flex-shrink-0" />
+                        <span>{income.isExtraordinary ? 'Straordinaria' : 'Segna come straordinaria'}</span>
+                      </button>
                     )}
                   </div>
 

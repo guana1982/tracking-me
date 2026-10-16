@@ -163,12 +163,41 @@ export class DashboardService {
       // Real balance: what the month actually added to (or took from) wealth.
       // Surplus carried forward is last month's money and carry-over lines repeat
       // last month's overspend, so both are bookkeeping and stay out
-      const income = period.incomes
-        .filter((i) => !i.sourcePeriodKey)
+      const realIncomes = period.incomes.filter((i) => !i.sourcePeriodKey);
+      const income = realIncomes.reduce((sum, i) => sum + i.amount, 0);
+      const extraordinaryIncome = realIncomes
+        .filter((i) => i.isExtraordinary)
         .reduce((sum, i) => sum + i.amount, 0);
-      const realOutflows = period.expenses
-        .filter((e) => e.category !== 'SAVINGS' && !e.notes?.startsWith(CARRYOVER_NOTE_PREFIX))
-        .reduce((sum, e) => sum + e.amount, 0);
+      const realOutflowLines = period.expenses.filter(
+        (e) => e.category !== 'SAVINGS' && !e.notes?.startsWith(CARRYOVER_NOTE_PREFIX)
+      );
+      const realOutflows = realOutflowLines.reduce((sum, e) => sum + e.amount, 0);
+
+      // In-progress cycle: extrapolate variable outflows to payday at today's
+      // pace (same model as getSavingsPace); fixed ones are already all booked
+      let projectedRealBalance: number | null = null;
+      if (period.periodKey === livePeriodKey) {
+        const prevCutoff = this.findPrevPeriodCutoff(
+          periods.map((p) => ({ period: p })),
+          period.year,
+          period.month
+        );
+        const cycleStart = this.computeCycleStart(period.year, period.month, prevCutoff);
+        const cycleEnd = this.computeCycleEnd(
+          period.year,
+          period.month,
+          period.budgetRule?.cutoffDay ?? nominalCutoffDay
+        );
+        const cycleLengthDays = this.daysBetween(cycleStart, cycleEnd) + 1;
+        const elapsed = Math.min(Math.max(1, this.daysBetween(cycleStart, now) + 1), cycleLengthDays);
+        const fixedOutflows = realOutflowLines
+          .filter((e) => e.isFixed)
+          .reduce((sum, e) => sum + e.amount, 0);
+        const variableOutflows = realOutflows - fixedOutflows;
+        projectedRealBalance = roundCurrency(
+          income - fixedOutflows - (variableOutflows / elapsed) * cycleLengthDays
+        );
+      }
 
       return {
         periodKey: period.periodKey,
@@ -178,6 +207,8 @@ export class DashboardService {
         totalExpenses: roundCurrency(totalExpenses),
         income: roundCurrency(income),
         realBalance: roundCurrency(income - realOutflows),
+        extraordinaryIncome: roundCurrency(extraordinaryIncome),
+        projectedRealBalance,
       };
     });
 
@@ -203,6 +234,12 @@ export class DashboardService {
     const averageRealBalance = completedMonths.length > 0
       ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.realBalance, 0) / completedMonths.length)
       : null;
+    const averageStructuralBalance = completedMonths.length > 0
+      ? roundCurrency(
+          completedMonths.reduce((sum, m) => sum + m.realBalance - m.extraordinaryIncome, 0) /
+            completedMonths.length
+        )
+      : null;
 
     return {
       months,
@@ -212,6 +249,7 @@ export class DashboardService {
       livePeriodKey,
       averageMonthlySavings,
       averageRealBalance,
+      averageStructuralBalance,
     };
   }
 
