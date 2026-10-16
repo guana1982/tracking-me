@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import type { DashboardSummaryDTO, ReallocationPreviewDTO, CategorySummary, SavingsHistoryDTO, SavingsPaceDTO, CumulativeSpendDTO } from '@budget/shared';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
 import { AppError } from '../lib/error-handler.js';
-import { adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
+import { CARRYOVER_NOTE_PREFIX, adjustCutoffDayForWeekend, buildCategorySummary, calculateTargets, isPastCutoffDay, roundCurrency } from '../lib/utils.js';
 import { monthPeriodService } from './month-period.service.js';
 import { budgetRuleService } from './budget-rule.service.js';
 import { expenseService } from './expense.service.js';
@@ -128,6 +128,7 @@ export class DashboardService {
       include: {
         expenses: true,
         reallocations: true,
+        incomes: true,
         budgetRule: true,
       },
       orderBy: [{ year: 'asc' }, { month: 'asc' }],
@@ -159,12 +160,24 @@ export class DashboardService {
 
       const totalExpenses = period.expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+      // Real balance: what the month actually added to (or took from) wealth.
+      // Surplus carried forward is last month's money and carry-over lines repeat
+      // last month's overspend, so both are bookkeeping and stay out
+      const income = period.incomes
+        .filter((i) => !i.sourcePeriodKey)
+        .reduce((sum, i) => sum + i.amount, 0);
+      const realOutflows = period.expenses
+        .filter((e) => e.category !== 'SAVINGS' && !e.notes?.startsWith(CARRYOVER_NOTE_PREFIX))
+        .reduce((sum, e) => sum + e.amount, 0);
+
       return {
         periodKey: period.periodKey,
         month: period.month,
         year: period.year,
         savings: roundCurrency(savingsExpenses + reallocatedToSavings - extraSpent),
         totalExpenses: roundCurrency(totalExpenses),
+        income: roundCurrency(income),
+        realBalance: roundCurrency(income - realOutflows),
       };
     });
 
@@ -187,6 +200,9 @@ export class DashboardService {
     const averageMonthlySavings = completedMonths.length > 0
       ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.savings, 0) / completedMonths.length)
       : null;
+    const averageRealBalance = completedMonths.length > 0
+      ? roundCurrency(completedMonths.reduce((sum, m) => sum + m.realBalance, 0) / completedMonths.length)
+      : null;
 
     return {
       months,
@@ -195,6 +211,7 @@ export class DashboardService {
       cumulativeTotal,
       livePeriodKey,
       averageMonthlySavings,
+      averageRealBalance,
     };
   }
 

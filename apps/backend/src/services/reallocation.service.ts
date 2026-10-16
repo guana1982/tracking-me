@@ -4,7 +4,7 @@ import { AppError } from '../lib/error-handler.js';
 import { expenseService } from './expense.service.js';
 import { incomeService } from './income.service.js';
 import { DEFAULT_BUDGET_RULE } from '@budget/shared';
-import { isPastCutoffDay, roundCurrency, calculateTargets } from '../lib/utils.js';
+import { CARRYOVER_NOTE_PREFIX, isPastCutoffDay, roundCurrency, calculateTargets } from '../lib/utils.js';
 
 export class ReallocationService {
   /**
@@ -344,7 +344,7 @@ export class ReallocationService {
 
   // Machine-readable prefix in notes: makes the carry-over idempotent
   private carryoverMarker(periodKey: string): string {
-    return `[Riporto ${periodKey}]`;
+    return `${CARRYOVER_NOTE_PREFIX}${periodKey}]`;
   }
 
   private formatPeriodLabel(periodKey: string): string {
