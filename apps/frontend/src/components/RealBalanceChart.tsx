@@ -98,12 +98,12 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
     <div>
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p
-          className="text-[11px] font-medium text-slate-500"
+          className={cn('font-medium text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}
           title="Entrate del mese meno tutte le uscite reali (Necessità, Svago, Extra). I bonifici in Risparmi non sono uscite; riporti e avanzi portati avanti sono esclusi."
         >
           {structural ? 'Saldo strutturale mensile' : 'Saldo reale mensile'}
         </p>
-        <label className="flex cursor-pointer items-center gap-1 text-[11px] text-slate-500">
+        <label className={cn('flex cursor-pointer items-center gap-1 text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}>
           <input
             type="checkbox"
             checked={structural}
@@ -113,7 +113,10 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
           Escludi entrate straordinarie
         </label>
       </div>
-      <div className="mb-1 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+      {expanded && (
+        <p className="mb-2 text-sm text-slate-400">Il saldo reale dice quanto ti è rimasto in tutto.</p>
+      )}
+      <div className={cn('mb-1 flex flex-wrap gap-x-3 text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}>
         {average !== null && (
           <span title="Solo mesi chiusi: il mese in corso è escluso">
             media{' '}
