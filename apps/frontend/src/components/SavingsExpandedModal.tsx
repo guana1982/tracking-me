@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { PiggyBank, X } from 'lucide-react';
+import { Info, PiggyBank, X } from 'lucide-react';
+import { SavingsInfoModal } from './SavingsInfoModal';
 
 interface SavingsExpandedModalProps {
   onClose: () => void;
@@ -12,18 +13,28 @@ interface SavingsExpandedModalProps {
  * Rendered in a portal so the sticky, scrollable dashboard rail does not clip it.
  */
 export function SavingsExpandedModal({ onClose, children }: SavingsExpandedModalProps) {
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
+
+  // Lock page scroll once for the modal's lifetime; re-running this on every
+  // render would capture 'hidden' as the value to restore
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      // Esc closes the explanation first, then the modal itself
+      if (isInfoOpen) setIsInfoOpen(false);
+      else onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, isInfoOpen]);
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
@@ -38,6 +49,15 @@ export function SavingsExpandedModal({ onClose, children }: SavingsExpandedModal
           <div className="flex items-center gap-2">
             <PiggyBank className="h-5 w-5 text-sky-600" />
             <h2 className="text-lg font-semibold text-slate-900">Risparmi</h2>
+            <button
+              type="button"
+              onClick={() => setIsInfoOpen(true)}
+              className="rounded-full p-1 text-slate-400 transition-colors hover:bg-sky-50 hover:text-sky-600"
+              title="Come leggere questi dati"
+              aria-label="Come leggere i risparmi"
+            >
+              <Info className="h-5 w-5" />
+            </button>
           </div>
           <button
             onClick={onClose}
@@ -49,6 +69,7 @@ export function SavingsExpandedModal({ onClose, children }: SavingsExpandedModal
         </div>
         <div className="overflow-y-auto">{children}</div>
       </div>
+      {isInfoOpen && <SavingsInfoModal onClose={() => setIsInfoOpen(false)} />}
     </div>,
     document.body,
   );

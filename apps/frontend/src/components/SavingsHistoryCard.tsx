@@ -130,6 +130,11 @@ export function SavingsHistoryCard({ history }: SavingsHistoryCardProps) {
     <div className={cn('flex flex-1 flex-col justify-center min-h-0', expanded ? 'gap-8' : 'gap-4')}>
       <div>
         <p className={cn('mb-1 font-medium text-slate-500', expanded ? 'text-sm' : 'text-[11px]')}>Accantonato netto mensile</p>
+        {expanded && (
+          <p className="mb-2 text-sm text-slate-400">
+            L&apos;accantonato dice quanto è finito nei risparmi, al netto degli Extra pagati con quei soldi.
+          </p>
+        )}
         <div className={cn('w-full', expanded ? 'h-56' : 'h-28')}>
         <ResponsiveContainer width="100%" height="100%">
         <BarChart
