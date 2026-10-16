@@ -44,6 +44,7 @@ import type {
 // Query keys
 export const queryKeys = {
   dashboard: (periodKey: string) => ['dashboard', periodKey] as const,
+  livePeriod: ['livePeriod'] as const,
   savingsHistory: (periodKey: string) => ['savingsHistory', periodKey] as const,
   savingsPace: (periodKey: string) => ['savingsPace', periodKey] as const,
   cumulativeSpend: (periodKey: string) => ['cumulativeSpend', periodKey] as const,
@@ -81,6 +82,15 @@ export function useDashboard(periodKey: string) {
   return useQuery({
     queryKey: queryKeys.dashboard(periodKey),
     queryFn: () => dashboardApi.getSummary(periodKey),
+  });
+}
+
+// Pay-cycle in progress today, from the user's payday (budget rules)
+export function useLivePeriod() {
+  return useQuery({
+    queryKey: queryKeys.livePeriod,
+    queryFn: () => dashboardApi.getLivePeriod(),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -561,6 +571,7 @@ export function useUpdateBudgetRule(periodKey: string) {
       budgetRulesApi.update(periodKey, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.budgetRule(periodKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.livePeriod });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(periodKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.savingsPace(periodKey) });
     },

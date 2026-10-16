@@ -13,9 +13,9 @@ import {
   UtensilsCrossed,
   ListTodo,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
-import { usePeriods, useDashboard } from '../hooks/useQueries';
+import { usePeriods, useDashboard, useLivePeriod } from '../hooks/useQueries';
 import { usePeriodStore } from '../hooks/usePeriod';
 import { QuickAddModal } from './QuickAddModal';
 import { useAuthStore } from '../stores/authStore';
@@ -25,8 +25,15 @@ export function Layout() {
   const [isPeriodSelectorOpen, setIsPeriodSelectorOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const location = useLocation();
-  const { periodKey, setPeriodKey } = usePeriodStore();
+  const { periodKey, setPeriodKey, syncLivePeriod } = usePeriodStore();
   const { data: periods } = usePeriods();
+  const { data: livePeriod } = useLivePeriod();
+  // Payday comes from the user's budget rules; the default-27 guess is a fallback
+  const currentPeriodKey = livePeriod?.livePeriodKey ?? getCurrentPeriodKey();
+
+  useEffect(() => {
+    if (livePeriod) syncLivePeriod(livePeriod.livePeriodKey);
+  }, [livePeriod, syncLivePeriod]);
   const { data: dashboard } = useDashboard(periodKey);
   const { user, logout } = useAuthStore();
   const isCashFlowPage = location.pathname.startsWith('/cash-flow');
@@ -94,7 +101,7 @@ export function Layout() {
                       <div className="absolute left-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 max-h-80 overflow-y-auto">
                         {/* All months of current year */}
                         {getAllPeriodsForYear(new Date().getFullYear()).map((period) => {
-                          const isCurrentMonth = period.periodKey === getCurrentPeriodKey();
+                          const isCurrentMonth = period.periodKey === currentPeriodKey;
                           const hasData = periods?.some((p) => p.periodKey === period.periodKey);
 
                           return (

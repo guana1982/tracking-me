@@ -463,7 +463,13 @@ export interface MonthlySavingsDTO {
   periodKey: string;
   month: number;
   year: number;
-  savings: number; // actual savings amount for that month
+  savings: number; // savingsTransfers + reallocatedToSavings - extraSpent
+  savingsTransfers: number; // SAVINGS expenses (real transfers to savings accounts)
+  // Reallocations counted in savings: the recorded amount capped at what was
+  // really left (income - ordinary spend - savingsTransfers), never below 0
+  reallocatedToSavings: number;
+  reallocatedRecorded: number; // reallocations to SAVINGS as stored
+  extraSpent: number; // EXTRA expenses, paid from the savings account
   totalExpenses: number; // all expenses recorded in the month, without classification
   income: number; // real income of the month (surplus carried forward excluded)
   // Income minus real outflows (NEEDS + WANTS + EXTRA, carry-over lines excluded).
@@ -475,6 +481,12 @@ export interface MonthlySavingsDTO {
   // Live (in-progress) cycle only: realBalance extrapolated to payday, fixed
   // outflows as they are and variable ones at the current daily pace. Null otherwise
   projectedRealBalance: number | null;
+}
+
+// Pay-cycle in progress today, computed with the user's own payday (cutoffDay)
+export interface LivePeriodDTO {
+  livePeriodKey: string;
+  cutoffDay: number;
 }
 
 export interface SavingsHistoryDTO {

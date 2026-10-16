@@ -19,6 +19,8 @@ interface RealBalanceRow {
   name: string;
   periodKey: string;
   saldo: number | null;
+  // In-progress cycle only: balance so far (the bar shows the projection)
+  finora: number | null;
   cumulato: number | null;
   inProgress: boolean;
 }
@@ -37,6 +39,11 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
   const valueOf = (m: { realBalance: number; extraordinaryIncome: number }) =>
     structural ? m.realBalance - m.extraordinaryIncome : m.realBalance;
 
+  const projectionOf = (m: { projectedRealBalance: number | null; extraordinaryIncome: number }) =>
+    m.projectedRealBalance != null
+      ? m.projectedRealBalance - (structural ? m.extraordinaryIncome : 0)
+      : null;
+
   let running = 0;
   const rows: RealBalanceRow[] = history.months.map((m) => {
     const inProgress = m.periodKey === livePeriodKey;
@@ -46,7 +53,12 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
     return {
       name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
       periodKey: m.periodKey,
-      saldo: completed || inProgress ? Math.round(valueOf(m) * 100) / 100 : null,
+      saldo: completed
+        ? round2(valueOf(m))
+        : inProgress
+          ? round2(projectionOf(m) ?? valueOf(m))
+          : null,
+      finora: inProgress ? round2(valueOf(m)) : null,
       cumulato: completed && m.periodKey.startsWith(liveYear) ? Math.round(running * 100) / 100 : null,
       inProgress,
     };
@@ -55,10 +67,7 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
   const completedCount = history.months.filter((m) => m.periodKey < livePeriodKey).length;
   const average = structural ? history.averageStructuralBalance : history.averageRealBalance;
   const live = history.months.find((m) => m.periodKey === livePeriodKey);
-  const liveProjection =
-    live?.projectedRealBalance != null
-      ? live.projectedRealBalance - (structural ? live.extraordinaryIncome : 0)
-      : null;
+  const liveProjection = live ? projectionOf(live) : null;
   const ytd = rows.some((r) => r.cumulato !== null) ? running : null;
 
   const renderTooltip = ({ active, payload, label }: any) => {
@@ -72,10 +81,11 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
           {row.inProgress && <span className="ml-1 font-normal text-slate-400">(in corso)</span>}
         </p>
         <p className={`text-xs ${row.saldo < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-          {row.inProgress ? 'Finora ' : ''}{formatCurrency(row.saldo)}
+          {row.inProgress ? 'Proiezione a fine periodo' : structural ? 'Saldo strutturale' : 'Saldo del mese'}{' '}
+          {formatCurrency(row.saldo)}
         </p>
-        {row.inProgress && liveProjection !== null && (
-          <p className="text-xs text-slate-500">Proiezione {formatCurrency(liveProjection)}</p>
+        {row.finora !== null && (
+          <p className="text-xs text-slate-500">Finora {formatCurrency(row.finora)}</p>
         )}
         {row.cumulato !== null && (
           <p className="text-xs text-indigo-600">Da inizio anno {formatCurrency(row.cumulato)}</p>
@@ -187,6 +197,14 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
               })}
             </Bar>
             <Line
+              dataKey="finora"
+              stroke="none"
+              dot={{ r: 3, fill: '#475569', stroke: '#fff', strokeWidth: 1 }}
+              activeDot={false}
+              legendType="none"
+              isAnimationActive={false}
+            />
+            <Line
               type="monotone"
               dataKey="cumulato"
               stroke="#4f46e5"
@@ -204,4 +222,8 @@ export function RealBalanceChart({ history, periodKey, onSelectPeriod, expanded 
 
 function completedMonths(count: number): string {
   return count === 1 ? '1 mese' : `${count} mesi`;
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

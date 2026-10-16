@@ -122,3 +122,48 @@ describe('getSavingsHistory structural balance and projection', () => {
     expect(result.months[1].projectedRealBalance).toBe(560);
   });
 });
+
+describe('getSavingsHistory reallocation cap', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('caps reallocations at the real leftover (January 2026 data)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T12:00:00'));
+    periods.splice(0, periods.length,
+      {
+        ...period(2026, 1, 0),
+        incomes: [{ amount: 2090, sourcePeriodKey: null, isExtraordinary: false }],
+        expenses: [
+          { category: 'NEEDS', amount: 1200 },
+          { category: 'WANTS', amount: 391.51 },
+          { category: 'SAVINGS', amount: 295 },
+        ],
+        reallocations: [{ toCategory: 'SAVINGS', amount: 289.49 }],
+      },
+      {
+        ...period(2026, 2, 0),
+        incomes: [{ amount: 2500, sourcePeriodKey: null, isExtraordinary: false }],
+        expenses: [
+          { category: 'NEEDS', amount: 1800 },
+          { category: 'SAVINGS', amount: 300 },
+          { category: 'EXTRA', amount: 50 },
+        ],
+        reallocations: [{ toCategory: 'SAVINGS', amount: 150 }],
+      },
+    );
+
+    const result = await dashboardService.getSavingsHistory('2026-10', 'user');
+    const [jan, feb] = result.months;
+
+    // 2090 - 1591.51 - 295 = 203.49 really left, below the 289.49 budget remainder
+    expect(jan.reallocatedRecorded).toBe(289.49);
+    expect(jan.reallocatedToSavings).toBe(203.49);
+    expect(jan.savings).toBe(498.49);
+    expect(jan.savings).toBe(jan.realBalance);
+    // 400 really left: the 150 remainder fits and is unchanged
+    expect(feb.reallocatedToSavings).toBe(150);
+    expect(feb.savings).toBe(400);
+  });
+});

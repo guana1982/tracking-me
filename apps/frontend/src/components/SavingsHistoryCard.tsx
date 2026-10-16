@@ -11,6 +11,35 @@ import { SavingsExpandedModal } from './SavingsExpandedModal';
 
 const MONTH_LABELS = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
+// Breakdown of a month's net savings; flags reallocations capped by real leftover
+const SavingsTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const m = payload[0].payload as {
+    risparmio: number;
+    bonifici: number;
+    riallocazione: number;
+    riallocazioneRegistrata: number;
+    extra: number;
+  };
+  const capped = m.riallocazioneRegistrata - m.riallocazione > 0.005;
+  return (
+    <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-200 text-xs">
+      <p className="font-medium text-slate-900">{label}</p>
+      <p className="text-slate-600">Bonifici a risparmi {formatCurrency(m.bonifici)}</p>
+      <p className="text-slate-600">Riallocazione {formatCurrency(m.riallocazione)}</p>
+      {capped && (
+        <p className="max-w-[14rem] text-amber-600">
+          Limitata da {formatCurrency(m.riallocazioneRegistrata)} a {formatCurrency(m.riallocazione)}: avanzo reale insufficiente
+        </p>
+      )}
+      <p className="text-slate-600">Extra −{formatCurrency(m.extra)}</p>
+      <p className={`mt-0.5 font-semibold ${m.risparmio < 0 ? 'text-red-600' : 'text-sky-600'}`}>
+        Totale {formatCurrency(m.risparmio)}
+      </p>
+    </div>
+  );
+};
+
 const BarChartTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -40,6 +69,10 @@ export function SavingsHistoryCard({ history }: SavingsHistoryCardProps) {
   const barData = history.months.map((m) => ({
     name: `${MONTH_LABELS[m.month - 1]} ${String(m.year).slice(2)}`,
     risparmio: m.savings,
+    bonifici: m.savingsTransfers,
+    riallocazione: m.reallocatedToSavings,
+    riallocazioneRegistrata: m.reallocatedRecorded,
+    extra: m.extraSpent,
     speseTotali: m.totalExpenses,
     periodKey: m.periodKey,
   }));
@@ -121,7 +154,7 @@ export function SavingsHistoryCard({ history }: SavingsHistoryCardProps) {
             tickLine={false}
             tickFormatter={(v) => `${v}`}
           />
-          <Tooltip content={<BarChartTooltip />} />
+          <Tooltip content={<SavingsTooltip />} />
           {avgMonthlySavings !== null && (
             <ReferenceLine
               y={avgMonthlySavings}
