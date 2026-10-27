@@ -11,7 +11,7 @@ import {
   LogOut,
   User,
   UtensilsCrossed,
-  ListTodo,
+  ShoppingCart,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn, formatPeriodKey, getCurrentPeriodKey, getAllPeriodsForYear } from '../lib/utils';
@@ -39,16 +39,16 @@ export function Layout() {
   const isCashFlowPage = location.pathname.startsWith('/cash-flow');
   const isPortfolioPage = location.pathname.startsWith('/portfolio');
   const isFoodPage = location.pathname.startsWith('/food');
-  const isActivitiesPage = location.pathname.startsWith('/activities');
-  const showBudgetContext = !isCashFlowPage && !isPortfolioPage && !isFoodPage && !isActivitiesPage;
+  const isKitchenPage = location.pathname.startsWith('/spesa');
+  const showBudgetContext = !isCashFlowPage && !isPortfolioPage && !isFoodPage && !isKitchenPage;
   const appTitle = isCashFlowPage
     ? 'Net Worth'
     : isPortfolioPage
       ? 'Portafoglio'
       : isFoodPage
         ? 'Diario Alimentare'
-        : isActivitiesPage
-          ? 'Attività'
+        : isKitchenPage
+          ? 'Spesa e menù'
         : 'Budget';
 
   const budgetRule = dashboard?.budgetRule || { needsPct: 65, wantsPct: 25, savingsPct: 10 };
@@ -57,7 +57,7 @@ export function Layout() {
   const navItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/expenses', icon: Receipt, label: 'Spese' },
-    { to: '/activities', icon: ListTodo, label: 'Attività' },
+    { to: '/spesa', icon: ShoppingCart, label: 'Spesa' },
     { to: '/food', icon: UtensilsCrossed, label: 'Diario' },
     { to: '/cash-flow', icon: LineChart, label: 'Cash Flow' },
     { to: '/portfolio', icon: Briefcase, label: 'Portafoglio' },

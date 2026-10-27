@@ -12,54 +12,45 @@ import {
 } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import type { ActivityDayCountDTO } from '@budget/shared';
-import { useActivityCounts } from '../../hooks/useActivityQueries';
 import { cn } from '../../lib/utils';
 
+export type DayDot = 'open' | 'late' | 'warn' | 'done';
+
+/** What one day carries, as the page that owns the calendar sees it */
+export interface DayMark {
+  dots: DayDot[];
+  label?: string;
+}
+
 /**
- * What a day carries, at a glance: something still open, a deadline due, or
- * everything already closed. Without this the month view is only a way to
- * navigate, and you have to open a day to find out whether it holds anything.
+ * The page decides what a day's dots mean and where they come from. Called as a
+ * hook by both halves of the calendar, so it has to be a stable function.
  */
-function DayLoad({
-  counts,
-  date,
-  today,
-  isSelected,
-}: {
-  counts: ActivityDayCountDTO | undefined;
-  date: string;
-  today: string;
-  isSelected: boolean;
-}) {
-  const open = counts?.open ?? 0;
-  const done = counts?.done ?? 0;
-  const deadlines = counts?.deadlines ?? 0;
-  const dots: string[] = [];
+export type UseDayMarks = (from: string, to: string) => Map<string, DayMark>;
 
-  if (open > 0) dots.push(date < today ? 'bg-red-500' : isSelected ? 'bg-sky-300' : 'bg-sky-500');
-  if (deadlines > 0) dots.push(isSelected ? 'bg-amber-300' : 'bg-amber-500');
-  if (open === 0 && done > 0) dots.push(isSelected ? 'bg-emerald-300' : 'bg-emerald-500');
+const DOT_COLORS: Record<DayDot, { idle: string; selected: string }> = {
+  open: { idle: 'bg-sky-500', selected: 'bg-sky-300' },
+  late: { idle: 'bg-red-500', selected: 'bg-red-300' },
+  warn: { idle: 'bg-amber-500', selected: 'bg-amber-300' },
+  done: { idle: 'bg-emerald-500', selected: 'bg-emerald-300' },
+};
 
+/**
+ * What a day carries, at a glance. Without this the month view is only a way
+ * to navigate, and you have to open a day to find out whether it holds anything.
+ */
+function DayLoad({ mark, isSelected }: { mark: DayMark | undefined; isSelected: boolean }) {
   return (
     <span className="mt-0.5 flex h-1 items-center justify-center gap-0.5" aria-hidden="true">
-      {dots.map((color) => (
-        <span key={color} className={cn('w-1 h-1 rounded-full', color)} />
+      {(mark?.dots ?? []).map((dot) => (
+        <span key={dot} className={cn('w-1 h-1 rounded-full', DOT_COLORS[dot][isSelected ? 'selected' : 'idle'])} />
       ))}
     </span>
   );
 }
 
-function loadLabel(counts: ActivityDayCountDTO | undefined): string | undefined {
-  if (!counts) return undefined;
-  const parts: string[] = [];
-  if (counts.open > 0) parts.push(`${counts.open} da fare`);
-  if (counts.done > 0) parts.push(`${counts.done} completate`);
-  if (counts.deadlines > 0) parts.push(`${counts.deadlines} scadenze`);
-  return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
-interface ActivityWeekStripProps {
+interface WeekStripProps {
+  useMarks: UseDayMarks;
   selectedDate: string;
   today: string;
   /** Only to label the toggle: the month itself is a panel the page places */
@@ -79,26 +70,23 @@ interface ActivityWeekStripProps {
  * It stays in the flow at the top of the page, so moving by a day never costs
  * an extra click and the list below keeps the whole width.
  */
-export function ActivityWeekStrip({
+export function WeekStrip({
+  useMarks,
   selectedDate,
   today,
   isMonthOpen,
   onToggleMonth,
   actions,
   onSelectDate,
-}: ActivityWeekStripProps) {
+}: WeekStripProps) {
   const weekDays = useMemo(() => {
     const first = startOfWeek(parseISO(selectedDate), { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, index) => addDays(first, index));
   }, [selectedDate]);
 
-  const counts = useActivityCounts(
+  const marks = useMarks(
     format(weekDays[0], 'yyyy-MM-dd'),
     format(weekDays[weekDays.length - 1], 'yyyy-MM-dd')
-  );
-  const countsByDate = useMemo(
-    () => new Map((counts.data ?? []).map((entry) => [entry.date, entry])),
-    [counts.data]
   );
 
   const moveSelectedDay = (amount: number) => {
@@ -157,13 +145,13 @@ export function ActivityWeekStrip({
           const value = format(day, 'yyyy-MM-dd');
           const isSelected = value === selectedDate;
           const isToday = value === today;
-          const dayCounts = countsByDate.get(value);
+          const dayMark = marks.get(value);
           return (
             <button
               key={value}
               type="button"
               onClick={() => onSelectDate(value)}
-              title={loadLabel(dayCounts)}
+              title={dayMark?.label}
               className={cn(
                 'relative min-h-11 flex flex-col items-center justify-center py-1.5 rounded-xl text-xs transition-colors',
                 isSelected
@@ -179,7 +167,7 @@ export function ActivityWeekStrip({
             >
               <span className="uppercase text-[9px] sm:text-[10px]">{format(day, 'EEE', { locale: it })}</span>
               <span className="font-semibold">{format(day, 'd')}</span>
-              <DayLoad counts={dayCounts} date={value} today={today} isSelected={isSelected} />
+              <DayLoad mark={dayMark} isSelected={isSelected} />
             </button>
           );
         })}
@@ -188,7 +176,10 @@ export function ActivityWeekStrip({
   );
 }
 
-interface ActivityMonthPanelProps {
+interface MonthPanelProps {
+  useMarks: UseDayMarks;
+  /** What the dots mean, under the month */
+  legend?: ReactNode;
   selectedDate: string;
   today: string;
   /** Says whose date is being picked, when the panel is answering for one card */
@@ -204,14 +195,16 @@ interface ActivityMonthPanelProps {
  * jumping to another date is an occasional errand, and it should not push the
  * list down or take width away from it for the rest of the session.
  */
-export function ActivityMonthPanel({
+export function MonthPanel({
+  useMarks,
+  legend,
   selectedDate,
   today,
   caption,
   footer,
   onClose,
   onSelectDate,
-}: ActivityMonthPanelProps) {
+}: MonthPanelProps) {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(parseISO(selectedDate)));
 
   useEffect(() => {
@@ -236,13 +229,9 @@ export function ActivityMonthPanel({
     return result;
   }, [visibleMonth]);
 
-  const counts = useActivityCounts(
+  const marks = useMarks(
     format(monthDays[0], 'yyyy-MM-dd'),
     format(monthDays[monthDays.length - 1], 'yyyy-MM-dd')
-  );
-  const countsByDate = useMemo(
-    () => new Map((counts.data ?? []).map((entry) => [entry.date, entry])),
-    [counts.data]
   );
 
   return (
@@ -302,13 +291,13 @@ export function ActivityMonthPanel({
           const isSelected = value === selectedDate;
           const isToday = value === today;
           const inMonth = isSameMonth(day, visibleMonth);
-          const dayCounts = countsByDate.get(value);
+          const dayMark = marks.get(value);
           return (
             <button
               key={value}
               type="button"
               onClick={() => onSelectDate(value)}
-              title={loadLabel(dayCounts)}
+              title={dayMark?.label}
               className={cn(
                 'relative min-h-9 flex flex-col items-center justify-center rounded-lg text-xs font-medium transition-colors',
                 isSelected
@@ -323,19 +312,17 @@ export function ActivityMonthPanel({
               aria-current={isSelected ? 'date' : undefined}
             >
               {format(day, 'd')}
-              <DayLoad counts={dayCounts} date={value} today={today} isSelected={isSelected} />
+              <DayLoad mark={dayMark} isSelected={isSelected} />
             </button>
           );
         })}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
-        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-sky-500" />da fare</span>
-        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />rimasto aperto</span>
-        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />scadenza</span>
-        <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />tutto chiuso</span>
-        <span className="w-full">I task settimanali non hanno un giorno, quindi non compaiono qui.</span>
-      </div>
+      {legend && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+          {legend}
+        </div>
+      )}
 
       {footer && <div className="mt-2 border-t border-slate-100 pt-2">{footer}</div>}
     </section>

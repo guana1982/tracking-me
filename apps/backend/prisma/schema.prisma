@@ -49,6 +49,10 @@ model User {
   habitDefinitions       HabitDefinition[]
   habitEntries           HabitEntry[]
   activityTypes          ActivityType[]
+  pantryItems            PantryItem[]
+  shoppingItems          ShoppingItem[]
+  recipes                Recipe[]
+  mealPlanEntries        MealPlanEntry[]
   activities             Activity[]
 
   @@index([googleId])
@@ -975,6 +979,114 @@ model Activity {
   @@index([userId, dueDate, status])
   @@index([typeId])
   @@map("activities")
+}
+
+// ============================================================
+// Kitchen - weekly shopping, pantry, family dishes and menu
+// ============================================================
+
+enum MealSlot {
+  LUNCH
+  DINNER
+}
+
+enum RecipeSlot {
+  LUNCH
+  DINNER
+  ANY
+}
+
+enum MealPlanStatus {
+  PLANNED
+  COOKED
+  SKIPPED
+}
+
+/// What is at home right now. Units and aisles are validated by the shared schemas
+model PantryItem {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  /// Lowercased, accent-free name: how the menu and the list find it
+  nameKey   String
+  category  String
+  quantity  Float    @default(0)
+  unit      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, nameKey])
+  @@map("pantry_items")
+}
+
+/// One line of a week's shopping list. Ticking it puts it in the pantry
+model ShoppingItem {
+  id            String    @id @default(cuid())
+  userId        String
+  weekStart     DateTime  @db.Date
+  name          String
+  nameKey       String
+  category      String
+  quantity      Float?
+  unit          String
+  checked       Boolean   @default(false)
+  checkedAt     DateTime?
+  fromPlan      Boolean   @default(false)
+  /// What ticking it added to the pantry, so unticking takes back exactly that
+  pantryItemId  String?
+  addedQuantity Float?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, weekStart])
+  @@map("shopping_items")
+}
+
+/// A family dish and what goes in it
+model Recipe {
+  id              String     @id @default(cuid())
+  userId          String
+  name            String
+  slot            RecipeSlot @default(ANY)
+  notes           String?
+  /// [{ name, quantity | null, unit }]
+  ingredientsJson Json       @default("[]")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlanEntries MealPlanEntry[]
+
+  @@index([userId])
+  @@map("recipes")
+}
+
+/// A lunch or dinner on the menu
+model MealPlanEntry {
+  id           String         @id @default(cuid())
+  userId       String
+  date         DateTime       @db.Date
+  slot         MealSlot
+  recipeId     String?
+  /// Copied from the dish, so deleting it does not empty the menu
+  title        String
+  status       MealPlanStatus @default(PLANNED)
+  /// [{ pantryItemId, quantity }] taken from the pantry when cooked, given back on undo
+  consumedJson Json?
+  cookedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe Recipe? @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([recipeId])
+  @@map("meal_plan_entries")
 }
 
 // CashFlow Settings - per-user commission/ETF configuration

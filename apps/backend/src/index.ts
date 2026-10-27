@@ -27,6 +27,7 @@ import { therapyPlanRoutes } from './routes/therapy-plan.routes.js';
 import { habitRoutes } from './routes/habit.routes.js';
 import { foodDashboardRoutes } from './routes/food-dashboard.routes.js';
 import { activityRoutes } from './routes/activity.routes.js';
+import { kitchenRoutes } from './routes/kitchen.routes.js';
 import { errorHandler } from './lib/error-handler.js';
 import authPlugin from './auth/auth.plugin.js';
 import { authRoutes } from './auth/auth.routes.js';
@@ -121,6 +122,7 @@ await fastify.register(swagger, {
       },
       { name: 'Food Dashboard', description: 'Food diary trends, correlations and CSV export' },
       { name: 'Activities', description: 'Daily tasks, weekly planning and deadlines' },
+      { name: 'Kitchen', description: 'Weekly shopping list, pantry, family dishes and menu' },
     ],
   },
 });
@@ -186,6 +188,7 @@ await fastify.register(therapyPlanRoutes, { prefix: '/api/therapy-plan' });
 await fastify.register(habitRoutes, { prefix: '/api/habits' });
 await fastify.register(foodDashboardRoutes, { prefix: '/api/food-dashboard' });
 await fastify.register(activityRoutes, { prefix: '/api/activities' });
+await fastify.register(kitchenRoutes, { prefix: '/api/kitchen' });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
