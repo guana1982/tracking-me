@@ -18,6 +18,7 @@ import { CoverageCard } from '../components/kitchen/CoverageCard';
 import { ItemEditSheet, type EditableItem } from '../components/kitchen/ItemEditSheet';
 import { MealPickerSheet, type MealPickerTarget } from '../components/kitchen/MealPickerSheet';
 import { MenuTab } from '../components/kitchen/MenuTab';
+import { PantryGauge } from '../components/kitchen/PantryGauge';
 import { PantryTab } from '../components/kitchen/PantryTab';
 import { RecipeEditorSheet } from '../components/kitchen/RecipeEditorSheet';
 import { RecipesTab, STARTER_RECIPES } from '../components/kitchen/RecipesTab';
@@ -301,152 +302,169 @@ export function Kitchen() {
 
   return (
     <div className="sm:ml-44 md:ml-48 lg:ml-52 2xl:ml-56 pb-28 sm:pb-12">
-      <header className="mb-3">
-        <WeekStrip
-          useMarks={useKitchenDayMarks}
-          selectedDate={selectedDate}
-          today={today}
-          isMonthOpen={isMonthOpen}
-          onToggleMonth={() => setIsMonthOpen((open) => !open)}
-          onSelectDate={selectDate}
-        />
-      </header>
-
-      {week.isLoading || !data ? (
-        week.isError ? (
-          <div className="card text-sm text-red-600">Impossibile caricare la settimana. Riprova tra poco.</div>
-        ) : (
-          <div className="card min-h-48 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-          </div>
-        )
-      ) : (
-        <div className="max-w-2xl mx-auto space-y-3">
-          <CoverageCard
-            week={data}
-            isAddingMissing={addMissing.isPending}
-            isCopyingPlan={copyPlan.isPending}
-            onAddMissing={() =>
-              void run(() => addMissing.mutateAsync(selectedDate), (result) => `${result.added} prodotti aggiunti alla lista.`)
-            }
-            onOpenShopping={() => setTab('shopping')}
-            onCopyPreviousPlan={() =>
-              void run(
-                () => copyPlan.mutateAsync(selectedDate),
-                (result) => (result.added > 0 ? `${result.added} pasti copiati dalla settimana scorsa.` : 'La settimana scorsa era vuota.')
-              )
-            }
-            onOpenRecipes={() => setTab('recipes')}
-          />
-
-          <nav
-            className="sticky top-14 md:top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 py-2 bg-slate-50/95 backdrop-blur"
-            aria-label="Sezioni"
-          >
-            <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-200/70 p-1">
-              {tabs.map((entry) => {
-                const Icon = entry.icon;
-                const isActive = tab === entry.key;
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    onClick={() => setTab(entry.key)}
-                    className={cn(
-                      'relative min-h-11 rounded-xl flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[11px] sm:text-sm font-medium transition-colors',
-                      isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                    )}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {entry.label}
-                    {entry.badge ? (
-                      <span
-                        className={cn(
-                          'absolute top-1 right-1.5 sm:static min-w-4 h-4 px-1 rounded-full text-[10px] leading-4 text-white font-semibold',
-                          entry.badgeTone
-                        )}
-                      >
-                        {entry.badge}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+      {/* On a wide screen the gauge takes the empty band left of the page; the page itself stays centred */}
+      <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_minmax(0,1fr)] xl:gap-8">
+        <aside className="hidden xl:block">
+          {data && (
+            <div className="sticky top-4 ml-auto max-w-sm">
+              <PantryGauge week={data} onOpenShopping={() => setTab('shopping')} />
             </div>
-          </nav>
+          )}
+        </aside>
 
-          {tab === 'menu' && (
-            <MenuTab
-              week={data}
+        <div className="min-w-0">
+          <header className="mb-3">
+            <WeekStrip
+              useMarks={useKitchenDayMarks}
               selectedDate={selectedDate}
-              busyId={busyId}
-              isCopyingPlan={copyPlan.isPending}
-              onSelectDate={setSelectedDate}
-              onAddMeal={(date, slot) => setPicker({ date, slot })}
-              onChangeMeal={(entry) => setPicker({ date: entry.date, slot: entry.slot, entryId: entry.id })}
-              onSetStatus={(entry, status) => void setMealStatus(entry, status)}
-              onDeleteMeal={(entry) => void removeMeal(entry)}
-              onUseIdea={(recipeId) => void planIdea(recipeId)}
-              onCopyPreviousPlan={() =>
-                void run(
-                  () => copyPlan.mutateAsync(selectedDate),
-                  (result) =>
-                    result.added > 0 ? `${result.added} pasti copiati dalla settimana scorsa.` : 'Niente da copiare nei pasti liberi.'
-                )
-              }
+              today={today}
+              isMonthOpen={isMonthOpen}
+              onToggleMonth={() => setIsMonthOpen((open) => !open)}
+              onSelectDate={selectDate}
             />
-          )}
+          </header>
 
-          {tab === 'shopping' && (
-            <ShoppingTab
-              week={data}
-              isAdding={createShopping.isPending}
-              isAddingMissing={addMissing.isPending}
-              isClearing={clearChecked.isPending}
-              isCopying={copyList.isPending}
-              onAdd={addToList}
-              onToggle={toggleShopping}
-              onEdit={(item) => setItemEditor({ kind: 'shopping', item })}
-              onAddMissing={() =>
-                void run(() => addMissing.mutateAsync(selectedDate), (result) => `${result.added} prodotti aggiunti alla lista.`)
-              }
-              onClearChecked={() =>
-                void run(() => clearChecked.mutateAsync(selectedDate), (result) => `${result.removed} voci tolte dalla lista.`)
-              }
-              onCopyPrevious={() =>
-                void run(
-                  () => copyList.mutateAsync(selectedDate),
-                  (result) => (result.added > 0 ? `${result.added} prodotti dalla lista scorsa.` : 'La lista scorsa era vuota.')
-                )
-              }
-            />
-          )}
+          {week.isLoading || !data ? (
+            week.isError ? (
+              <div className="card text-sm text-red-600">Impossibile caricare la settimana. Riprova tra poco.</div>
+            ) : (
+              <div className="card min-h-48 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              </div>
+            )
+          ) : (
+            <div className="max-w-2xl mx-auto space-y-3">
+              <CoverageCard
+                week={data}
+                isAddingMissing={addMissing.isPending}
+                isCopyingPlan={copyPlan.isPending}
+                onAddMissing={() =>
+                  void run(() => addMissing.mutateAsync(selectedDate), (result) => `${result.added} prodotti aggiunti alla lista.`)
+                }
+                onOpenShopping={() => setTab('shopping')}
+                onCopyPreviousPlan={() =>
+                  void run(
+                    () => copyPlan.mutateAsync(selectedDate),
+                    (result) => (result.added > 0 ? `${result.added} pasti copiati dalla settimana scorsa.` : 'La settimana scorsa era vuota.')
+                  )
+                }
+                onOpenRecipes={() => setTab('recipes')}
+              />
 
-          {tab === 'pantry' && (
-            <PantryTab
-              week={data}
-              isAdding={createPantry.isPending}
-              onAdd={addToPantry}
-              onAdjust={(item, delta) => void run(() => adjustPantry.mutateAsync({ id: item.id, delta }))}
-              onEdit={(item) => setItemEditor({ kind: 'pantry', item })}
-              onAddToList={(item) =>
-                void addToList([{ name: item.name, quantity: null, unit: item.unit, hasUnit: true }])
-              }
-            />
-          )}
+              <div className="xl:hidden">
+                <PantryGauge week={data} compact onOpenShopping={() => setTab('shopping')} />
+              </div>
 
-          {tab === 'recipes' && (
-            <RecipesTab
-              week={data}
-              isInstalling={isInstalling}
-              onNew={() => setRecipeEditor({ recipe: null })}
-              onEdit={(recipe) => setRecipeEditor({ recipe })}
-              onInstallStarters={() => void installStarters()}
-            />
+              <nav
+                className="sticky top-14 md:top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 py-2 bg-slate-50/95 backdrop-blur"
+                aria-label="Sezioni"
+              >
+                <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-200/70 p-1">
+                  {tabs.map((entry) => {
+                    const Icon = entry.icon;
+                    const isActive = tab === entry.key;
+                    return (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => setTab(entry.key)}
+                        className={cn(
+                          'relative min-h-11 rounded-xl flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[11px] sm:text-sm font-medium transition-colors',
+                          isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                        )}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {entry.label}
+                        {entry.badge ? (
+                          <span
+                            className={cn(
+                              'absolute top-1 right-1.5 sm:static min-w-4 h-4 px-1 rounded-full text-[10px] leading-4 text-white font-semibold',
+                              entry.badgeTone
+                            )}
+                          >
+                            {entry.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+
+              {tab === 'menu' && (
+                <MenuTab
+                  week={data}
+                  selectedDate={selectedDate}
+                  busyId={busyId}
+                  isCopyingPlan={copyPlan.isPending}
+                  onSelectDate={setSelectedDate}
+                  onAddMeal={(date, slot) => setPicker({ date, slot })}
+                  onChangeMeal={(entry) => setPicker({ date: entry.date, slot: entry.slot, entryId: entry.id })}
+                  onSetStatus={(entry, status) => void setMealStatus(entry, status)}
+                  onDeleteMeal={(entry) => void removeMeal(entry)}
+                  onUseIdea={(recipeId) => void planIdea(recipeId)}
+                  onCopyPreviousPlan={() =>
+                    void run(
+                      () => copyPlan.mutateAsync(selectedDate),
+                      (result) =>
+                        result.added > 0 ? `${result.added} pasti copiati dalla settimana scorsa.` : 'Niente da copiare nei pasti liberi.'
+                    )
+                  }
+                />
+              )}
+
+              {tab === 'shopping' && (
+                <ShoppingTab
+                  week={data}
+                  isAdding={createShopping.isPending}
+                  isAddingMissing={addMissing.isPending}
+                  isClearing={clearChecked.isPending}
+                  isCopying={copyList.isPending}
+                  onAdd={addToList}
+                  onToggle={toggleShopping}
+                  onEdit={(item) => setItemEditor({ kind: 'shopping', item })}
+                  onAddMissing={() =>
+                    void run(() => addMissing.mutateAsync(selectedDate), (result) => `${result.added} prodotti aggiunti alla lista.`)
+                  }
+                  onClearChecked={() =>
+                    void run(() => clearChecked.mutateAsync(selectedDate), (result) => `${result.removed} voci tolte dalla lista.`)
+                  }
+                  onCopyPrevious={() =>
+                    void run(
+                      () => copyList.mutateAsync(selectedDate),
+                      (result) => (result.added > 0 ? `${result.added} prodotti dalla lista scorsa.` : 'La lista scorsa era vuota.')
+                    )
+                  }
+                />
+              )}
+
+              {tab === 'pantry' && (
+                <PantryTab
+                  week={data}
+                  isAdding={createPantry.isPending}
+                  onAdd={addToPantry}
+                  onAdjust={(item, delta) => void run(() => adjustPantry.mutateAsync({ id: item.id, delta }))}
+                  onEdit={(item) => setItemEditor({ kind: 'pantry', item })}
+                  onAddToList={(item) =>
+                    void addToList([{ name: item.name, quantity: null, unit: item.unit, hasUnit: true }])
+                  }
+                />
+              )}
+
+              {tab === 'recipes' && (
+                <RecipesTab
+                  week={data}
+                  isInstalling={isInstalling}
+                  onNew={() => setRecipeEditor({ recipe: null })}
+                  onEdit={(recipe) => setRecipeEditor({ recipe })}
+                  onInstallStarters={() => void installStarters()}
+                />
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
 
       {isMonthOpen && (
         <div className="fixed z-30 bottom-20 right-3 sm:bottom-4 sm:right-4 w-80 max-w-[calc(100vw-1.5rem)]">
