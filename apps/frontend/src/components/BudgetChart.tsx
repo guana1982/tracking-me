@@ -134,7 +134,7 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                 ))}
               </div>
 
-              {/* Stats: Entrate, Speso nel budget, Rimanente, Extra, Speso finale */}
+              {/* Stats: Entrate, Speso nel budget, Rimanente, Extra */}
               <div className={cn(
                 'flex justify-center gap-4 pt-2 border-t border-slate-100',
                 visiblePanel === 'overview' ? 'flex-wrap' : 'sm:justify-start sm:gap-6'
@@ -179,20 +179,19 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                     {formatCurrency(extraSpent)}
                   </p>
                 </div>
-                <div
-                  className={cn(
-                    'text-center sm:text-left rounded-lg bg-slate-100 px-3 py-1.5',
-                    visiblePanel === 'overview' && 'basis-full'
-                  )}
-                  title="Speso nel budget + Extra: quanto hai speso davvero nel mese"
-                >
-                  <p className="text-xs font-semibold text-slate-600">Speso finale</p>
-                  <p className="text-base font-bold text-slate-900">
-                    {formatCurrency(totalSpent + extraSpent)}
-                  </p>
-                </div>
               </div>
             </div>
+          </div>
+
+          {/* Footer: real monthly outflow, budget + Extra */}
+          <div
+            className="mt-4 pt-3 border-t border-slate-200 flex items-baseline justify-between gap-3"
+            title="Speso nel budget + Extra: quanto hai speso davvero nel mese"
+          >
+            <span className="text-sm font-semibold text-slate-600">Speso finale</span>
+            <span className="text-lg font-bold text-slate-900">
+              {formatCurrency(totalSpent + extraSpent)}
+            </span>
           </div>
         </div>}
 
