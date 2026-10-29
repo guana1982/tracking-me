@@ -36,8 +36,14 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
     percentage: cat.percentage,
   }));
 
-  const totalSpent = categories.reduce((sum, cat) => sum + cat.actualAmount, 0);
-  const unspent = Math.max(0, totalIncome - totalSpent);
+  // Savings transfers are money set aside, not money spent: the donut still shows
+  // them as a slice, but "Speso" and "Rimanente" only count NEEDS + WANTS.
+  const totalAllocated = categories.reduce((sum, cat) => sum + cat.actualAmount, 0);
+  const totalSaved = categories
+    .filter((cat) => cat.category === 'SAVINGS')
+    .reduce((sum, cat) => sum + cat.actualAmount, 0);
+  const totalSpent = totalAllocated - totalSaved;
+  const unspent = Math.max(0, totalIncome - totalAllocated);
 
   // Add unspent portion
   if (unspent > 0) {
@@ -161,6 +167,11 @@ export function BudgetChart({ categories, totalIncome, extraSpent = 0, compact =
                   <p className={`text-sm font-bold ${remaining >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(remaining)}
                   </p>
+                  {totalSaved > 0 && (
+                    <p className="text-[11px] text-slate-400">
+                      di cui {formatCurrency(totalSaved)} risparmi
+                    </p>
+                  )}
                 </div>
                 <div className="text-center sm:text-left pl-6 border-l border-dashed border-violet-200" title="Spese Extra & Vacanze (Trade Republic) — fuori budget">
                   <p className="text-xs text-violet-500">Extra</p>
