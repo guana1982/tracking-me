@@ -1,0 +1,428 @@
+import { useState } from 'react';
+import {
+  useSpendingBreakdown,
+  useGlobalSpendingBreakdown,
+  useReclassifyExpenses,
+  useAllExpensesForPeriod,
+  useAllExpensesGlobal,
+} from '../hooks/useQueries';
+import { cn, formatCurrency, formatDate, formatPeriodKey } from '../lib/utils';
+import type { SpendingBreakdownItemDTO } from '@budget/shared';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
+  PieChart,
+  Loader2,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  History,
+  X,
+  BarChart3,
+} from 'lucide-react';
+
+// Selected category for the expenses modal: scope decides whether the list
+// covers the current period or the whole history
+interface SelectedCategory {
+  scope: 'period' | 'global';
+  categoryId: string | null;
+  name: string;
+  color: string;
+}
+
+// Shared bar list. Category names are clickable and open the expenses modal.
+function BreakdownBars({
+  items,
+  onSelect,
+  onSelectTrend,
+}: {
+  items: SpendingBreakdownItemDTO[];
+  onSelect: (item: SpendingBreakdownItemDTO) => void;
+  onSelectTrend?: (item: SpendingBreakdownItemDTO) => void;
+}) {
+  const maxTotal = items.length > 0 ? items[0].total : 0;
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-400 py-4 text-center">Nessuna spesa nel periodo</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+      {items.map((item) => (
+        <div
+          key={item.categoryId ?? 'unclassified'}
+          className="flex items-center gap-2 text-sm"
+        >
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: item.color }}
+          />
+          <button
+            onClick={() => onSelect(item)}
+            title={`Vedi le ${item.count} ${item.count === 1 ? 'spesa' : 'spese'} di "${item.name}"`}
+            className={cn(
+              'w-40 truncate flex-shrink-0 text-left hover:underline hover:text-indigo-600 transition-colors',
+              item.categoryId ? 'text-slate-600' : 'text-slate-400 italic'
+            )}
+          >
+            {item.name}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectTrend?.(item)}
+            disabled={!onSelectTrend}
+            className={cn(
+              'flex-1 h-2 bg-slate-100 rounded-full overflow-hidden text-left',
+              onSelectTrend && 'cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400'
+            )}
+            title={onSelectTrend ? `Vedi l'andamento annuale di “${item.name}”` : undefined}
+            aria-label={onSelectTrend ? `Vedi l'andamento annuale di ${item.name}` : undefined}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${maxTotal > 0 ? Math.max(2, (item.total / maxTotal) * 100) : 0}%`,
+                backgroundColor: item.color,
+              }}
+            />
+          </button>
+          <span className="w-20 text-right font-semibold text-slate-700 flex-shrink-0">
+            {formatCurrency(item.total)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const MONTH_NAMES = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+// Annual histogram opened by clicking a category bar in the current-period breakdown.
+function AnnualCategoryTrendModal({
+  selected,
+  year,
+  onClose,
+}: {
+  selected: SpendingBreakdownItemDTO;
+  year: number;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = useAllExpensesGlobal(true);
+  const monthlyData = MONTH_NAMES.map((month, index) => {
+    const periodKey = `${year}-${String(index + 1).padStart(2, '0')}`;
+    const amount = (data ?? [])
+      .filter((expense) =>
+        expense.periodKey === periodKey &&
+        expense.category !== 'SAVINGS' &&
+        (expense.spendingCategoryId ?? null) === selected.categoryId
+      )
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    return { month, amount: Math.round(amount * 100) / 100 };
+  });
+  const annualTotal = monthlyData.reduce((sum, month) => sum + month.amount, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-4xl sm:rounded-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="rounded-lg p-2" style={{ backgroundColor: `${selected.color}20` }}>
+              <BarChart3 className="h-5 w-5" style={{ color: selected.color }} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-semibold text-slate-900">{selected.name}</h2>
+              <p className="text-sm text-slate-500">Andamento mensile {year} · {formatCurrency(annualTotal)} totali</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="flex-shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Chiudi andamento annuale">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="h-[420px] p-4 sm:p-6">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData} margin={{ top: 12, right: 12, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+                <YAxis tickFormatter={(value: number) => `${value} €`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} width={72} />
+                <Tooltip formatter={(value: number) => [formatCurrency(value), selected.name]} cursor={{ fill: '#f1f5f9' }} />
+                <Bar dataKey="amount" fill={selected.color} radius={[5, 5, 0, 0]} maxBarSize={46} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal listing every expense of a category (period or whole history)
+function CategoryExpensesModal({
+  selected,
+  periodKey,
+  onClose,
+}: {
+  selected: SelectedCategory;
+  periodKey: string;
+  onClose: () => void;
+}) {
+  const isGlobal = selected.scope === 'global';
+  const periodQuery = useAllExpensesForPeriod(periodKey, !isGlobal);
+  const globalQuery = useAllExpensesGlobal(isGlobal);
+  const { data, isLoading } = isGlobal ? globalQuery : periodQuery;
+
+  // SAVINGS rows are transfers: excluded from the breakdown, so exclude them here too
+  const expenses = (data ?? []).filter(
+    (expense) =>
+      expense.category !== 'SAVINGS' &&
+      (expense.spendingCategoryId ?? null) === selected.categoryId
+  );
+  const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: selected.color }}
+            />
+            <h2 className="text-lg font-semibold text-slate-900 truncate">{selected.name}</h2>
+            <span className="text-sm text-slate-400 flex-shrink-0">
+              {isGlobal ? 'da inizio storico' : formatPeriodKey(periodKey)}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : expenses.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">
+              Nessuna spesa in questa categoria
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  {isGlobal && <th className="pb-2 pr-3 font-medium">Mese</th>}
+                  <th className="pb-2 pr-3 font-medium">Data</th>
+                  <th className="pb-2 pr-3 font-medium">Descrizione</th>
+                  <th className="pb-2 text-right font-medium">Importo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {expenses.map((expense) => (
+                  <tr key={expense.id}>
+                    {isGlobal && (
+                      <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
+                        {'periodKey' in expense
+                          ? formatPeriodKey(expense.periodKey as string)
+                          : ''}
+                      </td>
+                    )}
+                    <td className="py-2 pr-3 whitespace-nowrap text-slate-500">
+                      {formatDate(expense.date)}
+                    </td>
+                    <td className="py-2 pr-3 text-slate-700">{expense.label}</td>
+                    <td className="py-2 text-right font-semibold text-slate-900 whitespace-nowrap">
+                      {formatCurrency(expense.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {expenses.length > 0 && (
+          <div className="flex items-center justify-between p-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+            <span className="text-sm text-slate-500">
+              {expenses.length} {expenses.length === 1 ? 'spesa' : 'spese'}
+            </span>
+            <span className="text-lg font-bold text-slate-900">{formatCurrency(total)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Modal with the global breakdown (whole history); categories open the
+// expenses modal in global scope
+function GlobalBreakdownModal({
+  onClose,
+  onSelectCategory,
+}: {
+  onClose: () => void;
+  onSelectCategory: (item: SpendingBreakdownItemDTO) => void;
+}) {
+  const { data, isLoading } = useGlobalSpendingBreakdown(true);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+
+      <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-indigo-50">
+              <History className="w-4 h-4 text-indigo-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Dove sono andati i soldi — da inizio storico
+            </h2>
+            {data && (
+              <span className="text-sm text-slate-400">{formatCurrency(data.total)} totali</span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <BreakdownBars items={data?.items ?? []} onSelect={onSelectCategory} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Dove sono andati i soldi": collapsible per-category spending breakdown.
+// Collapsed by default; the header still shows the period total at a glance.
+export function SpendingBreakdownCard({ periodKey }: { periodKey: string }) {
+  const { data, isLoading } = useSpendingBreakdown(periodKey);
+  const reclassify = useReclassifyExpenses();
+
+  const [expanded, setExpanded] = useState(false);
+  const [showGlobal, setShowGlobal] = useState(false);
+  const [selected, setSelected] = useState<SelectedCategory | null>(null);
+  const [annualTrend, setAnnualTrend] = useState<SpendingBreakdownItemDTO | null>(null);
+
+  const openCategory = (scope: 'period' | 'global') => (item: SpendingBreakdownItemDTO) =>
+    setSelected({ scope, categoryId: item.categoryId, name: item.name, color: item.color });
+
+  return (
+    <div className="card py-3 shadow-sm bg-white border border-slate-200">
+      {/* Accordion header */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          onClick={() => setExpanded((prev) => !prev)}
+          className="flex flex-1 items-center gap-2 text-left min-w-0"
+          title={expanded ? 'Chiudi il dettaglio' : 'Apri il dettaglio per categoria'}
+        >
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          )}
+          <div className="p-1.5 rounded-lg bg-indigo-50 flex-shrink-0">
+            <PieChart className="w-4 h-4 text-indigo-600" />
+          </div>
+          <h3 className="font-semibold text-sm text-slate-700 truncate">
+            Dove sono andati i soldi
+          </h3>
+          {data && (
+            <span className="text-xs text-slate-400 flex-shrink-0">
+              {formatCurrency(data.total)} totali
+            </span>
+          )}
+        </button>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowGlobal(true)}
+            title="Mostra la classificazione di tutte le spese da inizio storico"
+            className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            Da inizio storico
+          </button>
+          <button
+            onClick={() => reclassify.mutate()}
+            disabled={reclassify.isPending}
+            title="Riesegue la classificazione automatica su tutto lo storico (le correzioni manuali restano)"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {reclassify.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            Riclassifica
+          </button>
+        </div>
+      </div>
+
+      {/* Accordion body */}
+      {expanded && (
+        <div className="mt-3">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <BreakdownBars
+              items={data?.items ?? []}
+              onSelect={openCategory('period')}
+              onSelectTrend={setAnnualTrend}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showGlobal && (
+        <GlobalBreakdownModal
+          onClose={() => setShowGlobal(false)}
+          onSelectCategory={openCategory('global')}
+        />
+      )}
+      {selected && (
+        <CategoryExpensesModal
+          selected={selected}
+          periodKey={periodKey}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {annualTrend && (
+        <AnnualCategoryTrendModal
+          selected={annualTrend}
+          year={Number(periodKey.slice(0, 4))}
+          onClose={() => setAnnualTrend(null)}
+        />
+      )}
+    </div>
+  );
+}

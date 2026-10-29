@@ -1,0 +1,71 @@
+import { fetchApi } from './api';
+import type {
+  CreateRatingDefinitionDTO,
+  CreateRatingEntryDTO,
+  RatingDefinitionDTO,
+  RatingEntryDTO,
+  SuggestedSideEffectDTO,
+  UpdateRatingDefinitionDTO,
+  UpdateRatingEntryDTO,
+} from '@budget/shared';
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+// Characteristics rated daily in the diary, and the votes given on them
+export const ratingsApi = {
+  getAll: () => fetchApi<RatingDefinitionDTO[]>('/ratings'),
+
+  create: (data: CreateRatingDefinitionDTO) =>
+    fetchApi<RatingDefinitionDTO>('/ratings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (key: string, data: UpdateRatingDefinitionDTO) =>
+    fetchApi<RatingDefinitionDTO>(`/ratings/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  remove: (key: string) =>
+    fetchApi<void>(`/ratings/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+  installDefaultEvents: () =>
+    fetchApi<RatingDefinitionDTO[]>('/ratings/events/defaults', { method: 'POST' }),
+
+  getTriggers: () => fetchApi<string[]>('/ratings/triggers'),
+
+  getSuggestedSideEffects: () =>
+    fetchApi<SuggestedSideEffectDTO[]>('/ratings/side-effects/suggested'),
+
+  installSideEffects: (names: string[]) =>
+    fetchApi<RatingDefinitionDTO[]>('/ratings/side-effects', {
+      method: 'POST',
+      body: JSON.stringify({ names }),
+    }),
+
+  getEntries: (from?: string, to?: string) =>
+    fetchApi<RatingEntryDTO[]>(`/ratings/entries${buildQuery({ from, to })}`),
+
+  createEntry: (data: CreateRatingEntryDTO) =>
+    fetchApi<RatingEntryDTO>('/ratings/entries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateEntry: (id: string, data: UpdateRatingEntryDTO) =>
+    fetchApi<RatingEntryDTO>(`/ratings/entries/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  removeEntry: (id: string) =>
+    fetchApi<void>(`/ratings/entries/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+};
